@@ -4,7 +4,6 @@ build-backend = "hatchling.build"
 
 [project]
 name = "boilerack"
-version = "0.0.0"
 description = "Pont MQTT transactionnel pour chaudieres Viessmann via vcontrold"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,7 +19,11 @@ classifiers = [
     "Topic :: Home Automation",
 ]
 
-# Aucune dependance d'execution en C0 : le paquet ne contient aucune logique.
+# Source unique de version : src/boilerack/__init__.py (voir [tool.hatch.version]).
+dynamic = ["version"]
+
+# Aucune dependance d'execution : le paquet ne contient aucune logique
+# de transport, de reseau ni de sous-processus.
 dependencies = []
 
 [project.optional-dependencies]
@@ -30,5 +33,18 @@ dev = ["pytest>=8"]
 [project.urls]
 Homepage = "https://github.com/antoinevalentinHA/boilerack"
 
+[tool.hatch.version]
+path = "src/boilerack/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/boilerack"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+testpaths = ["tests"]
+markers = [
+    "reference: comportement eprouve, a conserver dans le produit final",
+    "accident: comportement actuel non souhaite, caracterise sans etre normatif",
+    "divergence_ratified: comportement qui devra changer selon D-1 a D-10",
+    "unknown: comportement non demontre ou dependant d'un effet externe",
+]
