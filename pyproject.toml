@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "boilerack"
+version = "0.0.0"
+description = "Pont MQTT transactionnel pour chaudieres Viessmann via vcontrold"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Antoine Valentin" }]
+keywords = ["mqtt", "vcontrold", "viessmann", "optolink", "home-assistant", "boiler"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Home Automation",
+]
+
+# Aucune dependance d'execution en C0 : le paquet ne contient aucune logique.
+dependencies = []
+
+[project.optional-dependencies]
+# Outils de test uniquement. Strictement separes des dependances d'execution.
+dev = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://github.com/antoinevalentinHA/boilerack"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/boilerack"]
