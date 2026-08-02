@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from boilerack.transport.mqtt import (
     Message,
+    MessageHandler,
     MqttClient,
     NotConnectedError,
     Publication,
@@ -24,6 +25,7 @@ from boilerack.transport.vclient import (
 
 __all__ = [
     "Message",
+    "MessageHandler",
     "MqttClient",
     "NotConnectedError",
     "Publication",

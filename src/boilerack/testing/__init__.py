@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from boilerack.testing.fake_clock import VirtualClock
 from boilerack.testing.fake_mqtt import FakeMqttClient
+from boilerack.testing.fake_profile import build_fake_profile
 from boilerack.testing.fake_vclient import (
     FakeVClient,
     FakeVClientError,
@@ -23,6 +24,7 @@ from boilerack.testing.fake_vclient import (
 __all__ = [
     "VirtualClock",
     "FakeMqttClient",
+    "build_fake_profile",
     "FakeVClient",
     "FakeVClientError",
     "RecordedCall",
