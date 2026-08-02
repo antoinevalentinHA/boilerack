@@ -1,0 +1,128 @@
+"""Double du transport MQTT.
+
+Implemente la frontiere `boilerack.transport.mqtt.MqttClient` en memoire, sans
+Paho, sans broker et sans reseau. Il enregistre fidelement ce qui a ete demande
+et permet au test de piloter les issues.
+
+Enregistre, dans l'ordre :
+
+- les publications (topic, payload brut, QoS, retain), avec leur etat
+  demandee / confirmee / echouee ;
+- les souscriptions demandees ;
+- les evenements de connexion et de deconnexion.
+
+Pilotage par le test :
+
+- `program_publish_failure()` fait echouer les prochaines publications ;
+- `confirm_pending()` confirme les publications demandees encore en attente ;
+- `deliver()` injecte un message entrant (avec drapeau `dup` eventuel).
+"""
+
+from __future__ import annotations
+
+from typing import Callable
+
+from boilerack.transport.mqtt import (
+    Message,
+    NotConnectedError,
+    Publication,
+    PublishHandle,
+    Subscription,
+)
+
+
+class FakeMqttClient:
+    """Client MQTT factice conforme au protocole `MqttClient`."""
+
+    def __init__(self) -> None:
+        self._connected = False
+        self._publications: list[PublishHandle] = []
+        self._subscriptions: list[Subscription] = []
+        self._connection_events: list[str] = []
+        self._inbox: list[Message] = []
+        self._pending_failures = 0
+        self._on_message: Callable[[Message], None] | None = None
+
+    # ------------------------------------------------------------------
+    # Protocole MqttClient
+    # ------------------------------------------------------------------
+
+    def connect(self) -> None:
+        self._connected = True
+        self._connection_events.append("connect")
+
+    def disconnect(self) -> None:
+        self._connected = False
+        self._connection_events.append("disconnect")
+
+    def subscribe(self, topic: str, qos: int = 0) -> None:
+        if not self._connected:
+            raise NotConnectedError("souscription impossible : client non connecte")
+        self._subscriptions.append(Subscription(topic=topic, qos=qos))
+
+    def publish(
+        self, topic: str, payload: bytes, qos: int = 0, retain: bool = False
+    ) -> PublishHandle:
+        if not self._connected:
+            raise NotConnectedError("publication impossible : client non connecte")
+        handle = PublishHandle(
+            Publication(topic=topic, payload=payload, qos=qos, retain=retain)
+        )
+        if self._pending_failures > 0:
+            self._pending_failures -= 1
+            handle._mark_failed()
+        self._publications.append(handle)
+        return handle
+
+    # ------------------------------------------------------------------
+    # Pilotage par le test
+    # ------------------------------------------------------------------
+
+    def program_publish_failure(self, count: int = 1) -> None:
+        """Fait echouer les `count` prochaines publications (des la demande)."""
+        if count < 1:
+            raise ValueError(f"count doit valoir au moins 1 : {count!r}")
+        self._pending_failures += count
+
+    def confirm_pending(self) -> None:
+        """Confirme toutes les publications demandees qui ne sont ni confirmees ni echouees."""
+        for handle in self._publications:
+            if not handle.confirmed and not handle.failed:
+                handle._mark_confirmed()
+
+    def set_message_handler(self, handler: Callable[[Message], None]) -> None:
+        """Enregistre un rappel appele a chaque message entrant."""
+        self._on_message = handler
+
+    def deliver(self, message: Message) -> None:
+        """Injecte un message entrant et notifie le rappel eventuel."""
+        self._inbox.append(message)
+        if self._on_message is not None:
+            self._on_message(message)
+
+    # ------------------------------------------------------------------
+    # Inspection
+    # ------------------------------------------------------------------
+
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
+    @property
+    def publications(self) -> tuple[PublishHandle, ...]:
+        """Publications demandees, dans l'ordre."""
+        return tuple(self._publications)
+
+    @property
+    def subscriptions(self) -> tuple[Subscription, ...]:
+        return tuple(self._subscriptions)
+
+    @property
+    def connection_events(self) -> tuple[str, ...]:
+        """Suite des `connect` / `disconnect`, dans l'ordre."""
+        return tuple(self._connection_events)
+
+    @property
+    def inbox(self) -> tuple[Message, ...]:
+        """Messages entrants injectes, dans l'ordre."""
+        return tuple(self._inbox)
