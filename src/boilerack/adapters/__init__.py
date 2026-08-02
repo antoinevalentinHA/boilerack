@@ -8,10 +8,15 @@ implementations reelles, sans jamais contacter la production :
 - `ProcessRunner` / `SubprocessRunner` / `ProcessResult` : frontiere generique et
   injectable autour d'un sous-processus borne, sans dialecte `vclient`.
 
-L'adaptateur `vclient` concret (traduction sortie -> `TransportStatus`) reste
-DELIBEREMENT absent : son contrat reel (arguments, sorties, codes retour, erreurs)
-n'est pas encore caracterise a partir d'une source explicite. Voir
-docs/design/c4-real-adapters.md.
+Depuis C6, le volet LECTURE de l'adaptateur `vclient` est disponible :
+
+- `VClientCliReader` : execute `vclient -J` et classe l'issue selon les seules
+  signatures caracterisees en C5.
+
+Le volet ECRITURE reste DELIBEREMENT absent : le contrat reel d'une commande
+`set…` n'est toujours pas caracterise. `VClientCliReader` n'expose donc aucune
+methode `write` et ne satisfait pas le protocole `VClient` complet — il ne peut
+pas etre branche au moteur transactionnel. Voir docs/design/c6-vclient-read-adapter.md.
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from boilerack.adapters.process_runner import (
     ProcessRunner,
     SubprocessRunner,
 )
+from boilerack.adapters.vclient_cli import InvalidCommandName, VClientCliReader
 
 __all__ = [
     "MqttConfig",
@@ -32,4 +38,6 @@ __all__ = [
     "ProcessResult",
     "ProcessRunner",
     "SubprocessRunner",
+    "VClientCliReader",
+    "InvalidCommandName",
 ]
