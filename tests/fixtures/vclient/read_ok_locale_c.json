@@ -28,6 +28,7 @@
     "stdout_b64": "Z2V0VGVtcEtpc3Q6CjI4LjAwMDAwMCBHcmFkIENlbHNpdXMK",
     "stderr_b64": ""
   },
+  "notes": "stdout identique octet pour octet a la locale de production : sortie non sensible a la locale sur cette installation.",
   "expected_status": "OK",
-  "notes": "stdout identique octet pour octet a la locale de production : sortie non sensible a la locale sur cette installation."
+  "status_is_proposed": false
 }

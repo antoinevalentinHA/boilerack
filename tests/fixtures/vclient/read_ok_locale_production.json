@@ -28,6 +28,7 @@
     "stdout_b64": "Z2V0VGVtcEtpc3Q6CjI4LjAwMDAwMCBHcmFkIENlbHNpdXMK",
     "stderr_b64": ""
   },
+  "notes": "Deux lignes : nom de commande suivi de ':', puis valeur et unite. stderr vide.",
   "expected_status": "OK",
-  "notes": "Deux lignes : nom de commande suivi de ':', puis valeur et unite. stderr vide."
+  "status_is_proposed": false
 }

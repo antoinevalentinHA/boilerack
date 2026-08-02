@@ -29,6 +29,7 @@
     "stdout_b64": "W3siY29tbWFuZCI6ImdldFRlbXBLaXN0IiwidmFsdWUiOjI4LjAwMDAwMCwicmF3IjoiMjguMDAwMDAwIEdyYWQgQ2Vsc2l1cyIsImVycm9yIjoiIn1dCg==",
     "stderr_b64": ""
   },
+  "notes": "Tableau d'objets. 'error' vide en cas de succes. 'raw' porte la valeur et l'unite.",
   "expected_status": "OK",
-  "notes": "Tableau d'objets. 'error' vide en cas de succes. 'raw' porte la valeur et l'unite."
+  "status_is_proposed": false
 }

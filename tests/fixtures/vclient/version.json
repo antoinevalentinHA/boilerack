@@ -23,6 +23,7 @@
     "stdout_b64": "dmNsaWVudCB2ZXJzaW9uIDAuOTguMTItNS1nOGNhNDc5Nwo=",
     "stderr_b64": ""
   },
+  "notes": "Resultat normal rendu avec un code retour 1. La version est sur stdout.",
   "expected_status": "n/a",
-  "notes": "Resultat normal rendu avec un code retour 1. La version est sur stdout."
+  "status_is_proposed": false
 }

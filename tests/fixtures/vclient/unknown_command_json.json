@@ -29,6 +29,7 @@
     "stdout_b64": "W3siY29tbWFuZCI6ImJvaWxlcmFja19jNV9jb21tYW5kZV9pbmV4aXN0YW50ZV8yMDI2MDgwMiIsInZhbHVlIjowLjAwMDAwMCwicmF3IjoiRVJSOiBjb21tYW5kIHVua25vd24iLCJlcnJvciI6IkVSUjogY29tbWFuZCB1bmtub3duIn1dCg==",
     "stderr_b64": "U1JWIEVSUjogY29tbWFuZCB1bmtub3duCg=="
   },
+  "notes": "'error' non vide est le discriminant. 'value' vaut 0.0 : piege silencieux pour qui lirait la valeur sans verifier l'erreur.",
   "expected_status": "UNKNOWN_COMMAND",
-  "notes": "'error' non vide est le discriminant. 'value' vaut 0.0 : piege silencieux pour qui lirait la valeur sans verifier l'erreur."
+  "status_is_proposed": false
 }

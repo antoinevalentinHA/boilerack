@@ -28,6 +28,8 @@
     "stdout_b64": "",
     "stderr_b64": "dGltZW91dDogZmFpbGVkIHRvIHJ1biBjb21tYW5kICcvdG1wL2JvaWxlcmFjay1jNS12Y2xpZW50LWFic2VudCc6IE5vIHN1Y2ggZmlsZSBvciBkaXJlY3RvcnkK"
   },
-  "expected_status": "CLIENT_UNAVAILABLE",
-  "notes": "Message emis par l'enveloppe timeout(1), pas par un exec direct. Un lancement sans shell rendrait ENOENT avant tout demarrage de processus."
+  "notes": "Message emis par l'enveloppe timeout(1), pas par un exec direct. Un lancement sans shell rendrait ENOENT avant tout demarrage de processus.",
+  "candidate_status": "CLIENT_UNAVAILABLE",
+  "status_is_proposed": true,
+  "proposal_reference": "docs/design/c5-vclient-contract.md#6"
 }

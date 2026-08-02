@@ -24,12 +24,19 @@ duree, la locale et la ligne de commande. Elles sont versionnees en
 normalisation de fin de ligne, et couvertes par
 `tests/characterization/test_vclient_fixtures.py`.
 
-Deux fixtures — `version` et `help` — ont ete **recapturees verbatim** apres la
+Les neuf fixtures se repartissent en **deux recaptures verbatim** et **sept
+transcriptions fideles** du rapport de collecte. Cette distinction est
+probante et protegee par des tests.
+
+Les deux recaptures — `version` et `help` — ont ete refaites verbatim apres la
 collecte initiale, l'aide faisant 1909 octets et sa restitution ayant ete
 repliee a l'affichage. Ce sont des sondes purement locales, sans contact avec
-le demon. Les six autres sont transcrites de la collecte ; **la longueur en
-octets de chacune correspond exactement a la valeur attestee par la capture**,
-ce que les tests verifient.
+le demon. Les **sept** autres sont transcrites de la collecte. **La longueur en octets de
+chacune correspond exactement a la valeur attestee par la capture**, ce que les
+tests verifient — mais les repertoires de capture ayant ete supprimes en fin de
+collecte, **aucune transcription n'est verifiable contre un original**. La
+concordance des longueurs est une corroboration forte, pas une preuve
+independante.
 
 ## 2. Version observee
 
@@ -92,7 +99,9 @@ Tableau d'objets, un par commande — coherent avec `-c cmd1,cmd2`.
 
 Trois consequences de conception :
 
-1. **`error` est le seul discriminant fiable.**
+1. **`error` est le discriminant a utiliser** — c'est le seul champ qui ait
+   distingue le succes de l'echec sur les deux cas observes. Aucune regle
+   universelle couvrant *toutes* les erreurs n'est demontree a ce stade.
 2. **`value` vaut `0.0` en erreur** — valeur parfaitement plausible pour une
    temperature. Lire `value` sans verifier `error` est un piege silencieux.
 3. **`raw` porte l'unite**, ce que la forme texte oblige a extraire par
@@ -153,6 +162,23 @@ sans invention : `launch_error != ""`.
 Aucun consommateur n'est affecte aujourd'hui, l'adaptateur qui traduirait un
 `ProcessResult` en `TransportStatus` n'existant pas encore.
 
+> **Deux niveaux d'observation a ne pas confondre.**
+>
+> La sonde de l'executable absent a ete lancee sous l'utilitaire GNU
+> `timeout`. Ce qu'elle observe est donc le comportement de **`timeout`**, qui
+> rend `127` et produit son propre message
+> (`timeout: failed to run command … : No such file or directory`).
+>
+> **Elle ne prouve pas directement le comportement de `subprocess.run()`.** Ce
+> cas est caracterise **separement en C4**, par les exceptions Python que
+> `SubprocessRunner` intercepte : `FileNotFoundError`, `PermissionError` et
+> autres `OSError`, qui produisent `returncode is None` et renseignent
+> `launch_error`.
+>
+> La conclusion **commune aux deux niveaux**, et la seule qui soit etablie,
+> est : *le processus `vclient` n'a pas demarre et aucune commande n'a pu
+> atteindre le demon.*
+
 ### 6.2 Distinction des voisins
 
 | | Le client a demarre | Une commande a pu partir | Une ecriture a pu atteindre la chaudiere |
@@ -174,7 +200,7 @@ frontiere retenue est celle de l'invocation de l'operation d'ecriture :
 |---|---|---|---|
 | `CLIENT_UNAVAILABLE` | `rejected` | `bridge_unavailable` | transitoire |
 | `DAEMON_UNREACHABLE` | `rejected` | `bridge_unavailable` | transitoire |
-| `UNKNOWN_COMMAND` | `rejected` | `bridge_unavailable` | transitoire — signale une **incoherence de profil**, a journaliser comme telle |
+| `UNKNOWN_COMMAND` | `rejected` | **`unsupported_command`** | **permanent** — deja ratifie en C3 |
 | `UNUSABLE_OUTPUT` avant invocation | `rejected` | `bridge_unavailable` | transitoire |
 | `TIMEOUT` **apres** invocation d'ecriture | `timeout` | — | — |
 | `TRANSPORT_ERROR` **apres** invocation d'ecriture | `timeout` | — | — |
@@ -182,6 +208,20 @@ frontiere retenue est celle de l'invocation de l'operation d'ecriture :
 `CLIENT_UNAVAILABLE` et `DAEMON_UNREACHABLE` **prouvent qu'aucune ecriture n'a
 eu lieu** : ils autorisent un verdict `rejected`, plus informatif qu'un
 `timeout`. C'est leur seul interet pratique, et il est reel.
+
+> **Correction.** Une redaction anterieure de ce tableau rattachait
+> `UNKNOWN_COMMAND` a `bridge_unavailable` / transitoire. C'etait faux a deux
+> titres : une commande inconnue est une condition **permanente** — la rejouer
+> donnera le meme resultat — et la question etait **deja tranchee en C3**, ou
+> `unsupported_command` / `permanent` est ratifie et implemente
+> (`docs/design/c3-transactional-core.md` §1.b). Le tableau ci-dessus reprend
+> la decision existante ; il ne la rouvre pas.
+
+**Portee du signal.** `UNKNOWN_COMMAND` repose strictement sur
+`error == "ERR: command unknown"`, pour la version et l'installation
+caracterisees. Cette classification n'est etendue **ni** a toute valeur
+d'`error` non vide, **ni** a tout `raw` commencant par `ERR:`, **ni** a la
+ligne `server error` observee sur `stderr`.
 
 ### 6.4 Impact sur les acquittements
 
@@ -209,8 +249,15 @@ celles qui lui manquent encore.
 
 ## 7. Locale
 
-Les sorties sous la locale reelle du service et sous `LC_ALL=C` sont
-**identiques octet pour octet**.
+Pour **la seule commande `getTempKist`**, sur **cette version**
+(`0.98.12-5-g8ca4797`) et **cette installation**, les sorties sous la locale
+reelle du service (`LANG=en_GB.UTF-8`, `LC_ALL` non defini) et sous `LC_ALL=C`
+sont **identiques octet pour octet**.
+
+Rien n'est etabli au-dela : ni pour les autres commandes, ni pour d'autres
+locales, ni pour une autre version. En particulier, ce lot **n'affirme pas**
+que `vclient` serait insensible a la locale en general, ni que `LC_ALL=C`
+serait inutile partout.
 
 L'adaptateur pourra neanmoins fixer un environnement deterministe par
 precaution, mais le document doit indiquer que **cette precaution n'est pas
@@ -230,10 +277,20 @@ la chaine **`SRV`** en guise de valeur.
 Consequences : `SRV` publie comme valeur de telemetrie, et surtout une **sante
 rendue faussement nominale**, la valeur n'etant pas nulle.
 
+Nuance importante : sur les chemins **numeriques**, la degradation reste
+prudente — `float("SRV")` echoue et la valeur devient `None`. Le defaut ne se
+manifeste donc que sur les chemins qui consomment la chaine telle quelle :
+publication de telemetrie et derivation de la sante.
+
 **Le defaut est latent** : le jeu de commandes est fige et les definitions sont
 intactes. Il deviendrait actif si la configuration des commandes divergeait.
 Il est demontre sur la capture reelle par
 `test_le_filtre_historique_rend_SRV_sur_une_commande_inconnue`.
+
+> **Portee du constat.** Le code du pont historique demontre **son propre
+> comportement**, non le contrat general de `vclient`. Ce qui est etabli ici,
+> c'est la rencontre entre une sortie reelle du client et un filtre particulier
+> — pas une propriete du client.
 
 ## 9. Contention et durees
 
@@ -260,14 +317,14 @@ duree est un signal exploitable, jamais un verdict.
 | 1 | Version `0.98.12-5-g8ca4797`, compilee depuis un depot Git |
 | 2 | `-V` et `--help` rendent un code retour `1` avec sortie sur `stdout` |
 | 3 | Une lecture reussie rend `0`, deux lignes sur `stdout`, `stderr` vide |
-| 4 | `-j` et `-J` sont supportes ; `-4`, `-6`, `--help` egalement |
+| 4 | L'aide **declare** `-j`, `-J`, `-4`, `-6`, `--help` ; seul **`-J` a ete exerce** |
 | 5 | La forme JSON longue est un tableau d'objets a quatre champs |
-| 6 | `error == ""` marque le succes ; une valeur non vide marque l'echec |
+| 6 | `error == ""` **observe sur la lecture reussie** ; `error == "ERR: command unknown"` **observe sur la commande inexistante**. Aucune regle universelle couvrant toutes les erreurs n'est demontree |
 | 7 | En erreur, `value` vaut `0.000000` |
 | 8 | Une commande inconnue rend `0`, message `SRV ERR: command unknown` sur `stderr` |
 | 9 | Une commande inconnue est rejetee localement, sans transaction Optolink |
 | 10 | Un demon injoignable rend `1` avec les deux flux vides |
-| 11 | La sortie est insensible a la locale |
+| 11 | Pour `getTempKist`, sur cette version et cette installation, la sortie est identique entre `en_GB.UTF-8` et `LC_ALL=C` |
 | 12 | Une lecture reelle coute 2,7 a 4,0 s pour un client tiers, production active |
 
 ### Inconnu

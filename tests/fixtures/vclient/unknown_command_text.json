@@ -28,6 +28,7 @@
     "stdout_b64": "Ym9pbGVyYWNrX2M1X2NvbW1hbmRlX2luZXhpc3RhbnRlXzIwMjYwODAyOgo=",
     "stderr_b64": "U1JWIEVSUjogY29tbWFuZCB1bmtub3duCnNlcnZlciBlcnJvcgo="
   },
+  "notes": "Code retour 0 pour un echec. Le message est sur stderr et commence par 'SRV', non par 'ERR'. Rejet local du demon : aucune transaction Optolink.",
   "expected_status": "UNKNOWN_COMMAND",
-  "notes": "Code retour 0 pour un echec. Le message est sur stderr et commence par 'SRV', non par 'ERR'. Rejet local du demon : aucune transaction Optolink."
+  "status_is_proposed": false
 }

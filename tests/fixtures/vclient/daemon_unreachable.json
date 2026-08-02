@@ -28,6 +28,7 @@
     "stdout_b64": "",
     "stderr_b64": ""
   },
+  "notes": "Code retour 1 et les DEUX flux vides. Signature la plus nette des huit sondes.",
   "expected_status": "DAEMON_UNREACHABLE",
-  "notes": "Code retour 1 et les DEUX flux vides. Signature la plus nette des huit sondes."
+  "status_is_proposed": false
 }
