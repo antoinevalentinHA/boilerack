@@ -15,11 +15,22 @@ Honnetete du `PublishHandle` (arbitrage C4-A / A2 ratifie) :
   en QoS 1) ;
 - jamais de `wait_for_publish()` (aucune attente indefinie de PUBACK).
 
-Course PUBACK / enregistrement (A2) : `on_publish` s'execute sur le thread reseau
-de Paho et peut precéder l'enregistrement du handle par `publish()`. Un verrou
-protege un registre `mid -> PublishHandle` et un ensemble de `mid` acquittes
-AVANT enregistrement ; un rappel en double est idempotent ; un `mid` inconnu
-n'est jamais faussement rattache.
+Course PUBACK / enregistrement (A2, durci C4-CORR) : `on_publish` s'execute sur
+le thread reseau de Paho et peut preceder l'enregistrement du handle par
+`publish()`. Un verrou protege un registre `mid -> PublishHandle` et un ensemble
+BORNE de `mid` acquittes tot. Ce dernier n'accepte un credit QUE pendant une
+FENETRE DE CORRELATION ouverte (`_registering > 0`, i.e. une publication est en
+train de s'enregistrer) ; des qu'aucune publication n'enregistre plus, tout
+credit non consomme est PURGE. Consequences garanties :
+
+- un PUBACK precoce legitime confirme la publication en cours ;
+- un double PUBACK apres confirmation ne cree aucun credit pour une publication
+  future ;
+- un `mid` inconnu ou orphelin n'est jamais memorise sans limite ;
+- la reutilisation ulterieure d'un `mid` ne confirme jamais un nouveau handle
+  sans nouveau PUBACK ;
+- un rappel en double est idempotent ; aucun callback externe n'est appele sous
+  verrou ; aucune attente bloquante.
 
 QoS (A3) : `boilerack` publie ses ACK en QoS 1, ou `on_publish` vaut PUBACK et
 donc confirmation reelle. En QoS 0, `on_publish` ne prouve que la remise LOCALE a
@@ -96,7 +107,14 @@ class PahoMqttClient:
         self._config = config
         self._lock = threading.Lock()
         self._pending: dict[int, PublishHandle] = {}
-        self._acked_early: set[int] = set()
+        # Crédits d'ACK précoces (PUBACK arrivé pendant qu'un `publish()` enregistre
+        # encore son `mid`). Bornés : n'existent QUE pendant une fenêtre de
+        # corrélation ouverte (`_registering > 0`) et sont purgés dès qu'aucune
+        # publication n'est en cours d'enregistrement.
+        self._early_acks: set[int] = set()
+        # Nombre de `publish()` actuellement dans leur fenêtre d'enregistrement
+        # (entre l'appel `client.publish()` et l'enregistrement du handle).
+        self._registering = 0
         self._handler: MessageHandler | None = None
         self._connected = False
 
@@ -147,26 +165,50 @@ class PahoMqttClient:
         publication = Publication(topic=topic, payload=payload, qos=qos, retain=retain)
         handle = PublishHandle(publication)
 
-        info = self._client.publish(topic, payload, qos=qos, retain=retain)
-        rc = getattr(info, "rc", _MQTT_ERR_SUCCESS)
-        mid = getattr(info, "mid", None)
+        # Ouverture de la FENETRE DE CORRELATION : dès maintenant (avant même
+        # `client.publish()`), un PUBACK précoce arrivant sur le thread réseau
+        # sera reconnu comme légitime. On ne tient PAS le verrou pendant
+        # `client.publish()` (aucun callback externe sous verrou, aucun risque
+        # de réentrance).
+        with self._lock:
+            self._registering += 1
+        confirm_now = False
+        failed = False
+        try:
+            info = self._client.publish(topic, payload, qos=qos, retain=retain)
+            rc = getattr(info, "rc", _MQTT_ERR_SUCCESS)
+            mid = getattr(info, "mid", None)
 
-        if rc != _MQTT_ERR_SUCCESS:
-            # Echec ETABLI et immediat : le broker/transport a refuse la remise.
+            if rc != _MQTT_ERR_SUCCESS:
+                # Echec ETABLI et immediat : le broker/transport a refuse la remise.
+                failed = True
+            else:
+                with self._lock:
+                    if mid in self._early_acks:
+                        # Le PUBACK a précédé cet enregistrement (course A2) :
+                        # crédit légitime pour CETTE publication, consommé ici.
+                        self._early_acks.discard(mid)
+                        confirm_now = True
+                    else:
+                        self._pending[mid] = handle
+        finally:
+            # Fermeture de la fenêtre. Quand plus AUCUNE publication n'enregistre,
+            # tout crédit d'ACK précoce non consommé est OBSOLETE : on le purge.
+            # Un ACK orphelin (double PUBACK, `mid` inconnu, ou `mid` promis à une
+            # réutilisation future) ne peut donc jamais survivre a la quiescence,
+            # ni confirmer une publication ultérieure sans nouveau PUBACK.
+            with self._lock:
+                self._registering -= 1
+                if self._registering == 0:
+                    self._early_acks.clear()
+
+        if failed:
             handle._mark_failed()
             logger.warning(
-                "publication MQTT refusee immediatement rc=%s topic=%s", rc, topic
+                "publication MQTT refusee immediatement topic=%s", topic
             )
-            return handle
-
-        with self._lock:
-            if mid in self._acked_early:
-                # Le PUBACK a precede cet enregistrement (course A2) : on consomme
-                # le marqueur et on confirme immediatement.
-                self._acked_early.discard(mid)
-                handle._mark_confirmed()
-            else:
-                self._pending[mid] = handle
+        elif confirm_now:
+            handle._mark_confirmed()
         return handle
 
     # -- callbacks Paho ------------------------------------------------------
@@ -179,19 +221,25 @@ class PahoMqttClient:
         reason_code: object = None,
         properties: object = None,
     ) -> None:
+        confirmed_handle: PublishHandle | None = None
         with self._lock:
             handle = self._pending.pop(mid, None)
             if handle is None:
-                # Soit le PUBACK precede l'enregistrement du handle (course),
-                # soit c'est un rappel en double apres confirmation, soit un
-                # `mid` inconnu. Dans tous les cas : on memorise le `mid` sans
-                # rien confirmer a tort. Le `publish()` correspondant le
-                # consommera une seule fois s'il existe.
-                self._acked_early.add(mid)
+                # Aucun handle enregistré pour ce `mid`. Deux cas :
+                # - une publication est en cours d'enregistrement
+                #   (`_registering > 0`) : PUBACK précoce légitime -> on dépose un
+                #   crédit BORNE, que ce `publish()` consommera puis que la
+                #   quiescence purgera ;
+                # - sinon (`_registering == 0`) : ACK orphelin (double PUBACK,
+                #   `mid` inconnu ou obsolète) -> on l'ABANDONNE. Il ne crée
+                #   AUCUN droit de confirmation permanent.
+                if self._registering > 0:
+                    self._early_acks.add(mid)
                 return
+            confirmed_handle = handle
         # Hors verrou : le handle nous appartient. Confirmation idempotente.
-        if not (handle.confirmed or handle.failed):
-            handle._mark_confirmed()
+        if not (confirmed_handle.confirmed or confirmed_handle.failed):
+            confirmed_handle._mark_confirmed()
 
     def _on_message(self, client: object, userdata: object, message: Any) -> None:
         handler = self._handler

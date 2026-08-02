@@ -63,25 +63,35 @@ validation, ni déduplication, ni cache, ni ACK, ni retry, ni décodage du paylo
   (PUBACK en QoS 1) ;
 - **jamais** de `wait_for_publish()` : aucune attente indéfinie de PUBACK.
 
-### Course PUBACK / enregistrement
+### Course PUBACK / enregistrement (durcie C4-CORR)
 
 `on_publish` s'exécute sur le thread réseau de Paho et peut **précéder**
-l'enregistrement du handle par `publish()`. Traitement : un `threading.Lock`
-protège un registre `mid → PublishHandle` et un ensemble `mid` acquittés avant
-enregistrement.
+l'enregistrement du handle par `publish()`. Le `mid` n'étant attribué qu'à
+l'intérieur de `client.publish()`, la seule course réelle est un PUBACK arrivant
+**pendant** la fenêtre où `publish()` enregistre encore ce `mid`.
 
-- `publish()` (sous verrou) : si le `mid` est déjà dans l'ensemble « acquitté
-  tôt », consomme le marqueur et confirme ; sinon enregistre le handle ;
-- `on_publish` (sous verrou) : si un handle est enregistré, le retire et le
-  confirme ; sinon mémorise le `mid` ;
-- **double callback** idempotent (le second ne trouve plus de handle) ;
-- **`mid` inconnu** : mémorisé, aucun handle confirmé à tort.
+Traitement : un `threading.Lock` protège un registre `mid → PublishHandle`, un
+ensemble **borné** de `mid` acquittés tôt, et un compteur `_registering` des
+publications en cours d'enregistrement.
 
-*Limite documentée :* un `on_publish` en double **après** confirmation ré-insère
-le `mid` dans l'ensemble « acquitté tôt ». Comme Paho réutilise les `mid`
-(16 bits), un `mid` réutilisé ultérieurement pourrait alors être confirmé
-prématurément. En pratique un PUBACK QoS 1 est unique par message ; ce cas est
-signalé comme limite, pas traité par une machinerie de suivi non bornée.
+- `publish()` **ouvre** la fenêtre (`_registering += 1`) **avant**
+  `client.publish()` (appelé **hors** verrou), puis, sous verrou : si le `mid`
+  porte déjà un crédit d'ACK précoce, le consomme et confirme ; sinon enregistre
+  le handle. En `finally`, **ferme** la fenêtre ; quand plus aucune publication
+  n'enregistre (`_registering == 0`), **purge** tout crédit non consommé ;
+- `on_publish` (sous verrou) : si un handle est enregistré, le retire (confirmé
+  **hors** verrou) ; sinon dépose un crédit **seulement si** une fenêtre est
+  ouverte (`_registering > 0`), et **abandonne** l'ACK autrement.
+
+Garanties (verrouillées par tests) :
+
+- un PUBACK précoce **légitime** confirme la publication en cours ;
+- un **double** PUBACK après confirmation ne crée **aucun** crédit futur ;
+- un `mid` **inconnu / orphelin** n'est jamais mémorisé sans limite (purge à la
+  quiescence → aucune croissance non bornée) ;
+- la **réutilisation** ultérieure d'un `mid` ne confirme **jamais** un nouveau
+  handle sans nouveau PUBACK ;
+- aucun callback externe n'est appelé sous verrou ; aucune attente bloquante.
 
 ### QoS
 

@@ -64,6 +64,16 @@ class FakePahoClient:
 
     next_mid: int = 1
     publish_rc: int = 0  # 0 = MQTT_ERR_SUCCESS
+    # Si vrai, `publish()` déclenche `on_publish(mid)` SYNCHRONEMENT avant de
+    # rendre la main : simule fidèlement un PUBACK qui arrive PENDANT la fenêtre
+    # d'enregistrement (la seule course réelle possible, le `mid` étant attribué
+    # à l'intérieur de `client.publish()`).
+    ack_during_publish: bool = False
+    # Si renseigné, `publish()` déclenche AUSSI `on_publish(orphan)` pour ce mid
+    # étranger PENDANT la fenêtre (simule un ACK orphelin arrivant alors qu'une
+    # publication concurrente enregistre encore) : sert à prouver la purge à la
+    # quiescence.
+    orphan_ack_during_publish: "int | None" = None
     # journaux d'appels
     connected_args: tuple | None = None
     loop_started: int = 0
@@ -100,6 +110,14 @@ class FakePahoClient:
         self.published.append(
             {"topic": topic, "payload": payload, "qos": qos, "retain": retain, "mid": mid}
         )
+        if self.publish_rc == 0 and self.on_publish is not None:
+            if self.orphan_ack_during_publish is not None:
+                # ACK orphelin arrivant PENDANT la fenêtre ouverte.
+                self.on_publish(self, None, self.orphan_ack_during_publish, None, None)
+            if self.ack_during_publish:
+                # PUBACK racing in pendant l'enregistrement (fenêtre de corrélation
+                # ouverte cote adaptateur), sur le meme thread, hors verrou.
+                self.on_publish(self, None, mid, None, None)
         return FakeMessageInfo(rc=self.publish_rc, mid=mid)
 
     # -- declencheurs de callbacks (cote test) -------------------------------
