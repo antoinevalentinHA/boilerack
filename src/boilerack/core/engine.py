@@ -41,6 +41,7 @@ Doctrine appliquee :
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from boilerack.clock import Clock
@@ -56,6 +57,13 @@ from boilerack.core.validation import Rejection, ValidatedCommand, validate
 from boilerack.bounded_queue import BoundedQueue, QueueEmpty
 from boilerack.transport.mqtt import Message, MqttClient, PublishHandle
 from boilerack.transport.vclient import TransportStatus, VClient
+
+# Observabilite minimale (C4) : les `except Exception` conservateurs ci-dessous
+# convertissent une erreur en verdict prudent SANS jamais fabriquer un faux
+# succes. On les rend VISIBLES via `logging`, sans changer aucun verdict. Aucun
+# secret ni payload complet n'est journalise : uniquement `request_id`, role,
+# etape et TYPE d'exception. La journalisation est capturable en test (`caplog`).
+logger = logging.getLogger(__name__)
 
 # Statuts d'ecriture qui prouvent, de facon TYPEE, qu'aucune ecriture n'a ete
 # emise. Eux seuls autorisent `bridge_unavailable`. Tout autre statut connu
@@ -201,10 +209,17 @@ class TransactionalCore:
 
             self._queue.put(validated)
             return accepted
-        except Exception:
+        except Exception as exc:
             # Exception apres reservation mais AVANT toute invocation d'ecriture
             # (la mise en file n'ecrit rien) : la commande n'est pas executee.
             # Verdict fail-closed, `in_flight` libere, aucune ecriture physique.
+            logger.warning(
+                "exception a l'admission apres reservation, fail-closed "
+                "bridge_unavailable request_id=%s role=%s exc=%s",
+                request_id,
+                role,
+                type(exc).__name__,
+            )
             return self._conclude(
                 request_id,
                 Ack.rejected(request_id, Reason.BRIDGE_UNAVAILABLE),
@@ -282,16 +297,37 @@ class TransactionalCore:
             # `TRANSPORT_ERROR`) OU IMPREVU : potentiellement emis -> relecture.
             # On ne pretend jamais l'absence d'ecriture par defaut.
             return self._confirm(validated)
-        except Exception:
+        except Exception as exc:
             if not write_invoked:
                 # Exception avant l'invocation de l'ecriture : rien n'a ete emis.
+                logger.warning(
+                    "exception AVANT invocation d'ecriture, non emise -> "
+                    "bridge_unavailable request_id=%s role=%s exc=%s",
+                    request_id,
+                    spec.role,
+                    type(exc).__name__,
+                )
                 return Ack.rejected(request_id, Reason.BRIDGE_UNAVAILABLE)
             # Exception A PARTIR de l'invocation : l'ecriture a pu etre emise. On
             # ne la rejoue pas ; on tente une confirmation. Si meme la
             # confirmation echoue, verdict `timeout` (jamais `bridge_unavailable`).
+            logger.warning(
+                "exception A PARTIR de l'invocation d'ecriture (potentiellement "
+                "emise), tentative de confirmation request_id=%s role=%s exc=%s",
+                request_id,
+                spec.role,
+                type(exc).__name__,
+            )
             try:
                 return self._confirm(validated)
-            except Exception:
+            except Exception as exc2:
+                logger.warning(
+                    "confirmation en echec apres exception d'ecriture -> timeout "
+                    "request_id=%s role=%s exc=%s",
+                    request_id,
+                    spec.role,
+                    type(exc2).__name__,
+                )
                 return Ack.timeout(request_id)
 
     def _confirm(self, validated: ValidatedCommand) -> Ack:
@@ -308,9 +344,16 @@ class TransactionalCore:
                 confirmed = read.ok and _confirms(
                     read.value, target, spec.confirm_tolerance, spec
                 )
-            except Exception:
+            except Exception as exc:
                 # Une lecture qui echoue ne confirme rien : on n'abandonne pas la
                 # confirmation, on epuise le budget avant de conclure `timeout`.
+                logger.warning(
+                    "lecture de confirmation en echec (ne confirme pas) "
+                    "request_id=%s role=%s exc=%s",
+                    request_id,
+                    spec.role,
+                    type(exc).__name__,
+                )
                 confirmed = False
             if confirmed:
                 return Ack.applied(request_id)
@@ -330,6 +373,13 @@ class TransactionalCore:
 
         `in_flight.release` est un `discard` : l'appeler pour un identifiant non
         reserve (rejet `queue_full`) est un no-op sans effet de bord.
+
+        INVARIANT (contre-verification C3, reserve theorique) : avec les
+        implementations memoire actuelles, `terminal_cache.put` (verdict toujours
+        terminal ici) et `in_flight.release` (`set.discard`) NE LEVENT PAS. Ce
+        flux n'est donc pas enveloppe d'un `try/except` qui pourrait masquer une
+        corruption interne du cache. Une eventuelle levee ici signalerait un
+        defaut de programmation, a traiter comme tel, pas a absorber.
         """
         self._terminal.put(request_id, verdict)
         self._in_flight.release(request_id)
@@ -345,8 +395,16 @@ class TransactionalCore:
         """
         try:
             self._publish_ack(ack, role)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Verdict deja en cache : une publication ratee ne le perd pas et ne
+            # remonte pas. On la rend visible sans changer le verdict.
+            logger.warning(
+                "publication terminale au mieux en echec, verdict conserve "
+                "request_id=%s role=%s exc=%s",
+                ack.request_id,
+                role,
+                type(exc).__name__,
+            )
 
     def _publish_ack(self, ack: Ack, role: str) -> PublishHandle:
         topic = f"{self._ack_prefix}/{role}"
