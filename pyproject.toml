@@ -22,9 +22,13 @@ classifiers = [
 # Source unique de version : src/boilerack/__init__.py (voir [tool.hatch.version]).
 dynamic = ["version"]
 
-# Aucune dependance d'execution : le paquet ne contient aucune logique
-# de transport, de reseau ni de sous-processus.
-dependencies = []
+# Premiere et seule dependance d'execution (lot C4) : le client MQTT Paho v2,
+# requis par l'adaptateur MQTT reel `boilerack.adapters.mqtt_paho`. Licence
+# `EPL-2.0 OR BSD-3-Clause` (permissive, compatible MIT), pur-Python, supporte
+# Python >= 3.7 (donc 3.11 / 3.12 / 3.13). API callbacks `VERSION2`.
+# L'adaptateur `vclient` n'ajoute aucune dependance : il s'appuie sur la
+# bibliotheque standard (`subprocess`).
+dependencies = ["paho-mqtt>=2.1,<3"]
 
 [project.optional-dependencies]
 # Outils de test uniquement. Strictement separes des dependances d'execution.
