@@ -1,0 +1,29 @@
+{
+  "id": "version",
+  "description": "Interrogation de version du client.",
+  "collection": {
+    "collected_at": "2026-08-02T16:08:31+02:00",
+    "client_version": "0.98.12-5-g8ca4797",
+    "argv": [
+      "vclient",
+      "-V"
+    ],
+    "env": {
+      "LANG": "en_GB.UTF-8",
+      "LC_ALL": "C"
+    },
+    "external_timeout_s": 10,
+    "origin": "recapture verbatim le 2026-08-02, sonde purement locale sans contact demon"
+  },
+  "result": {
+    "returncode": 1,
+    "duration_ms": 10,
+    "stdout_len": 35,
+    "stderr_len": 0,
+    "stdout_b64": "dmNsaWVudCB2ZXJzaW9uIDAuOTguMTItNS1nOGNhNDc5Nwo=",
+    "stderr_b64": ""
+  },
+  "notes": "Resultat normal rendu avec un code retour 1. La version est sur stdout.",
+  "expected_status": "n/a",
+  "status_is_proposed": false
+}

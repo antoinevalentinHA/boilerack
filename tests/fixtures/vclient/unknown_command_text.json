@@ -1,0 +1,34 @@
+{
+  "id": "unknown_command_text",
+  "description": "Commande inexistante, forme texte.",
+  "collection": {
+    "collected_at": "2026-08-02T16:17:07+02:00",
+    "client_version": "0.98.12-5-g8ca4797",
+    "argv": [
+      "vclient",
+      "-h",
+      "localhost",
+      "-p",
+      "3002",
+      "-c",
+      "boilerack_c5_commande_inexistante_20260802"
+    ],
+    "env": {
+      "LANG": "en_GB.UTF-8",
+      "LC_ALL": "C"
+    },
+    "external_timeout_s": 10,
+    "origin": "transcrit de la collecte du 2026-08-02 ; longueur en octets attestee par la capture"
+  },
+  "result": {
+    "returncode": 0,
+    "duration_ms": 111,
+    "stdout_len": 44,
+    "stderr_len": 38,
+    "stdout_b64": "Ym9pbGVyYWNrX2M1X2NvbW1hbmRlX2luZXhpc3RhbnRlXzIwMjYwODAyOgo=",
+    "stderr_b64": "U1JWIEVSUjogY29tbWFuZCB1bmtub3duCnNlcnZlciBlcnJvcgo="
+  },
+  "notes": "Code retour 0 pour un echec. Le message est sur stderr et commence par 'SRV', non par 'ERR'. Rejet local du demon : aucune transaction Optolink.",
+  "expected_status": "UNKNOWN_COMMAND",
+  "status_is_proposed": false
+}
