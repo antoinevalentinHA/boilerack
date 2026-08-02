@@ -101,17 +101,25 @@ Trois consequences de conception :
 L'adaptateur privilegiera donc `-J`, en analysant `command`, `value`, `raw` et
 `error`.
 
-## 5. Cartographie des statuts de transport
+## 5. Cartographie sur l'enumeration existante
 
-**Proposition documentaire.** Aucun type ni enumeration n'est cree dans ce
-lot. Les noms sont ceux du vocabulaire normatif retenu.
+`TransportStatus` existe deja, en `src/boilerack/transport/vclient.py`, avec
+**six** valeurs : `OK`, `DAEMON_UNREACHABLE`, `UNKNOWN_COMMAND`, `TIMEOUT`,
+`UNUSABLE_OUTPUT`, `TRANSPORT_ERROR`.
+
+Ce lot **ne la modifie pas**. Il lui adosse les signatures reellement
+observees, et propose separement une septieme valeur en §6.
+
+Le tableau ci-dessous rattache chaque signature collectee a une valeur
+existante ; la ligne `CLIENT_UNAVAILABLE` est la seule qui ne corresponde a
+aucune valeur actuelle.
 
 | Statut | Signature | Preuve |
 |---|---|---|
 | `OK` | processus lance · JSON valide · objet correspondant a la commande demandee · `error == ""` · `value` numerique finie · structure non ambigue | `read_ok_json` |
 | `UNKNOWN_COMMAND` | `error == "ERR: command unknown"` — **code retour 0** | `unknown_command_json`, `unknown_command_text` |
 | `DAEMON_UNREACHABLE` | processus lance · code retour 1 · `stdout` **et** `stderr` vides · echec immediat | `daemon_unreachable` |
-| `CLIENT_UNAVAILABLE` | le client n'a pas pu etre lance ; aucune commande n'a ete remise au demon | `client_absent` |
+| `CLIENT_UNAVAILABLE` | le client n'a pas pu etre lance ; aucune commande n'a ete remise au demon | `client_absent` — **valeur inexistante a ce jour**, proposee en §6 |
 | `TIMEOUT` | budget externe du lanceur de processus epuise | **non caracterise — reporte deliberement** |
 | `UNUSABLE_OUTPUT` | JSON invalide · structure inattendue · commande absente de la reponse · `error` vide mais valeur absente, non numerique ou non finie · reponse contradictoire | non observe |
 | `TRANSPORT_ERROR` | toute autre erreur **apres lancement** non identifiee avec certitude : erreur structuree autre que `command unknown`, sortie ou code retour incompatibles avec les signatures ci-dessus, communication interrompue, resultat ambigu | cas prudent par defaut |
@@ -134,6 +142,16 @@ Deux precautions inscrites au contrat :
 Cas couverts au niveau du lanceur de processus : executable absent, permission
 refusee, format executable invalide, tout autre echec systeme survenant avant
 le demarrage du processus.
+
+**Le signal existe deja.** `ProcessResult`, en
+`src/boilerack/adapters/process_runner.py`, distingue ces cas : toute `OSError`
+levee au lancement — `FileNotFoundError`, `PermissionError` et apparentees —
+produit `returncode is None` et renseigne `launch_error` avec le nom de la
+classe d'exception. La condition d'un futur `CLIENT_UNAVAILABLE` s'ecrit donc
+sans invention : `launch_error != ""`.
+
+Aucun consommateur n'est affecte aujourd'hui, l'adaptateur qui traduirait un
+`ProcessResult` en `TransportStatus` n'existant pas encore.
 
 ### 6.2 Distinction des voisins
 
@@ -180,8 +198,14 @@ diagnostic. Trois consequences seulement :
 
 ### 6.5 Ce que ce lot ne fait pas
 
-Aucune enumeration, aucun type, aucun adaptateur, aucun lanceur de processus
-n'est cree ou modifie ici. La proposition ci-dessus attend un arbitrage.
+`TransportStatus` **n'est pas modifiee** : la septieme valeur reste une
+proposition en attente d'arbitrage. Aucun type, aucun adaptateur, aucun lanceur
+de processus n'est cree ni modifie.
+
+L'adaptateur `vclient` — qui traduira un `ProcessResult` en `ReadResult` ou
+`WriteResult` — **n'existe pas encore**. Ce document en est l'entree : il
+fournit les signatures que cet adaptateur devra reconnaitre, et rappelle en §11
+celles qui lui manquent encore.
 
 ## 7. Locale
 
