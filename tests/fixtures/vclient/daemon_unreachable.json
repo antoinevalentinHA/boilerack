@@ -1,0 +1,33 @@
+{
+  "id": "daemon_unreachable",
+  "description": "Port local ferme, verifie sans ecoute avant la sonde.",
+  "collection": {
+    "collected_at": "2026-08-02T16:17:07+02:00",
+    "client_version": "0.98.12-5-g8ca4797",
+    "argv": [
+      "vclient",
+      "-h",
+      "localhost",
+      "-p",
+      "13002",
+      "-c",
+      "getTempKist"
+    ],
+    "env": {
+      "LANG": "en_GB.UTF-8",
+      "LC_ALL": "C"
+    },
+    "external_timeout_s": 10,
+    "origin": "transcrit de la collecte du 2026-08-02 ; longueur en octets attestee par la capture"
+  },
+  "result": {
+    "returncode": 1,
+    "duration_ms": 11,
+    "stdout_len": 0,
+    "stderr_len": 0,
+    "stdout_b64": "",
+    "stderr_b64": ""
+  },
+  "expected_status": "DAEMON_UNREACHABLE",
+  "notes": "Code retour 1 et les DEUX flux vides. Signature la plus nette des huit sondes."
+}

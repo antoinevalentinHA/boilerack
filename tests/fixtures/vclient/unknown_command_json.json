@@ -1,0 +1,34 @@
+{
+  "id": "unknown_command_json",
+  "description": "Commande inexistante, forme JSON longue.",
+  "collection": {
+    "collected_at": "2026-08-02T16:17:07+02:00",
+    "client_version": "0.98.12-5-g8ca4797",
+    "argv": [
+      "vclient",
+      "-h",
+      "localhost",
+      "-p",
+      "3002",
+      "-J",
+      "-c",
+      "boilerack_c5_commande_inexistante_20260802"
+    ],
+    "env": {
+      "LANG": "en_GB.UTF-8",
+      "LC_ALL": "C"
+    },
+    "external_timeout_s": 10,
+    "origin": "transcrit de la collecte du 2026-08-02 ; longueur en octets attestee par la capture"
+  },
+  "result": {
+    "returncode": 0,
+    "duration_ms": 1787,
+    "stdout_len": 136,
+    "stderr_len": 25,
+    "stdout_b64": "W3siY29tbWFuZCI6ImJvaWxlcmFja19jNV9jb21tYW5kZV9pbmV4aXN0YW50ZV8yMDI2MDgwMiIsInZhbHVlIjowLjAwMDAwMCwicmF3IjoiRVJSOiBjb21tYW5kIHVua25vd24iLCJlcnJvciI6IkVSUjogY29tbWFuZCB1bmtub3duIn1dCg==",
+    "stderr_b64": "U1JWIEVSUjogY29tbWFuZCB1bmtub3duCg=="
+  },
+  "expected_status": "UNKNOWN_COMMAND",
+  "notes": "'error' non vide est le discriminant. 'value' vaut 0.0 : piege silencieux pour qui lirait la valeur sans verifier l'erreur."
+}

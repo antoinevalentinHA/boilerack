@@ -1,0 +1,33 @@
+{
+  "id": "client_absent",
+  "description": "Chemin d'executable inexistant.",
+  "collection": {
+    "collected_at": "2026-08-02T16:08:31+02:00",
+    "client_version": "0.98.12-5-g8ca4797",
+    "argv": [
+      "/tmp/boilerack-c5-vclient-absent",
+      "-h",
+      "localhost",
+      "-p",
+      "3002",
+      "-c",
+      "getTempKist"
+    ],
+    "env": {
+      "LANG": "en_GB.UTF-8",
+      "LC_ALL": "C"
+    },
+    "external_timeout_s": 10,
+    "origin": "transcrit de la collecte du 2026-08-02 ; longueur en octets attestee par la capture"
+  },
+  "result": {
+    "returncode": 127,
+    "duration_ms": 8,
+    "stdout_len": 0,
+    "stderr_len": 93,
+    "stdout_b64": "",
+    "stderr_b64": "dGltZW91dDogZmFpbGVkIHRvIHJ1biBjb21tYW5kICcvdG1wL2JvaWxlcmFjay1jNS12Y2xpZW50LWFic2VudCc6IE5vIHN1Y2ggZmlsZSBvciBkaXJlY3RvcnkK"
+  },
+  "expected_status": "CLIENT_UNAVAILABLE",
+  "notes": "Message emis par l'enveloppe timeout(1), pas par un exec direct. Un lancement sans shell rendrait ENOENT avant tout demarrage de processus."
+}

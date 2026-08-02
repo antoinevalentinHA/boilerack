@@ -1,0 +1,33 @@
+{
+  "id": "read_ok_locale_c",
+  "description": "Meme lecture sous LC_ALL=C.",
+  "collection": {
+    "collected_at": "2026-08-02T16:16:23+02:00",
+    "client_version": "0.98.12-5-g8ca4797",
+    "argv": [
+      "vclient",
+      "-h",
+      "localhost",
+      "-p",
+      "3002",
+      "-c",
+      "getTempKist"
+    ],
+    "env": {
+      "LANG": "en_GB.UTF-8",
+      "LC_ALL": "C"
+    },
+    "external_timeout_s": 10,
+    "origin": "transcrit de la collecte du 2026-08-02 ; longueur en octets attestee par la capture"
+  },
+  "result": {
+    "returncode": 0,
+    "duration_ms": 4027,
+    "stdout_len": 36,
+    "stderr_len": 0,
+    "stdout_b64": "Z2V0VGVtcEtpc3Q6CjI4LjAwMDAwMCBHcmFkIENlbHNpdXMK",
+    "stderr_b64": ""
+  },
+  "expected_status": "OK",
+  "notes": "stdout identique octet pour octet a la locale de production : sortie non sensible a la locale sur cette installation."
+}
