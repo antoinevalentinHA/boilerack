@@ -105,12 +105,16 @@ def validate(payload: bytes, profile: Profile, now: datetime) -> ValidatedComman
     # Resolution du role (avant bornes/pas : pas de surface -> pas de sens).
     spec = profile.get(command.role)
     if spec is None:
+        # Charge utile bien formee mais role sans surface d'ecriture (absent du
+        # profil) : `unsupported_role`, jamais `invalid_payload`.
         return Rejection(
-            Reason.INVALID_PAYLOAD, f"role inconnu du profil : {command.role!r}"
+            Reason.UNSUPPORTED_ROLE, f"role inconnu du profil : {command.role!r}"
         )
     if not spec.writable:
+        # Meme raison pour un role present mais en LECTURE SEULE ; le `detail`
+        # distingue les deux cas. Une seule raison, pas deux.
         return Rejection(
-            Reason.INVALID_PAYLOAD,
+            Reason.UNSUPPORTED_ROLE,
             f"role en lecture seule, aucune surface d'ecriture : {command.role!r}",
         )
 

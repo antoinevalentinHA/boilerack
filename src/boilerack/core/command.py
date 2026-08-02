@@ -37,8 +37,9 @@ class CommandFormError(Exception):
     """Echec de decodage / validation de forme, porteur d'une raison typee.
 
     La `reason` est l'une des raisons permanentes de forme : `invalid_payload`
-    (structure ou champ non recevable) ou `invalid_type` (valeur numerique
-    inacceptable : booleen, non nombre, ou non finie).
+    (structure ou champ non recevable), `invalid_type` (valeur non numerique :
+    booleen, chaine, objet) ou `invalid_value_non_finite` (nombre bien type mais
+    `NaN` / `+Inf` / `-Inf`).
     """
 
     def __init__(self, reason: Reason, detail: str) -> None:
@@ -114,10 +115,11 @@ def _require_numeric_value(raw: object) -> int | float:
             Reason.INVALID_TYPE, f"value doit etre numerique, recu {type(raw).__name__}."
         )
     # Finitude : etape distincte du type (cf. ordre de validation). `NaN`/`Inf`
-    # sont des nombres mais pas des valeurs de commande exploitables.
+    # sont des nombres (le TYPE est correct) mais pas des valeurs exploitables :
+    # d'ou une raison propre, `invalid_value_non_finite`, et non `invalid_type`.
     if not math.isfinite(raw):
         raise CommandFormError(
-            Reason.INVALID_TYPE, f"value doit etre finie : {raw!r}"
+            Reason.INVALID_VALUE_NON_FINITE, f"value doit etre finie : {raw!r}"
         )
     return raw
 
@@ -135,9 +137,9 @@ def decode_payload(payload: bytes) -> dict:
 
     N'accepte QUE des octets UTF-8 representant un objet JSON. Les constantes
     non standard (`NaN`, `Infinity`) laissees passer par la valeur seront
-    rejetees a l'etape de finitude, avec une raison `invalid_type` explicite,
-    plutot qu'ici : cela conserve une frontiere nette entre « payload illisible »
-    et « valeur non finie ».
+    rejetees a l'etape de finitude, avec une raison `invalid_value_non_finite`
+    explicite, plutot qu'ici : cela conserve une frontiere nette entre « payload
+    illisible » et « valeur non finie ».
     """
     if not isinstance(payload, (bytes, bytearray)):
         raise CommandFormError(

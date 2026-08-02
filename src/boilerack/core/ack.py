@@ -41,6 +41,11 @@ class Reason(str, Enum):
 
     INVALID_PAYLOAD = "invalid_payload"
     INVALID_TYPE = "invalid_type"
+    # Valeur numeriquement typee mais NON FINIE (`NaN`, `+Inf`, `-Inf`). Le type
+    # Python est bien un nombre ; c'est la VALEUR qui n'est pas finie, d'ou une
+    # raison distincte de `invalid_type` (qui vise « pas un nombre du tout » :
+    # booleen, chaine, objet). Defaut PERMANENT.
+    INVALID_VALUE_NON_FINITE = "invalid_value_non_finite"
     INVALID_VALUE_OUT_OF_RANGE = "invalid_value_out_of_range"
     INVALID_STEP = "invalid_step"
     EXPIRED = "expired"
@@ -51,6 +56,12 @@ class Reason(str, Enum):
     # installe. Defaut PERMANENT de profil / configuration / compatibilite.
     # A NE PAS confondre avec `invalid_payload` (charge utile mal formee).
     UNSUPPORTED_COMMAND = "unsupported_command"
+    # Le role vise par la commande n'offre pas de surface d'ecriture : soit il
+    # est absent du profil, soit il y figure en LECTURE SEULE. La charge utile
+    # est pourtant bien formee ; ce n'est donc PAS `invalid_payload`. Defaut
+    # PERMANENT (profil / configuration). Le `detail` textuel precise le cas
+    # exact (role inconnu vs role non inscriptible).
+    UNSUPPORTED_ROLE = "unsupported_role"
 
 
 # Classe FIXE de chaque raison. Une raison n'a qu'une seule classe possible :
@@ -58,12 +69,14 @@ class Reason(str, Enum):
 REASON_CLASS: dict[Reason, ReasonClass] = {
     Reason.INVALID_PAYLOAD: ReasonClass.PERMANENT,
     Reason.INVALID_TYPE: ReasonClass.PERMANENT,
+    Reason.INVALID_VALUE_NON_FINITE: ReasonClass.PERMANENT,
     Reason.INVALID_VALUE_OUT_OF_RANGE: ReasonClass.PERMANENT,
     Reason.INVALID_STEP: ReasonClass.PERMANENT,
     Reason.EXPIRED: ReasonClass.TEMPORAL,
     Reason.BRIDGE_UNAVAILABLE: ReasonClass.TRANSIENT,
     Reason.QUEUE_FULL: ReasonClass.TRANSIENT,
     Reason.UNSUPPORTED_COMMAND: ReasonClass.PERMANENT,
+    Reason.UNSUPPORTED_ROLE: ReasonClass.PERMANENT,
 }
 
 _TERMINAL_STATUSES = frozenset(

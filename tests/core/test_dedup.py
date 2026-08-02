@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from boilerack.core import TerminalCache
-from boilerack.core.ack import Ack, AckStatus
+from boilerack.core.ack import Ack, AckStatus, Reason
 from boilerack.transport.vclient import ReadResult, WriteResult
 from boilerack.transport import TransportStatus
 from support import START, Harness, message, payload, rid
@@ -81,6 +81,45 @@ def test_aucune_memoire_apres_nouvelle_instance() -> None:
     h2 = Harness()
     ack = h2.core.submit(message(payload(rid(1), "mode", 1)))
     assert ack.status is AckStatus.ACCEPTED
+
+
+def test_rejet_queue_full_est_mis_en_cache_et_rejoue() -> None:
+    # POLITIQUE RATIFIEE : TOUT verdict terminal est mis en cache pendant le TTL,
+    # y compris les rejets `transient`. Un meme `request_id` designe la meme
+    # transaction et rejoue le meme verdict ; une nouvelle tentative apres une
+    # cause transitoire doit utiliser un NOUVEAU `request_id`.
+    h = Harness(queue_capacity=1)
+    h.core.submit(message(payload(rid(1), "mode", 1)))       # occupe la file
+    full = h.core.submit(message(payload(rid(2), "mode", 2)))  # sature
+    assert full.status is AckStatus.REJECTED
+    assert full.reason is Reason.QUEUE_FULL
+    assert h.core.terminal_cache_size == 1  # queue_full EST mis en cache
+
+    # Meme identifiant : rejeu du meme verdict, aucune re-admission ni ecriture,
+    # meme si la file s'est videe entre-temps.
+    h.vclient.expect_write("set_mode", 1.0, result=WriteResult(TransportStatus.OK))
+    h.vclient.expect_read("get_mode", returns=1.0)
+    h.core.process_next()  # vide la file
+    assert h.core.queue_depth == 0
+    replay = h.core.submit(message(payload(rid(2), "mode", 2)))
+    assert replay.status is AckStatus.REJECTED
+    assert replay.reason is Reason.QUEUE_FULL  # rejoue, pas readmis
+
+
+def test_rejet_bridge_unavailable_fail_closed_est_mis_en_cache_et_rejoue() -> None:
+    # Idem pour le fail-closed sur echec etabli de `accepted` : verdict terminal
+    # `bridge_unavailable`, mis en cache et rejoue a l'identique.
+    h = Harness()
+    h.mqtt.program_publish_failure(1)  # la publication de `accepted` echoue
+    verdict = h.core.submit(message(payload(rid(1), "mode", 1)))
+    assert verdict.status is AckStatus.REJECTED
+    assert verdict.reason is Reason.BRIDGE_UNAVAILABLE
+    assert h.core.terminal_cache_size == 1
+
+    replay = h.core.submit(message(payload(rid(1), "mode", 1)))
+    assert replay.status is AckStatus.REJECTED
+    assert replay.reason is Reason.BRIDGE_UNAVAILABLE
+    assert h.core.in_flight_count == 0
 
 
 def test_accepted_jamais_mis_en_cache() -> None:

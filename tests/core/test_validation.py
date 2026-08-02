@@ -66,12 +66,14 @@ def test_chaine_numerique_refusee() -> None:
 
 def test_nan_refuse() -> None:
     # NaN injecte via une constante JSON non standard, capturee a la finitude.
+    # Le type est bien numerique : la raison est `invalid_value_non_finite`,
+    # PAS `invalid_type` (reserve a « pas un nombre du tout »).
     pb = b'{"request_id":"%s","ts":"%s","expires_at":"%s","source":"t","role":"mode","value":NaN}' % (
         rid(1).encode(),
         START.isoformat().encode(),
         START.isoformat().encode(),
     )
-    assert _reject_reason(pb) is Reason.INVALID_TYPE
+    assert _reject_reason(pb) is Reason.INVALID_VALUE_NON_FINITE
 
 
 def test_infinities_refusees() -> None:
@@ -82,7 +84,21 @@ def test_infinities_refusees() -> None:
             (START.isoformat()).encode(),
             token,
         )
-        assert _reject_reason(pb) is Reason.INVALID_TYPE
+        assert _reject_reason(pb) is Reason.INVALID_VALUE_NON_FINITE
+
+
+def test_non_finie_distincte_du_mauvais_type() -> None:
+    # Frontiere O-2 : un nombre non fini et un « pas un nombre » ne partagent
+    # PAS la meme raison. Le premier est numeriquement type mais non fini.
+    non_finite = b'{"request_id":"%s","ts":"%s","expires_at":"%s","source":"t","role":"mode","value":NaN}' % (
+        rid(1).encode(),
+        START.isoformat().encode(),
+        START.isoformat().encode(),
+    )
+    assert _reject_reason(non_finite) is Reason.INVALID_VALUE_NON_FINITE
+    # Une chaine (« 2 ») ou un booleen restent `invalid_type` : type non numerique.
+    assert _reject_reason(payload(rid(1), "mode", "2")) is Reason.INVALID_TYPE
+    assert _reject_reason(payload(rid(1), "mode", True)) is Reason.INVALID_TYPE
 
 
 # -- valeurs entieres / flottantes ---------------------------------------------
@@ -138,12 +154,32 @@ def test_priorite_borne_avant_pas() -> None:
 # -- role ----------------------------------------------------------------------
 
 def test_role_absent_refuse() -> None:
-    assert _reject_reason(payload(rid(1), "inconnu", 1)) is Reason.INVALID_PAYLOAD
+    # Charge utile bien formee, mais role absent du profil : `unsupported_role`
+    # (permanent), jamais `invalid_payload`.
+    assert _reject_reason(payload(rid(1), "inconnu", 1)) is Reason.UNSUPPORTED_ROLE
 
 
 def test_role_lecture_seule_refuse() -> None:
-    # `sonde` n'a pas de surface d'ecriture.
-    assert _reject_reason(payload(rid(1), "sonde", 5.0)) is Reason.INVALID_PAYLOAD
+    # `sonde` n'a pas de surface d'ecriture : meme raison `unsupported_role`.
+    assert _reject_reason(payload(rid(1), "sonde", 5.0)) is Reason.UNSUPPORTED_ROLE
+
+
+def test_role_indisponible_est_permanent() -> None:
+    from boilerack.core.ack import REASON_CLASS
+
+    assert REASON_CLASS[Reason.UNSUPPORTED_ROLE] is ReasonClass.PERMANENT
+
+
+def test_role_inconnu_et_lecture_seule_partagent_la_raison_mais_le_detail_differe() -> None:
+    absent = validate(payload(rid(1), "inconnu", 1), build_fake_profile(), START)
+    readonly = validate(payload(rid(1), "sonde", 5.0), build_fake_profile(), START)
+    assert isinstance(absent, Rejection) and isinstance(readonly, Rejection)
+    # Une seule raison pour les deux cas...
+    assert absent.reason is Reason.UNSUPPORTED_ROLE
+    assert readonly.reason is Reason.UNSUPPORTED_ROLE
+    # ... mais le detail textuel distingue « inconnu » de « lecture seule ».
+    assert "inconnu" in absent.detail
+    assert "lecture seule" in readonly.detail
 
 
 # -- classes de raison ---------------------------------------------------------

@@ -50,6 +50,25 @@ def test_unsupported_command_est_permanent() -> None:
     assert ack.reason_class is ReasonClass.PERMANENT
 
 
+def test_unsupported_role_est_permanent() -> None:
+    ack = Ack.rejected("x", Reason.UNSUPPORTED_ROLE)
+    assert ack.reason_class is ReasonClass.PERMANENT
+
+
+def test_invalid_value_non_finite_est_permanent() -> None:
+    ack = Ack.rejected("x", Reason.INVALID_VALUE_NON_FINITE)
+    assert ack.reason_class is ReasonClass.PERMANENT
+
+
+def test_toutes_les_raisons_ont_une_classe() -> None:
+    # Table normative raison -> classe : aucune raison orpheline.
+    from boilerack.core.ack import REASON_CLASS
+
+    for reason in Reason:
+        assert reason in REASON_CLASS
+        assert REASON_CLASS[reason] in ReasonClass
+
+
 # -- serialisation -------------------------------------------------------------
 
 def test_schema_exact_applied() -> None:

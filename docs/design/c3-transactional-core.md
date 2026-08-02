@@ -44,14 +44,21 @@ Statuts fermés : `accepted` (non terminal), `applied`, `rejected`, `timeout`
 
 | Raison | Classe | Origine |
 |---|---|---|
-| `invalid_payload` | permanent | forme / structure / rôle inconnu / rôle lecture seule |
-| `invalid_type` | permanent | booléen, non nombre, ou non fini |
+| `invalid_payload` | permanent | forme / structure / champ manquant ou supplémentaire |
+| `invalid_type` | permanent | **pas un nombre** : booléen, chaîne, objet |
+| `invalid_value_non_finite` | permanent | nombre bien typé mais **non fini** (`NaN` / `±Inf`) |
 | `invalid_value_out_of_range` | permanent | hors `[min, max]` |
 | `invalid_step` | permanent | hors grille `step` |
 | `expired` | temporal | `now >= expires_at` |
-| `bridge_unavailable` | transient | aucune écriture émise (démon injoignable) |
+| `bridge_unavailable` | transient | **aucune écriture émise** (démon injoignable, ou exception avant invocation de l'écriture) |
 | `queue_full` | transient | file bornée saturée |
-| `unsupported_command` | permanent | commande d'écriture non reconnue par le transport (C3, arbitrage 1.b) |
+| `unsupported_command` | permanent | commande d'écriture non reconnue par le transport (arbitrage 1.b) |
+| `unsupported_role` | permanent | rôle **sans surface d'écriture** : absent du profil, ou présent en lecture seule (le `detail` distingue les deux) |
+
+Deux raisons ajoutées après l'audit C3, pour ne pas mentir sur la nature du
+défaut : `unsupported_role` (le payload est **bien formé** ; ce n'est donc pas
+`invalid_payload`) et `invalid_value_non_finite` (le **type** est numérique ;
+c'est la **valeur** qui n'est pas finie, distincte de `invalid_type`).
 
 `reason` / `reason_class` ne sont présents **que** pour `rejected`. Chaque raison
 a une classe **fixe** : on ne peut jamais construire un couple contradictoire.
@@ -77,8 +84,9 @@ Ordre explicite et testé ; la **première** cause rencontrée emporte le verdic
 6. **expiration** (`now >= expires_at`).
 
 La **résolution du rôle** (rôle inconnu, rôle en lecture seule) précède les
-bornes. **Priorité borne avant pas** (étape 4 < 5) : une valeur à la fois hors
-borne et hors grille est rejetée pour `invalid_value_out_of_range`.
+bornes et produit `unsupported_role` / permanent. **Priorité borne avant pas**
+(étape 4 < 5) : une valeur à la fois hors borne et hors grille est rejetée pour
+`invalid_value_out_of_range`.
 
 Doctrine ratifiée : **REJECT, jamais clamp** ; normalisation de représentation
 seulement (`20.0` peut représenter l'entier `20`) ; `20.4` n'est **jamais**
@@ -100,13 +108,23 @@ Deux structures **distinctes**, **volatiles**, non persistantes :
   la vie du processus, et est vidé d'un identifiant **uniquement** à la
   production de son verdict terminal ;
 - **`TerminalCache`** associe `request_id → verdict terminal`, TTL **monotone**
-  (défaut 60 s), purge déterministe (paresseuse à l'accès + `purge()` explicite),
-  rejoue le verdict **sans réexécution**, et ne contient **jamais** `accepted`.
+  (défaut 60 s), **non glissant** (la date limite est fixée à `put`, jamais
+  prolongée par `get`), purge déterministe (paresseuse à l'accès + `purge()`
+  explicite), rejoue le verdict **sans réexécution**, et ne contient **jamais**
+  `accepted`. Il est borné en **temps**, pas encore en **nombre** d'entrées :
+  aucune politique de taille/éviction en v1.
 
 Doublons : identifiant en cache terminal → rejeu ; en `in_flight` → aucun second
 travail, pas de nouveau `accepted` ; inconnu → admission normale. La dédup ne
 s'applique qu'aux `request_id` canoniques (sans identité stable, pas de dédup).
 Aucune mémoire n'est garantie après TTL ou redémarrage.
+
+**Politique de cache des rejets `transient` (ratifiée).** **Tous** les verdicts
+terminaux sont mis en cache pendant le TTL, **y compris** `queue_full` et
+`bridge_unavailable`. Un même `request_id` désigne la **même** transaction et
+rejoue le **même** verdict ; la classe `transient` signifie qu'une **nouvelle
+tentative** peut avoir du sens — avec un **nouveau** `request_id`, pas que le
+même identifiant puisse être ré-exécuté.
 
 ## File bornée
 
@@ -127,12 +145,31 @@ supposition :
 | `TIMEOUT` | peut-être | relecture → `applied` / `timeout` |
 | `UNUSABLE_OUTPUT` | peut-être | relecture → `applied` / `timeout` |
 | `TRANSPORT_ERROR` | peut-être (prudence) | relecture → `applied` / `timeout` |
-| `DAEMON_UNREACHABLE` | non | `rejected / bridge_unavailable / transient` |
+| *(tout statut imprévu)* | peut-être (prudence) | relecture → `applied` / `timeout` |
+| `DAEMON_UNREACHABLE` | **non** (preuve typée) | `rejected / bridge_unavailable / transient` |
 | `UNKNOWN_COMMAND` | non (refus du démon) | `rejected / unsupported_command / permanent` |
 
-On ne prétend jamais « non émise » sauf preuve typée (`DAEMON_UNREACHABLE`).
-`unsupported_command` est un défaut **permanent** de profil / configuration /
-compatibilité, distinct de `invalid_payload`.
+On ne prétend jamais « non émise » **sauf preuve typée** (`DAEMON_UNREACHABLE`).
+Seuls les statuts explicitement démontrés « non émis » produisent
+`bridge_unavailable` ; **tout statut imprévu** est traité comme potentiellement
+émis (relecture), jamais rejeté par défaut — un futur statut ne peut pas basculer
+silencieusement vers un faux « non émis » (qui inviterait un réessai = double
+écriture). `unsupported_command` est un défaut **permanent** de profil /
+configuration / compatibilité, distinct de `invalid_payload`.
+
+**Conclusion garantie sur exception.** La frontière avant/après invocation de
+l'écriture est **explicite** (`write_invoked`), jamais déduite implicitement
+d'une exception :
+
+| Exception survenant… | Émise ? | Verdict |
+|---|---|---|
+| après réservation, **avant** `vclient.write()` (p. ex. publication `accepted`) | non | `rejected / bridge_unavailable / transient` |
+| **pendant / après** l'appel `vclient.write()` | peut-être | relecture → `applied` / `timeout` |
+| pendant une lecture de confirmation | — | ne confirme pas ; budget épuisé → `timeout` |
+
+Dans tous les cas : **une seule** invocation d'écriture, `in_flight`
+**garanti** libéré, verdict terminal **mis en cache**, aucune transaction
+abandonnée silencieusement.
 
 ## Confirmation par relecture
 
@@ -155,6 +192,12 @@ compact. Ordre garanti : `accepted` **avant** le verdict terminal.
   de `in_flight`, le verdict `rejected / bridge_unavailable / transient` est mis
   en cache puis publié (meilleur effort). Un handle simplement **demandé** (ni
   confirmé ni échoué) n'est **pas** un échec : l'écriture n'attend pas le PUBACK.
+  Une **exception** de publication de `accepted` est traitée comme cet échec
+  établi (même verdict fail-closed), sans laisser l'exception traverser le cœur.
+- **Cache avant publication.** Le verdict terminal est mis en cache **avant**
+  toute tentative de publication. Une publication du verdict qui échoue ou
+  **lève** ne fait donc jamais disparaître le verdict de la mémoire, et remonte
+  au mieux (absorbée) : le doublon rejoue depuis le cache.
 - Le verdict est décidé par le **fait physique** (relecture). Un échec de
   publication (accepted ou terminal) ne transforme jamais une commande en
   succès et n'est **pas** retenté : livraison MQTT et résultat physique sont deux
@@ -183,15 +226,20 @@ Paho. Le pilotage de l'exécution (`process_next`) reste explicite ; le drapeau
    atteindre un nombre ; `unsupported_command` est une **raison d'ACK**, pas un
    statut de transport.
 
-## Décisions découvertes, surfacées pour ratification
+## Décisions ratifiées après audit C3
 
 - **Rôle inconnu** et **rôle en lecture seule** sont rejetés en
-  `invalid_payload / permanent` (requête non recevable contre le profil, pré-
-  transport). Une raison dédiée (`unknown_role` / `role_not_writable`) pourrait
-  être introduite ultérieurement si une sémantique plus fine est souhaitée, sur
-  le modèle de `unsupported_command`.
-- **Valeur non finie** (`NaN` / `±Inf`) est rejetée en `invalid_type` (étape de
-  finitude), le jeu de raisons ne comportant pas de raison de finitude dédiée.
+  **`unsupported_role / permanent`** (et non `invalid_payload` : le payload est
+  bien formé). Une **seule** raison couvre les deux cas ; le `detail` textuel
+  distingue « rôle inconnu » de « rôle en lecture seule ».
+- **Valeur non finie** (`NaN` / `±Inf`) est rejetée en
+  **`invalid_value_non_finite / permanent`** (et non `invalid_type` : le type est
+  numérique, c'est la valeur qui n'est pas finie).
+- **Rejets `transient` mis en cache** : politique conservée (voir « `in_flight`
+  et cache terminal »). Un réessai après cause transitoire utilise un **nouveau**
+  `request_id`.
+- **Statut de transport imprévu** : traité comme **potentiellement émis**
+  (relecture), jamais `bridge_unavailable` par défaut.
 
 ## Hors périmètre C3
 

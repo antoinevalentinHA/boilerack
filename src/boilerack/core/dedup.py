@@ -47,7 +47,17 @@ class InFlightRegistry:
 
 
 class TerminalCache:
-    """Cache `request_id -> verdict terminal`, borne par un TTL monotone."""
+    """Cache `request_id -> verdict terminal`, borne par un TTL monotone.
+
+    Borne en TEMPS, pas (encore) en NOMBRE d'entrees : la purge est paresseuse
+    (a l'acces d'une entree expiree) ou explicite (`purge()`). Sous un flux
+    d'identifiants uniques, le cache croit jusqu'a la prochaine purge. C'est
+    acceptable en v1 (memoire volatile, TTL court) ; une eventuelle politique de
+    taille/eviction releve d'un lot ulterieur, hors de cette correction.
+
+    Le TTL n'est PAS glissant : la date limite est fixee une seule fois, a la
+    mise en cache (`put`) ; `get` ne la prolonge jamais.
+    """
 
     def __init__(
         self, clock: Clock, ttl_seconds: float = DEFAULT_TERMINAL_TTL_SECONDS
