@@ -78,13 +78,19 @@ def test_hors_borne_haute(entree: float) -> None:
     assert sanitize_curve_slope(entree) == (False, "invalid_value_out_of_range", None)
 
 
-@pytest.mark.reference
+@pytest.mark.unknown
 def test_l_ordre_des_controles_est_bornes_puis_pas() -> None:
     """3.54 se normalise en 3.5, donc dans les bornes, puis echoue sur le pas.
 
     3.94 se normalise en 3.9, hors bornes : la raison rendue est le
     depassement, alors que le pas est egalement invalide. L'ordre des
     controles est donc observable de l'exterieur.
+
+    Classe UNKNOWN et non REFERENCE : le diagnostic rendu quand une valeur
+    viole a la fois les bornes ET le pas n'est pas un comportement a conserver,
+    mais un artefact de l'ordre des controles, a unifier en C3. Le rejet des
+    valeurs simplement hors bornes reste, lui, couvert par les tests REFERENCE
+    dedies (test_hors_borne_haute).
     """
     assert sanitize_curve_slope(3.54) == (False, "invalid_step", None)
     assert sanitize_curve_slope(3.94) == (False, "invalid_value_out_of_range", None)

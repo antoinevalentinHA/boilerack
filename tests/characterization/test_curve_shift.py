@@ -47,13 +47,19 @@ def test_hors_bornes_refuse(entree: int) -> None:
     assert sanitize_curve_shift(entree) == (False, "invalid_value_out_of_range", None)
 
 
-@pytest.mark.reference
+@pytest.mark.unknown
 def test_l_ordre_des_controles_est_pas_puis_bornes() -> None:
     """100.5 est hors bornes ET non entier : la raison rendue est `invalid_step`.
 
     L'ordre est l'inverse de celui de la pente. Deux commandes de la meme
     famille rendent donc des diagnostics differents pour une erreur de meme
-    nature. Comportement reel, a trancher lors de l'unification en C3.
+    nature.
+
+    Classe UNKNOWN et non REFERENCE : le diagnostic rendu quand une valeur
+    viole a la fois les bornes ET le pas n'est pas un comportement a conserver,
+    mais un artefact de l'ordre des controles, a unifier en C3. Le rejet des
+    valeurs simplement hors bornes reste, lui, couvert par les tests REFERENCE
+    dedies (test_hors_bornes_refuse).
     """
     assert sanitize_curve_shift(100.5) == (False, "invalid_step", None)
     assert sanitize_curve_shift(100) == (False, "invalid_value_out_of_range", None)

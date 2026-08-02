@@ -90,10 +90,10 @@ retire.
 
 | Classe | Sens | Nombre de tests |
 |---|---|---|
-| `REFERENCE` | comportement eprouve, a conserver | 135 |
+| `REFERENCE` | comportement eprouve, a conserver | 133 |
 | `ACCIDENT` | comportement actuel non souhaite, caracterise sans devenir normatif | 9 |
 | `DIVERGENCE_RATIFIED` | comportement qui changera selon D-1 a D-10 | 6 |
-| `UNKNOWN` | comportement observe dont le sens n'est pas demontre | 1 |
+| `UNKNOWN` | comportement observe dont le sens n'est pas demontre | 3 |
 
 Les marqueurs `pytest` correspondants sont declares dans `pyproject.toml` et
 `--strict-markers` est actif : un marqueur mal orthographie fait echouer la
@@ -132,11 +132,23 @@ Ces tests figent le comportement **reel**. Lorsque C3 appliquera les
 divergences, ils devront etre inverses de facon visible et tracee — jamais par
 une correction silencieuse.
 
-### Point non demontre
+### Points non demontres
 
-Le decalage de courbe accepte la valeur `0`, qui appartient a l'intervalle
-`[-13 ; 40]`. Aucune source consultee n'etablit son sens physique. Classe
-`UNKNOWN`.
+Trois comportements sont classes `UNKNOWN` — observes, mais dont le sens ou le
+caractere contractuel n'est pas etabli :
+
+1. Le decalage de courbe accepte la valeur `0`, qui appartient a l'intervalle
+   `[-13 ; 40]`. Aucune source consultee n'etablit son sens physique.
+2. Le diagnostic rendu par `sanitize_curve_shift` quand une valeur viole a la
+   fois les bornes ET le pas (`invalid_step`) depend de l'ordre des controles,
+   non d'un contrat.
+3. Le diagnostic symetrique de `sanitize_curve_slope`
+   (`invalid_value_out_of_range` dans le meme cas de figure).
+
+Les points 2 et 3 etaient auparavant classes `REFERENCE`. Les compter parmi les
+comportements « a conserver » aurait fige un artefact d'ordre en contrat, alors
+que l'unification prevue en C3 le fera changer. Le rejet des valeurs simplement
+hors bornes reste, lui, couvert par des tests `REFERENCE` dedies.
 
 ## Observations d'ordre de controle
 
@@ -145,7 +157,8 @@ Deux comportements decouverts par les tests, non documentes jusqu'ici :
 1. **L'ordre des controles differe entre les deux assainisseurs.** La pente
    verifie les bornes puis le pas ; le decalage verifie le pas puis les
    bornes. Une valeur a la fois hors bornes et hors pas rend donc des
-   diagnostics differents selon la commande. A unifier en C3.
+   diagnostics differents selon la commande. A unifier en C3 : les deux tests
+   qui figent ce diagnostic sont classes `UNKNOWN`, pas `REFERENCE`.
 2. **Une valeur sous la borne basse de pente peut etre rejetee pour le pas.**
    `0.19` se normalise en `0.2`, qui satisfait les bornes ; le rejet survient
    au controle suivant avec la raison `invalid_step`. Le controle de bornes
