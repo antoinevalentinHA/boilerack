@@ -13,6 +13,7 @@ seulement « pas de valeur numerique », et le pourquoi est toujours dans `statu
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol, runtime_checkable
@@ -44,15 +45,37 @@ class TransportStatus(Enum):
 class ReadResult:
     """Resultat d'une lecture.
 
-    `value` n'est renseigne que lorsque `status is TransportStatus.OK`. `raw`
-    porte la sortie brute du transport quand elle existe, y compris dans le cas
-    `UNUSABLE_OUTPUT`, pour permettre un diagnostic.
+    Invariant DURCI (C3) : le statut et la valeur ne peuvent jamais se
+    contredire.
+
+    - `status is OK` implique une `value` presente ET finie (jamais `None`,
+      jamais `NaN`, jamais infinie) : un succes de transport porte toujours un
+      nombre exploitable ;
+    - `status is not OK` implique `value is None` : aucune valeur numerique
+      n'accompagne un echec, et le « pourquoi » reste dans `status`.
+
+    `raw` porte la sortie brute du transport quand elle existe, y compris dans
+    le cas `UNUSABLE_OUTPUT`, pour permettre un diagnostic.
     """
 
     status: TransportStatus
     value: float | None = None
     raw: str | None = None
     detail: str = ""
+
+    def __post_init__(self) -> None:
+        if self.status is TransportStatus.OK:
+            if self.value is None:
+                raise ValueError("ReadResult OK exige une value non nulle.")
+            if not math.isfinite(self.value):
+                raise ValueError(
+                    f"ReadResult OK exige une value finie : {self.value!r}"
+                )
+        elif self.value is not None:
+            raise ValueError(
+                f"ReadResult non-OK ({self.status.value}) exige value is None, "
+                f"recu {self.value!r}"
+            )
 
     @property
     def ok(self) -> bool:

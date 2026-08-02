@@ -12,9 +12,28 @@ code de test.
 
 from __future__ import annotations
 
+import math
 import time
 from datetime import datetime, timezone
 from typing import Protocol, runtime_checkable
+
+
+def check_duration(seconds: float, *, op: str) -> float:
+    """Valide une duree en secondes destinee a une horloge.
+
+    Refuse toute valeur non finie (`NaN`, `+Inf`, `-Inf`) et toute valeur
+    negative. Renvoie la duree en `float` si elle est acceptable. Centralise la
+    garde pour que l'horloge reelle et l'horloge virtuelle refusent EXACTEMENT
+    les memes entrees.
+    """
+    value = float(seconds)
+    if math.isnan(value):
+        raise ValueError(f"{op} n'accepte pas NaN comme duree : {seconds!r}")
+    if math.isinf(value):
+        raise ValueError(f"{op} n'accepte pas une duree infinie : {seconds!r}")
+    if value < 0:
+        raise ValueError(f"{op} n'accepte pas une duree negative : {seconds!r}")
+    return value
 
 
 @runtime_checkable
@@ -57,6 +76,4 @@ class SystemClock:
         return time.monotonic()
 
     def sleep(self, seconds: float) -> None:
-        if seconds < 0:
-            raise ValueError(f"sleep() n'accepte pas une duree negative : {seconds!r}")
-        time.sleep(seconds)
+        time.sleep(check_duration(seconds, op="sleep()"))

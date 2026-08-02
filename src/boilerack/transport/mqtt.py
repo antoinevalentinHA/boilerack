@@ -14,7 +14,10 @@ Cela permettra plus tard de distinguer « envoye » de « accuse ».
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Callable, Protocol, runtime_checkable
+
+MessageHandler = Callable[["Message"], None]
+"""Rappel invoque pour chaque `Message` entrant remis par le transport."""
 
 
 class NotConnectedError(Exception):
@@ -97,6 +100,12 @@ class MqttClient(Protocol):
 
     Definit ce que le coeur pourra faire ; ne dit rien de COMMENT (reconnexion,
     retry, session persistante) : ce sont des decisions ulterieures.
+
+    La voie d'ENTREE est reduite au strict minimum : `set_message_handler`
+    enregistre un rappel que le transport appellera pour chaque `Message`
+    entrant (topic, payload brut, QoS, `dup`). Cela n'introduit ni Paho ni
+    session complete : c'est la seule couture dont le coeur a besoin pour
+    recevoir des commandes.
     """
 
     def connect(self) -> None:
@@ -111,4 +120,7 @@ class MqttClient(Protocol):
     def publish(
         self, topic: str, payload: bytes, qos: int = 0, retain: bool = False
     ) -> PublishHandle:
+        ...
+
+    def set_message_handler(self, handler: MessageHandler) -> None:
         ...
