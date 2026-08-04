@@ -48,7 +48,13 @@ import threading
 from typing import Any, Protocol
 
 from boilerack.adapters.config import MqttConfig
-from boilerack.transport.mqtt import Message, MessageHandler, Publication, PublishHandle
+from boilerack.transport.mqtt import (
+    Message,
+    MessageHandler,
+    MqttWill,
+    Publication,
+    PublishHandle,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +83,10 @@ class PahoLike(Protocol):
     def loop_start(self) -> Any: ...
     def loop_stop(self) -> Any: ...
     def subscribe(self, topic: str, qos: int = 0) -> Any: ...
+    def will_set(
+        self, topic: str, payload: Any = None, qos: int = 0, retain: bool = False
+    ) -> Any: ...
+    def will_clear(self) -> Any: ...
     def publish(
         self, topic: str, payload: bytes, qos: int = 0, retain: bool = False
     ) -> Any: ...
@@ -141,8 +151,28 @@ class PahoMqttClient:
 
     # -- cycle de connexion --------------------------------------------------
 
-    def connect(self) -> None:
+    def connect(self, will: MqttWill | None = None) -> None:
+        """Pose le testament PUIS ouvre la connexion, dans cet ordre exact.
+
+        Paho documente que `will_set()` « must be called before connect() to
+        have any effect » : le testament est empaquete dans le CONNECT. L'ordre
+        est donc encapsule ici plutot que confie a l'appelant.
+
+        `will=None` appelle `will_clear()` : sans cela, un testament pose lors
+        d'une connexion anterieure survivrait SILENCIEUSEMENT a une nouvelle
+        connexion censee ne pas en porter.
+
+        Le testament reste attache au client Paho et est reemis dans chaque
+        CONNECT : une reconnexion native le conserve, aucune action n'est
+        requise. Aucune politique de reconnexion metier n'est ajoutee.
+        """
         cfg = self._config
+        if will is not None:
+            self._client.will_set(
+                will.topic, will.payload, qos=will.qos, retain=will.retain
+            )
+        else:
+            self._client.will_clear()
         self._client.connect(cfg.host, cfg.port, cfg.keepalive)
         # Boucle reseau native de Paho (thread d'arriere-plan). Aucune politique
         # de reconnexion metier ajoutee.

@@ -10,12 +10,54 @@ import pytest
 
 from boilerack.adapters.config import MqttConfig
 from boilerack.adapters.mqtt_paho import PahoMqttClient
-from boilerack.transport.mqtt import Message, MqttClient
+from boilerack.transport.mqtt import Message, MqttClient, MqttWill
 from adapter_support import FakeMqttMessage, FakePahoClient
 
 
+class FakePahoWithWill(FakePahoClient):
+    """`FakePahoClient` etendu du testament, avec journal d'appels ORDONNE.
+
+    L'extension vit ici plutot que dans `adapter_support` : seul ce module
+    exerce `connect()`, et l'ordre `will_set` -> `connect` -> `loop_start` est
+    precisement ce que ces tests doivent prouver.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.calls: list = []
+        self.will_sets: list = []
+        self.will_clears: int = 0
+
+    def will_set(self, topic, payload=None, qos=0, retain=False):
+        self.will_sets.append((topic, payload, qos, retain))
+        self.calls.append("will_set")
+
+    def will_clear(self):
+        self.will_clears += 1
+        self.calls.append("will_clear")
+
+    def connect(self, host, port, keepalive):
+        self.calls.append("connect")
+        super().connect(host, port, keepalive)
+
+    def loop_start(self):
+        self.calls.append("loop_start")
+        super().loop_start()
+
+    def loop_stop(self):
+        self.calls.append("loop_stop")
+        super().loop_stop()
+
+    def disconnect(self):
+        self.calls.append("disconnect")
+        super().disconnect()
+
+
+_WILL = MqttWill(topic="boiler/bridge/online", payload=b"offline", qos=1, retain=True)
+
+
 def _adapter(fake=None, **cfg):
-    fake = fake or FakePahoClient()
+    fake = fake or FakePahoWithWill()
     config = MqttConfig(host="broker.local", **cfg)
     return PahoMqttClient(config, client=fake), fake
 
@@ -34,6 +76,53 @@ def test_connexion_demarre_la_boucle_native() -> None:
     adapter.connect()
     assert fake.connected_args == ("broker.local", 1884, 30)
     assert fake.loop_started == 1
+
+
+# -- testament ----------------------------------------------------------------
+
+def test_testament_pose_avant_la_connexion() -> None:
+    """Paho : « will_set must be called before connect() to have any effect »."""
+    adapter, fake = _adapter()
+    adapter.connect(will=_WILL)
+    assert fake.calls == ["will_set", "connect", "loop_start"]
+
+
+def test_arguments_exacts_du_testament() -> None:
+    adapter, fake = _adapter()
+    adapter.connect(will=_WILL)
+    assert fake.will_sets == [("boiler/bridge/online", b"offline", 1, True)]
+    assert fake.will_clears == 0
+
+
+def test_sans_testament_le_precedent_est_efface() -> None:
+    """Sans `will_clear()`, un testament anterieur survivrait silencieusement."""
+    adapter, fake = _adapter()
+    adapter.connect(will=_WILL)
+    adapter.connect()
+    assert fake.calls == [
+        "will_set", "connect", "loop_start",
+        "will_clear", "connect", "loop_start",
+    ]
+    assert fake.will_clears == 1
+
+
+def test_connexion_sans_testament_n_appelle_jamais_will_set() -> None:
+    adapter, fake = _adapter()
+    adapter.connect()
+    assert fake.will_sets == []
+    assert fake.will_clears == 1
+    assert fake.connected_args == ("broker.local", 1883, 60)
+
+
+def test_deconnexion_inchangee_par_le_testament() -> None:
+    """La sequence de deconnexion existante n'est pas touchee par ce lot."""
+    adapter, fake = _adapter()
+    adapter.connect(will=_WILL)
+    adapter.disconnect()
+    assert fake.calls == [
+        "will_set", "connect", "loop_start", "loop_stop", "disconnect",
+    ]
+    assert adapter.connected is False
 
 
 def test_on_connect_succes_puis_deconnexion_honnete() -> None:
