@@ -4,6 +4,9 @@ import pytest
 
 from boilerack.testing import FakeMqttClient
 from boilerack.transport import Message, MqttClient, NotConnectedError
+from boilerack.transport.mqtt import MqttWill
+
+_WILL = MqttWill(topic="boiler/bridge/online", payload=b"offline", qos=1, retain=True)
 
 
 def _connected() -> FakeMqttClient:
@@ -14,6 +17,72 @@ def _connected() -> FakeMqttClient:
 
 def test_conforme_au_protocole() -> None:
     assert isinstance(FakeMqttClient(), MqttClient)
+
+
+def test_mqtt_will_reexporte_publiquement() -> None:
+    """`MqttWill` fait partie de l'API publique de `boilerack.transport`."""
+    from boilerack.transport import MqttWill as Public
+    from boilerack.transport.mqtt import MqttWill as Direct
+
+    assert Public is Direct
+
+
+def test_exports_historiques_de_transport_conserves() -> None:
+    import boilerack.transport as transport
+
+    historiques = {
+        "Message", "MessageHandler", "MqttClient", "NotConnectedError",
+        "Publication", "PublishHandle", "Subscription",
+        "ReadResult", "TransportStatus", "VClient", "WriteResult",
+    }
+    assert historiques <= set(transport.__all__)
+    assert "MqttWill" in transport.__all__
+    assert all(hasattr(transport, nom) for nom in transport.__all__)
+
+
+def test_conformite_isinstance_ne_prouve_pas_le_testament() -> None:
+    """`runtime_checkable` ne verifie QUE la presence des methodes.
+
+    Un double dont `connect()` ignorerait le testament satisferait encore
+    `isinstance`. La conformite reelle doit donc etre etablie par le
+    COMPORTEMENT, ce que fait le test suivant.
+    """
+
+    class SansTestament:
+        def connect(self): ...
+        def disconnect(self): ...
+        def subscribe(self, topic, qos=0): ...
+        def publish(self, topic, payload, qos=0, retain=False): ...
+        def set_message_handler(self, handler): ...
+
+    assert isinstance(SansTestament(), MqttClient)
+
+
+def test_testament_reellement_conserve() -> None:
+    """Test de COMPORTEMENT : le double accepte et retient le testament."""
+    client = FakeMqttClient()
+    assert client.connected_will is None
+    client.connect(will=_WILL)
+    assert client.connected_will == _WILL
+    assert client.connected_will.payload == b"offline"
+    assert (client.connected_will.qos, client.connected_will.retain) == (1, True)
+
+
+def test_connexion_sans_testament_efface_le_precedent() -> None:
+    client = FakeMqttClient()
+    client.connect(will=_WILL)
+    client.disconnect()
+    client.connect()
+    assert client.connected_will is None
+
+
+def test_testament_n_est_jamais_emis_automatiquement() -> None:
+    """Un double de connexion n'invente aucune deconnexion brutale."""
+    client = FakeMqttClient()
+    client.connect(will=_WILL)
+    assert client.publications == ()
+    client.disconnect()
+    assert client.publications == ()
 
 
 def test_publication_enregistree_exactement() -> None:

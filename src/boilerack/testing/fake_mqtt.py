@@ -9,7 +9,8 @@ Enregistre, dans l'ordre :
 - les publications (topic, payload brut, QoS, retain), avec leur etat
   demandee / confirmee / echouee ;
 - les souscriptions demandees ;
-- les evenements de connexion et de deconnexion.
+- les evenements de connexion et de deconnexion ;
+- le testament pose lors du dernier `connect()` (`connected_will`).
 
 Pilotage par le test :
 
@@ -24,6 +25,7 @@ from typing import Callable
 
 from boilerack.transport.mqtt import (
     Message,
+    MqttWill,
     NotConnectedError,
     Publication,
     PublishHandle,
@@ -41,14 +43,24 @@ class FakeMqttClient:
         self._connection_events: list[str] = []
         self._inbox: list[Message] = []
         self._pending_failures = 0
+        self._connected_will: MqttWill | None = None
         self._on_message: Callable[[Message], None] | None = None
 
     # ------------------------------------------------------------------
     # Protocole MqttClient
     # ------------------------------------------------------------------
 
-    def connect(self) -> None:
+    def connect(self, will: MqttWill | None = None) -> None:
+        """Enregistre le testament de la connexion courante.
+
+        `will=None` EFFACE un testament precedemment enregistre : c'est la
+        semantique de la frontiere, « aucun testament pour cette connexion ».
+
+        Aucune emission automatique n'est simulee : un double de connexion
+        n'invente pas une deconnexion brutale que le test n'a pas demandee.
+        """
         self._connected = True
+        self._connected_will = will
         self._connection_events.append("connect")
 
     def disconnect(self) -> None:
@@ -107,6 +119,11 @@ class FakeMqttClient:
     @property
     def connected(self) -> bool:
         return self._connected
+
+    @property
+    def connected_will(self) -> MqttWill | None:
+        """Testament pose lors du dernier `connect()`, ou `None`."""
+        return self._connected_will
 
     @property
     def publications(self) -> tuple[PublishHandle, ...]:
