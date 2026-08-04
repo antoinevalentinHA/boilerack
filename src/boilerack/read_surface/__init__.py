@@ -1,26 +1,47 @@
-"""Primitives pures de la surface MQTT de lecture (lot C7-C1).
+"""Surface MQTT de lecture — parties pures (lots C7-C1 et C7-C2).
 
-Ce paquet implemente les seules parties du contrat `c7-mqtt-read-contract.md`
-qui sont entierement specifiees et sans aucune dependance : la construction des
-topics (§3.2 a §3.4) et la serialisation du payload scalaire (§4.5).
+Ce paquet implemente les parties du contrat `c7-mqtt-read-contract.md` qui sont
+entierement specifiees et sans dependance technique :
 
-Tout y est **pur** : aucune horloge, aucun processus, aucun socket, aucun
-client MQTT, aucun lecteur `vclient`, aucun etat. Ce paquet ne publie rien et
-ne peut rien publier.
+- **C7-C1** : construction des topics (§3.2 a §3.4) et serialisation du payload
+  scalaire (§4.5) ;
+- **C7-C2** : declaration des huit mesures (§4.2), etat de lecture (§6.5),
+  politique de fraicheur (§7.2, §7.3), cloture de cycle et etat de chaine
+  (§8.2), instantane `bridge/telemetry_status` (§6.2, §6.6).
 
-Sont DELIBEREMENT absents de ce lot, faute de consommateur :
+Tout y est **pur** : aucun processus, aucun socket, aucun client MQTT, aucun
+lecteur `vclient`. L'horloge est toujours injectee ; aucune horloge systeme
+n'est lue. Ce paquet ne publie rien et ne peut rien publier.
 
-- la declaration des mesures, la fraicheur et l'instantane `bridge/telemetry_status`
-  (reportes en C7-C2) ;
-- le testament MQTT, la presence, le battement, le publieur et l'ordonnancement
-  (reportes en C7-C3).
+Aucune valeur scalaire n'est conservee : elle va du `ReadResult` au payload sans
+transiter par l'etat, qui est une **projection des issues**. Voir
+`state.py` et docs/design/c7c2-read-surface-state.md.
 
-Voir docs/design/c7c1-read-surface-primitives.md.
+Sont DELIBEREMENT absents, faute de consommateur : le testament MQTT, la
+presence, le battement, le publieur, l'ordonnancement et les cadences —
+reportes en C7-C3.
 """
 
 from __future__ import annotations
 
+from boilerack.read_surface.measurements import (
+    V1_MEASUREMENTS,
+    MeasurementSpec,
+    default_fresh_max,
+)
 from boilerack.read_surface.payload import format_scalar
+from boilerack.read_surface.snapshot import (
+    PublicResult,
+    build_snapshot,
+    snapshot_to_json,
+)
+from boilerack.read_surface.state import (
+    ChainStatus,
+    MeasurementState,
+    ReadSurfaceState,
+    complete_cycle,
+    record_result,
+)
 from boilerack.read_surface.topics import (
     BRIDGE_SUFFIXES,
     TELEMETRY_SUFFIXES,
@@ -31,11 +52,27 @@ from boilerack.read_surface.topics import (
 )
 
 __all__ = [
+    # C7-C1 — topics
     "InvalidMqttTopic",
     "normalize_prefix",
     "build_topic",
     "TELEMETRY_SUFFIXES",
     "BRIDGE_SUFFIXES",
     "V1_SUFFIXES",
+    # C7-C1 — payload
     "format_scalar",
+    # C7-C2 — declaration
+    "MeasurementSpec",
+    "default_fresh_max",
+    "V1_MEASUREMENTS",
+    # C7-C2 — etat et cycles
+    "MeasurementState",
+    "ReadSurfaceState",
+    "ChainStatus",
+    "record_result",
+    "complete_cycle",
+    # C7-C2 — instantane
+    "PublicResult",
+    "build_snapshot",
+    "snapshot_to_json",
 ]
