@@ -12,11 +12,13 @@ import pytest
 from boilerack.read_surface import publisher as publisher_module
 from boilerack.read_surface.config import ReadSurfaceConfig
 from boilerack.read_surface.measurements import V1_MEASUREMENTS
+from boilerack.read_surface.payload import format_scalar
 from boilerack.read_surface.publisher import ReadSurfacePublisher
 from boilerack.read_surface.state import ChainStatus
 from boilerack.read_surface.topics import V1_SUFFIXES
 from boilerack.testing import FakeMqttClient, VirtualClock
 from boilerack.transport.mqtt import MqttWill, NotConnectedError
+from boilerack.transport.vclient import ReadResult, TransportStatus
 
 _DEBUT = datetime(2026, 8, 2, 20, 0, 0, tzinfo=timezone.utc)
 
@@ -25,10 +27,13 @@ def _clock() -> VirtualClock:
     return VirtualClock(_DEBUT, monotonic_start=1000.0)
 
 
-def _publieur(prefix: str = "boiler", mqtt=None):
+def _publieur(prefix: str = "boiler", mqtt=None, reader=None, clock=None, config=None):
     client = mqtt if mqtt is not None else FakeMqttClient()
     p = ReadSurfacePublisher(
-        mqtt=client, clock=_clock(), config=ReadSurfaceConfig(prefix=prefix)
+        mqtt=client,
+        clock=clock if clock is not None else _clock(),
+        reader=reader,
+        config=config if config is not None else ReadSurfaceConfig(prefix=prefix),
     )
     return p, client
 
@@ -541,30 +546,32 @@ def test_publication_refusee_hors_connexion() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Limites assumees de C7-C3A
+# Limites assumees apres C7-C3B
 # ---------------------------------------------------------------------------
 
 
-def test_pas_encore_un_producteur_de_telemetrie() -> None:
-    """C7-C3A ne lit rien et ne publie aucune mesure.
+def test_api_publique_minimale() -> None:
+    """C7-C3B ajoute `due_at` et `run_due` — et rien d'autre.
 
-    Ni lecteur, ni cycle, ni cadence, ni battement, ni reconnexion : tout cela
-    releve de C7-C3B. Ce test fige la limite pour qu'elle ne passe pas pour un
-    oubli — et il devra changer de facon VISIBLE le jour ou C7-C3B l'etendra.
+    Restent absents, faute de consommateur : une boucle propre, une politique de
+    reconnexion, et des publications d'instantane ou de battement exposees
+    publiquement. Ce test fige la limite pour qu'elle ne passe pas pour un oubli.
     """
+    for present in ("start", "stop", "due_at", "run_due", "will", "state"):
+        assert hasattr(ReadSurfacePublisher, present)
     for absent in (
-        "read", "run_due", "due_at", "publish_snapshot", "publish_heartbeat",
-        "run_forever", "reconnect",
+        "run_forever", "reconnect", "publish_snapshot", "publish_heartbeat",
+        "read_cycle", "loop",
     ):
         assert not hasattr(ReadSurfacePublisher, absent)
 
 
-def test_aucun_lecteur_injecte() -> None:
+def test_lecteur_injecte_jamais_construit() -> None:
+    """Le lecteur est une dependance INJECTEE, comme le client MQTT."""
     import inspect
 
     parametres = set(inspect.signature(ReadSurfacePublisher.__init__).parameters)
-    assert parametres == {"self", "mqtt", "clock", "specs", "config"}
-    assert "reader" not in parametres
+    assert parametres == {"self", "mqtt", "clock", "reader", "specs", "config"}
 
 
 def test_aucune_attente_de_confirmation() -> None:
@@ -617,7 +624,963 @@ def test_aucune_boucle_ni_sommeil() -> None:
 
 
 def test_aucun_adaptateur_construit() -> None:
-    """Le client est injecte : ce composant n'est pas une composition root."""
+    """Le client et le lecteur sont injectes : pas de composition root.
+
+    Le controle porte sur les symboles REELLEMENT references — le nom
+    `adapters` figure desormais dans une docstring qui explique precisement
+    pourquoi le paquet n'en depend pas.
+    """
     source = pathlib.Path(publisher_module.__file__).read_text(encoding="utf-8")
-    for interdit in ("PahoMqttClient", "SubprocessRunner", "SystemClock", "adapters"):
+    noms: set[str] = set()
+    for noeud in ast.walk(ast.parse(source)):
+        if isinstance(noeud, ast.Name):
+            noms.add(noeud.id)
+        elif isinstance(noeud, ast.Attribute):
+            noms.add(noeud.attr)
+        elif isinstance(noeud, (ast.Import, ast.ImportFrom)):
+            noms.update(a.name.split(".")[0] for a in noeud.names)
+            if isinstance(noeud, ast.ImportFrom) and noeud.module:
+                noms.add(noeud.module)
+    assert not noms & {"PahoMqttClient", "SubprocessRunner", "SystemClock"}
+    assert not any(n.startswith("boilerack.adapters") for n in noms)
+
+
+# ===========================================================================
+# C7-C3B — lectures dues, publications scalaires, cadences et battement
+# ===========================================================================
+
+_ECHECS = [s for s in TransportStatus if s is not TransportStatus.OK]
+_ROLES = [s.role for s in V1_MEASUREMENTS]
+_CMDS = [s.read for s in V1_MEASUREMENTS]
+_TEMPS_30S = [s for s in V1_MEASUREMENTS if s.period_s == 30]
+
+
+class _Lecteur:
+    """Lecteur programmable : aucun processus, aucun `vclient` reel."""
+
+    def __init__(self, plan: dict | None = None, valeur: float = 21.5) -> None:
+        self.plan = plan or {}
+        self.valeur = valeur
+        self.appels: list[str] = []
+
+    def read(self, command: str):
+        self.appels.append(command)
+        statut = self.plan.get(command, TransportStatus.OK)
+        if statut is TransportStatus.OK:
+            return ReadResult(status=statut, value=self.valeur)
+        return ReadResult(status=statut)
+
+
+class _LecteurQuiLeve(_Lecteur):
+    """Leve une exception inattendue a la N-ieme lecture."""
+
+    def __init__(self, a_la_lecture: int = 3, **kw) -> None:
+        super().__init__(**kw)
+        self.seuil = a_la_lecture
+
+    def read(self, command: str):
+        if len(self.appels) + 1 >= self.seuil:
+            self.appels.append(command)
+            raise RuntimeError("defaut inattendu du lecteur")
+        return super().read(command)
+
+
+def _demarre(reader=None, mqtt=None, config=None, clock=None):
+    c = clock if clock is not None else _clock()
+    p, client = _publieur(mqtt=mqtt, reader=reader, clock=c, config=config)
+    p.start()
+    return p, client, c
+
+
+def _topics(client) -> list[str]:
+    return [h.publication.topic for h in client.publications]
+
+
+def _depuis(client, n: int) -> list[tuple[str, bytes, int, bool]]:
+    return _publies(client)[n:]
+
+
+# ---------------------------------------------------------------------------
+# Demarrage et echeances initiales
+# ---------------------------------------------------------------------------
+
+
+def test_snapshot_initial_avant_toute_lecture() -> None:
+    r = _Lecteur()
+    p, client, _ = _demarre(reader=r)
+    assert r.appels == []
+    assert _topics(client) == ["boiler/bridge/online", "boiler/bridge/telemetry_status"]
+
+
+def test_mesures_immediatement_dues_apres_le_demarrage() -> None:
+    """Decision d'implementation : le demarrage est le premier reveil."""
+    p, _, c = _demarre(reader=_Lecteur())
+    assert p.due_at() == c.monotonic()
+    assert [s.role for s in p.due_measurements()] == _ROLES
+
+
+def test_echeances_snapshot_et_heartbeat_initialisees() -> None:
+    p, _, c = _demarre(reader=_Lecteur())
+    assert p.due_at() == c.monotonic()
+    p.run_due()
+    assert p.due_at() == c.monotonic() + 30
+
+
+def test_heartbeat_desactive_absent_de_toute_publication() -> None:
+    config = ReadSurfaceConfig(heartbeat_period_s=None)
+    p, client, c = _demarre(reader=_Lecteur(), config=config)
+    p.run_due()
+    c.advance(3600)
+    p.run_due()
+    assert not any("heartbeat" in t for t in _topics(client))
+
+
+def test_due_at_refuse_avant_start() -> None:
+    p, _ = _publieur(reader=_Lecteur())
+    with pytest.raises(RuntimeError, match="sans start"):
+        p.due_at()
+
+
+def test_run_due_refuse_avant_start() -> None:
+    r = _Lecteur()
+    p, _ = _publieur(reader=r)
+    with pytest.raises(RuntimeError, match="sans start"):
+        p.run_due()
+    assert r.appels == []
+
+
+def test_due_at_ne_modifie_rien() -> None:
+    p, client, _ = _demarre(reader=_Lecteur())
+    avant = (p.state, len(client.publications))
+    p.due_at()
+    p.due_at()
+    assert (p.state, len(client.publications)) == avant
+
+
+# ---------------------------------------------------------------------------
+# Mesures dues
+# ---------------------------------------------------------------------------
+
+
+def test_aucune_mesure_due_ne_declenche_aucune_lecture() -> None:
+    config = ReadSurfaceConfig(snapshot_period_s=90, heartbeat_period_s=None)
+    r = _Lecteur()
+    p, client, c = _demarre(reader=r, config=config)
+    p.run_due()
+    r.appels.clear()
+    n = len(client.publications)
+    p.run_due()
+    assert r.appels == []
+    assert len(client.publications) == n
+
+
+def test_seules_les_trois_mesures_30s_dues() -> None:
+    r = _Lecteur()
+    p, _, c = _demarre(reader=r)
+    p.run_due()
+    r.appels.clear()
+    c.advance(30)
+    p.run_due()
+    assert r.appels == [s.read for s in _TEMPS_30S]
+
+
+def test_les_huit_mesures_dues_a_60s() -> None:
+    r = _Lecteur()
+    p, _, c = _demarre(reader=r)
+    p.run_due()
+    r.appels.clear()
+    c.advance(60)
+    p.run_due()
+    assert r.appels == _CMDS
+
+
+def test_ordre_exact_des_specs() -> None:
+    """Aucun tri alphabetique : l'ordre de la table §4.2 est conserve."""
+    r = _Lecteur()
+    p, _, _ = _demarre(reader=r)
+    p.run_due()
+    assert r.appels == _CMDS
+
+
+def test_un_seul_appel_par_role() -> None:
+    r = _Lecteur()
+    p, _, _ = _demarre(reader=r)
+    p.run_due()
+    assert len(r.appels) == len(set(r.appels)) == 8
+
+
+# ---------------------------------------------------------------------------
+# Lecture reussie
+# ---------------------------------------------------------------------------
+
+
+def test_scalaire_publie_sur_le_bon_topic_qos1_retenu() -> None:
+    r = _Lecteur(valeur=21.5)
+    p, client, _ = _demarre(reader=r)
+    n = len(client.publications)
+    p.run_due()
+    scalaires = [x for x in _depuis(client, n) if "/telemetry/" in x[0]]
+    assert len(scalaires) == 8
+    assert all(q == 1 and ret is True for _, _, q, ret in scalaires)
+    assert scalaires[0][0] == "boiler/telemetry/temperatures/outdoor"
+
+
+def test_payload_scalaire_produit_par_format_scalar() -> None:
+    r = _Lecteur(valeur=21.5)
+    p, client, _ = _demarre(reader=r)
+    p.run_due()
+    charge = next(
+        pl for t, pl, _, _ in _publies(client) if t.endswith("temperatures/outdoor")
+    )
+    assert charge == format_scalar(21.5)
+
+
+def test_commande_exacte_transmise_au_lecteur() -> None:
+    r = _Lecteur()
+    p, _, _ = _demarre(reader=r)
+    p.run_due()
+    assert r.appels[0] == "getTempA"
+    assert r.appels[1] == "getTempKist"
+
+
+def test_etat_mis_a_jour_apres_publication_scalaire() -> None:
+    """§4.6 : scalaire, PUIS etat, PUIS instantane."""
+    r = _Lecteur()
+    p, _, _ = _demarre(reader=r)
+    p.run_due()
+    for role in _ROLES:
+        mesure = p.state.measurements[role]
+        assert mesure.last_result is TransportStatus.OK
+        assert mesure.has_value is True
+
+
+def test_snapshot_publie_apres_chaque_succes() -> None:
+    r = _Lecteur()
+    p, client, _ = _demarre(reader=r)
+    n = len(client.publications)
+    p.run_due()
+    sequence = [t for t, _, _, _ in _depuis(client, n)]
+    assert len(sequence) == 17
+    for i in range(8):
+        assert "/telemetry/" in sequence[2 * i]
+        assert sequence[2 * i + 1] == "boiler/bridge/telemetry_status"
+    assert sequence[-1] == "boiler/bridge/telemetry_status"
+
+
+def test_aucune_valeur_scalaire_stockee() -> None:
+    import dataclasses
+
+    from boilerack.read_surface.state import MeasurementState
+
+    p, _, _ = _demarre(reader=_Lecteur())
+    p.run_due()
+    champs = {f.name for f in dataclasses.fields(MeasurementState)}
+    assert not champs & {"value", "last_value", "raw", "detail"}
+    assert not any("21.5" in repr(v) for v in p.state.measurements.values())
+
+
+# ---------------------------------------------------------------------------
+# Lecture echouee
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("statut", _ECHECS, ids=[s.name for s in _ECHECS])
+def test_aucun_scalaire_sur_echec(statut: TransportStatus) -> None:
+    r = _Lecteur(plan={cmd: statut for cmd in _CMDS})
+    p, client, _ = _demarre(reader=r)
+    n = len(client.publications)
+    p.run_due()
+    assert not any("/telemetry/" in t for t, _, _, _ in _depuis(client, n))
+
+
+def test_aucune_sentinelle_sur_echec() -> None:
+    r = _Lecteur(plan={cmd: TransportStatus.TIMEOUT for cmd in _CMDS})
+    p, client, _ = _demarre(reader=r)
+    p.run_due()
+    assert [pl for t, pl, _, _ in _publies(client) if "/telemetry/" in t] == []
+
+
+def test_etat_mis_a_jour_sur_echec() -> None:
+    r = _Lecteur(plan={"getTempA": TransportStatus.TIMEOUT})
+    p, _, _ = _demarre(reader=r)
+    p.run_due()
+    mesure = p.state.measurements["outdoor_temperature"]
+    assert mesure.last_result is TransportStatus.TIMEOUT
+    assert mesure.has_value is False
+
+
+def test_snapshot_final_porte_le_dernier_resultat_echoue() -> None:
+    r = _Lecteur(plan={"getTempA": TransportStatus.TIMEOUT})
+    p, client, _ = _demarre(reader=r)
+    p.run_due()
+    final = json.loads(_publies(client)[-1][1].decode("utf-8"))
+    assert final["measurements"]["outdoor_temperature"]["last_result"] == "timeout"
+    assert final["measurements"]["supply_temperature"]["last_result"] == "ok"
+
+
+def test_aucun_snapshot_intermediaire_apres_un_echec() -> None:
+    """§4.6 n'impose l'instantane qu'APRES une lecture reussie."""
+    r = _Lecteur(plan={cmd: TransportStatus.TIMEOUT for cmd in _CMDS})
+    p, client, _ = _demarre(reader=r)
+    n = len(client.publications)
+    p.run_due()
+    assert [t for t, _, _, _ in _depuis(client, n)] == ["boiler/bridge/telemetry_status"]
+
+
+# ---------------------------------------------------------------------------
+# Cloture de cycle et chain
+# ---------------------------------------------------------------------------
+
+
+def test_chain_ok_sur_cycle_entierement_reussi() -> None:
+    p, _, _ = _demarre(reader=_Lecteur())
+    p.run_due()
+    assert p.state.chain_status is ChainStatus.OK
+    assert p.state.chain_cause is None
+    assert p.state.cycle_completed is True
+
+
+def test_chain_degrade_sur_cycle_partiel() -> None:
+    r = _Lecteur(plan={"getTempA": TransportStatus.DAEMON_UNREACHABLE})
+    p, _, _ = _demarre(reader=r)
+    p.run_due()
+    assert p.state.chain_status is ChainStatus.DEGRADED
+    assert p.state.chain_cause is TransportStatus.DAEMON_UNREACHABLE
+
+
+def test_chain_indisponible_si_tout_echoue() -> None:
+    r = _Lecteur(plan={cmd: TransportStatus.TIMEOUT for cmd in _CMDS})
+    p, _, _ = _demarre(reader=r)
+    p.run_due()
+    assert p.state.chain_status is ChainStatus.UNAVAILABLE
+    assert p.state.chain_cause is TransportStatus.TIMEOUT
+
+
+def test_aucun_cycle_cloture_si_aucune_mesure_due() -> None:
+    """`chain` reflete le dernier cycle TERMINE, jamais un reveil vide."""
+    config = ReadSurfaceConfig(snapshot_period_s=90, heartbeat_period_s=None)
+    p, _, c = _demarre(reader=_Lecteur(), config=config)
+    p.run_due()
+    etat = p.state
+    c.advance(1)
+    p.run_due()
+    assert p.state is etat
+
+
+def test_snapshot_de_fin_de_cycle_meme_si_tout_echoue() -> None:
+    r = _Lecteur(plan={cmd: TransportStatus.TIMEOUT for cmd in _CMDS})
+    p, client, _ = _demarre(reader=r)
+    n = len(client.publications)
+    p.run_due()
+    assert _depuis(client, n)[-1][0] == "boiler/bridge/telemetry_status"
+
+
+def test_chain_ne_retient_que_les_mesures_du_cycle() -> None:
+    r = _Lecteur(plan={"getTempWWsoll": TransportStatus.DAEMON_UNREACHABLE})
+    p, _, c = _demarre(reader=r)
+    p.run_due()
+    assert p.state.chain_cause is TransportStatus.DAEMON_UNREACHABLE
+    r.plan = {}
+    c.advance(30)
+    p.run_due()
+    assert p.state.chain_status is ChainStatus.OK
+    assert p.state.chain_cause is None
+
+
+# ---------------------------------------------------------------------------
+# Echeances
+# ---------------------------------------------------------------------------
+
+
+def test_prochaine_echeance_depuis_la_fin_de_la_tentative() -> None:
+    p, _, _ = _demarre(reader=_Lecteur())
+    p.run_due()
+    assert p.due_at() == 1030.0
+
+
+def test_aucun_rattrapage_apres_un_reveil_tardif() -> None:
+    """Une periode manquee n'engendre aucune rafale : on repart de maintenant."""
+    r = _Lecteur()
+    p, _, c = _demarre(reader=r)
+    p.run_due()
+    r.appels.clear()
+    c.advance(300)
+    p.run_due()
+    assert r.appels == _CMDS
+    assert p.due_at() == 1300.0 + 30
+
+
+def test_mesures_non_traitees_restent_dues_apres_exception() -> None:
+    p, _, _ = _demarre(reader=_LecteurQuiLeve(a_la_lecture=3))
+    with pytest.raises(RuntimeError, match="defaut inattendu"):
+        p.run_due()
+    restantes = {s.role for s in p.due_measurements()}
+    assert "outdoor_temperature" not in restantes
+    assert "supply_temperature" not in restantes
+    assert "dhw_temperature" in restantes
+
+
+def test_due_at_retourne_le_minimum() -> None:
+    config = ReadSurfaceConfig(snapshot_period_s=5, heartbeat_period_s=7)
+    p, _, c = _demarre(reader=_Lecteur(), config=config)
+    p.run_due()
+    assert p.due_at() == c.monotonic() + 5
+
+
+# ---------------------------------------------------------------------------
+# Instantane periodique
+# ---------------------------------------------------------------------------
+
+
+def test_snapshot_republie_sans_aucune_mesure_due() -> None:
+    """§7.4 : republication **meme si rien n'a change**."""
+    config = ReadSurfaceConfig(snapshot_period_s=5, heartbeat_period_s=None)
+    r = _Lecteur()
+    p, client, c = _demarre(reader=r, config=config)
+    p.run_due()
+    r.appels.clear()
+    n = len(client.publications)
+    c.advance(5)
+    p.run_due()
+    assert r.appels == []
+    assert [t for t, _, _, _ in _depuis(client, n)] == ["boiler/bridge/telemetry_status"]
+
+
+def test_snapshot_periodique_porte_un_ts_a_jour() -> None:
+    config = ReadSurfaceConfig(snapshot_period_s=5, heartbeat_period_s=None)
+    p, client, c = _demarre(reader=_Lecteur(), config=config)
+    p.run_due()
+    premier = json.loads(_publies(client)[-1][1].decode("utf-8"))["ts"]
+    c.advance(5)
+    p.run_due()
+    second = json.loads(_publies(client)[-1][1].decode("utf-8"))["ts"]
+    assert premier != second
+
+
+def test_pas_de_double_snapshot_dans_le_meme_appel() -> None:
+    """La publication de fin de cycle satisfait aussi l'echeance periodique."""
+    config = ReadSurfaceConfig(snapshot_period_s=5, heartbeat_period_s=None)
+    r = _Lecteur(plan={cmd: TransportStatus.TIMEOUT for cmd in _CMDS})
+    p, client, c = _demarre(reader=r, config=config)
+    p.run_due()
+    n = len(client.publications)
+    c.advance(60)
+    p.run_due()
+    finaux = [t for t, _, _, _ in _depuis(client, n) if t.endswith("telemetry_status")]
+    assert len(finaux) == 1
+
+
+def test_echeance_periodique_repoussee_apres_toute_tentative() -> None:
+    config = ReadSurfaceConfig(snapshot_period_s=5, heartbeat_period_s=None)
+    p, _, c = _demarre(reader=_Lecteur(), config=config)
+    p.run_due()
+    assert p.due_at() == c.monotonic() + 5
+
+
+def test_echec_du_snapshot_periodique_n_altere_pas_l_etat() -> None:
+    config = ReadSurfaceConfig(snapshot_period_s=5, heartbeat_period_s=None)
+    client = _MqttEchouantSur("telemetry_status")
+    r = _Lecteur(plan={cmd: TransportStatus.TIMEOUT for cmd in _CMDS})
+    c = _clock()
+    p, _ = _publieur(mqtt=client, reader=r, config=config, clock=c)
+    client.actif = False
+    p.start()
+    client.actif = True
+    with pytest.raises(ExceptionGroup):
+        p.run_due()
+    avant = p.state
+    c.advance(5)
+    with pytest.raises(ExceptionGroup):
+        p.run_due()
+    assert p.state is avant
+
+
+# ---------------------------------------------------------------------------
+# Battement
+# ---------------------------------------------------------------------------
+
+
+def test_battement_topic_payload_qos_et_retain() -> None:
+    """§9 : QoS 0, non retenu, `{"ts":"…"}` RFC 3339 UTC."""
+    config = ReadSurfaceConfig(snapshot_period_s=90, heartbeat_period_s=10)
+    p, client, c = _demarre(reader=_Lecteur(), config=config)
+    p.run_due()
+    n = len(client.publications)
+    c.advance(10)
+    p.run_due()
+    battements = [x for x in _depuis(client, n) if x[0].endswith("bridge/heartbeat")]
+    assert len(battements) == 1
+    topic, charge, qos, retain = battements[0]
+    assert topic == "boiler/bridge/heartbeat"
+    assert (qos, retain) == (0, False)
+    assert json.loads(charge.decode("utf-8")) == {"ts": "2026-08-02T20:00:10Z"}
+
+
+def test_battement_aucun_champ_supplementaire() -> None:
+    config = ReadSurfaceConfig(snapshot_period_s=90, heartbeat_period_s=10)
+    p, client, c = _demarre(reader=_Lecteur(), config=config)
+    p.run_due()
+    c.advance(10)
+    p.run_due()
+    charge = next(
+        pl for t, pl, _, _ in _publies(client) if t.endswith("bridge/heartbeat")
+    )
+    assert set(json.loads(charge.decode("utf-8"))) == {"ts"}
+
+
+def test_battement_compact_et_utf8() -> None:
+    config = ReadSurfaceConfig(snapshot_period_s=90, heartbeat_period_s=10)
+    p, client, c = _demarre(reader=_Lecteur(), config=config)
+    p.run_due()
+    c.advance(10)
+    p.run_due()
+    charge = next(
+        pl for t, pl, _, _ in _publies(client) if t.endswith("bridge/heartbeat")
+    )
+    assert isinstance(charge, bytes)
+    assert b", " not in charge and b": " not in charge
+
+
+def test_battement_meme_format_de_ts_que_l_instantane() -> None:
+    """Garde contre une derive entre les deux formateurs d'horodatage."""
+    config = ReadSurfaceConfig(snapshot_period_s=10, heartbeat_period_s=10)
+    p, client, c = _demarre(reader=_Lecteur(), config=config)
+    p.run_due()
+    c.advance(10)
+    p.run_due()
+    pubs = _publies(client)
+    ts_snapshot = next(
+        json.loads(pl.decode())["ts"]
+        for t, pl, _, _ in reversed(pubs)
+        if t.endswith("telemetry_status")
+    )
+    ts_battement = next(
+        json.loads(pl.decode())["ts"]
+        for t, pl, _, _ in reversed(pubs)
+        if t.endswith("bridge/heartbeat")
+    )
+    assert ts_snapshot == ts_battement
+
+
+def test_battement_sans_rattrapage() -> None:
+    config = ReadSurfaceConfig(snapshot_period_s=90, heartbeat_period_s=10)
+    p, client, c = _demarre(reader=_Lecteur(), config=config)
+    p.run_due()
+    n = len(client.publications)
+    c.advance(100)
+    p.run_due()
+    battements = [x for x in _depuis(client, n) if x[0].endswith("bridge/heartbeat")]
+    assert len(battements) == 1
+
+
+def test_aucun_battement_au_demarrage() -> None:
+    """§9 ne l'exige pas : le publier laisserait croire a une vitalite etablie."""
+    p, client, _ = _demarre(reader=_Lecteur())
+    assert not any("heartbeat" in t for t in _topics(client))
+
+
+# ---------------------------------------------------------------------------
+# Erreurs de publication MQTT
+# ---------------------------------------------------------------------------
+
+
+class _MqttEchouantSur(FakeMqttClient):
+    """Fait echouer les publications dont le topic contient un fragment."""
+
+    def __init__(self, fragment: str) -> None:
+        super().__init__()
+        self.fragment = fragment
+        self.actif = True
+
+    def publish(self, topic, payload, qos=0, retain=False):
+        if self.actif and self.fragment in topic:
+            raise RuntimeError(f"publication impossible : {topic}")
+        return super().publish(topic, payload, qos=qos, retain=retain)
+
+
+def test_erreur_scalaire_n_empeche_ni_l_etat_ni_le_cycle() -> None:
+    client = _MqttEchouantSur("/telemetry/")
+    r = _Lecteur()
+    p, _, _ = _demarre(reader=r, mqtt=client)
+    with pytest.raises(ExceptionGroup) as capture:
+        p.run_due()
+    assert len(capture.value.exceptions) == 8
+    assert all(
+        m.last_result is TransportStatus.OK for m in p.state.measurements.values()
+    )
+    assert p.state.chain_status is ChainStatus.OK
+    assert r.appels == _CMDS
+
+
+def test_erreur_de_publication_ne_transforme_pas_le_statut() -> None:
+    client = _MqttEchouantSur("/telemetry/")
+    p, _, _ = _demarre(reader=_Lecteur(), mqtt=client)
+    with pytest.raises(ExceptionGroup):
+        p.run_due()
+    assert p.state.chain_cause is None
+    assert not any(
+        m.last_result is TransportStatus.TRANSPORT_ERROR
+        for m in p.state.measurements.values()
+    )
+
+
+def test_erreur_de_snapshot_collectee_et_cycle_poursuivi() -> None:
+    client = _MqttEchouantSur("telemetry_status")
+    r = _Lecteur()
+    p, _ = _publieur(mqtt=client, reader=r)
+    client.actif = False
+    p.start()
+    client.actif = True
+    with pytest.raises(ExceptionGroup) as capture:
+        p.run_due()
+    assert len(capture.value.exceptions) == 9
+    assert r.appels == _CMDS
+
+
+def test_erreur_de_battement_collectee() -> None:
+    config = ReadSurfaceConfig(snapshot_period_s=90, heartbeat_period_s=10)
+    client = _MqttEchouantSur("bridge/heartbeat")
+    p, _, c = _demarre(reader=_Lecteur(), mqtt=client, config=config)
+    p.run_due()
+    c.advance(10)
+    with pytest.raises(ExceptionGroup) as capture:
+        p.run_due()
+    assert len(capture.value.exceptions) == 1
+    assert "heartbeat" in str(capture.value.exceptions[0])
+
+
+def test_erreurs_groupees_dans_l_ordre_de_survenue() -> None:
+    client = _MqttEchouantSur("boiler/")
+    p, _ = _publieur(mqtt=client, reader=_Lecteur())
+    client.actif = False
+    p.start()
+    client.actif = True
+    with pytest.raises(ExceptionGroup) as capture:
+        p.run_due()
+    messages = [str(e) for e in capture.value.exceptions]
+    assert "temperatures/outdoor" in messages[0]
+    assert "telemetry_status" in messages[1]
+    assert all(isinstance(e, RuntimeError) for e in capture.value.exceptions)
+
+
+def test_identite_des_exceptions_preservee() -> None:
+    levees: list[BaseException] = []
+
+    class _Tracant(FakeMqttClient):
+        def publish(self, topic, payload, qos=0, retain=False):
+            if "/telemetry/" in topic:
+                exc = RuntimeError(f"KO {topic}")
+                levees.append(exc)
+                raise exc
+            return super().publish(topic, payload, qos=qos, retain=retain)
+
+    p, _, _ = _demarre(reader=_Lecteur(), mqtt=_Tracant())
+    with pytest.raises(ExceptionGroup) as capture:
+        p.run_due()
+    assert list(capture.value.exceptions) == levees
+
+
+def test_base_exception_non_capturee_pendant_le_cycle() -> None:
+    class _MqttInterrompu(FakeMqttClient):
+        def publish(self, topic, payload, qos=0, retain=False):
+            if "/telemetry/" in topic:
+                raise KeyboardInterrupt("Ctrl-C")
+            return super().publish(topic, payload, qos=qos, retain=retain)
+
+    p, _, _ = _demarre(reader=_Lecteur(), mqtt=_MqttInterrompu())
+    with pytest.raises(KeyboardInterrupt) as capture:
+        p.run_due()
+    assert not isinstance(capture.value, ExceptionGroup)
+
+
+# ---------------------------------------------------------------------------
+# Exception inattendue du lecteur
+# ---------------------------------------------------------------------------
+
+
+def test_exception_du_lecteur_remonte_telle_quelle() -> None:
+    """C6 garantit qu'aucune issue de transport ne leve : c'est un DEFAUT."""
+    p, _, _ = _demarre(reader=_LecteurQuiLeve(a_la_lecture=3))
+    with pytest.raises(RuntimeError, match="defaut inattendu") as capture:
+        p.run_due()
+    assert not isinstance(capture.value, ExceptionGroup)
+
+
+def test_cycle_non_cloture_sur_exception_du_lecteur() -> None:
+    p, _, _ = _demarre(reader=_LecteurQuiLeve(a_la_lecture=3))
+    with pytest.raises(RuntimeError):
+        p.run_due()
+    assert p.state.chain_status is ChainStatus.UNAVAILABLE
+    assert p.state.cycle_completed is False
+
+
+def test_mesures_deja_traitees_restent_projetees_apres_exception() -> None:
+    p, _, _ = _demarre(reader=_LecteurQuiLeve(a_la_lecture=3))
+    with pytest.raises(RuntimeError):
+        p.run_due()
+    assert p.state.measurements["outdoor_temperature"].last_result is TransportStatus.OK
+    assert p.state.measurements["dhw_temperature"].last_result is None
+
+
+def test_aucun_lecteur_injecte_refuse_toute_lecture() -> None:
+    p, _, _ = _demarre(reader=None)
+    with pytest.raises(RuntimeError, match="aucun lecteur injecte"):
+        p.run_due()
+
+
+# ---------------------------------------------------------------------------
+# Cycle de vie
+# ---------------------------------------------------------------------------
+
+
+def test_redemarrage_reinitialise_les_echeances_sans_toucher_l_etat() -> None:
+    p, _, c = _demarre(reader=_Lecteur())
+    p.run_due()
+    etat = p.state
+    c.advance(10)
+    p.stop()
+    p.start()
+    assert p.state is etat
+    assert p.due_at() == c.monotonic()
+
+
+def test_due_at_refuse_apres_stop() -> None:
+    p, _, _ = _demarre(reader=_Lecteur())
+    p.stop()
+    with pytest.raises(RuntimeError, match="sans start"):
+        p.due_at()
+
+
+def test_aucun_lecteur_appele_avant_start() -> None:
+    r = _Lecteur()
+    ReadSurfacePublisher(mqtt=FakeMqttClient(), clock=_clock(), reader=r)
+    assert r.appels == []
+
+
+# ---------------------------------------------------------------------------
+# Borne du snapshot, dependante des specs
+# ---------------------------------------------------------------------------
+
+
+def test_snapshot_period_superieure_au_plus_petit_fresh_max_refusee() -> None:
+    """§7.4 : « **MUST** etre inferieure ou egale au plus petit `fresh_max` »."""
+    with pytest.raises(ValueError, match="plus petit fresh_max_s"):
+        ReadSurfacePublisher(
+            mqtt=FakeMqttClient(),
+            clock=_clock(),
+            config=ReadSurfaceConfig(snapshot_period_s=91),
+        )
+
+
+def test_snapshot_period_egale_au_plus_petit_fresh_max_acceptee() -> None:
+    p = ReadSurfacePublisher(
+        mqtt=FakeMqttClient(),
+        clock=_clock(),
+        config=ReadSurfaceConfig(snapshot_period_s=90),
+    )
+    assert p.started is False
+
+
+def test_borne_verifiee_contre_les_specs_injectees() -> None:
+    """La borne suit les specs REELLEMENT injectees, pas une constante globale."""
+    from boilerack.read_surface.measurements import MeasurementSpec
+
+    lentes = (
+        MeasurementSpec(
+            role="x", read="getX", suffix="telemetry/x", period_s=100, fresh_max_s=300
+        ),
+    )
+    p = ReadSurfacePublisher(
+        mqtt=FakeMqttClient(),
+        clock=_clock(),
+        specs=lentes,
+        config=ReadSurfaceConfig(snapshot_period_s=200),
+    )
+    assert p.started is False
+
+
+# ---------------------------------------------------------------------------
+# Frontieres C7-C3B
+# ---------------------------------------------------------------------------
+
+
+def test_aucun_topic_hors_surface_v1() -> None:
+    config = ReadSurfaceConfig(snapshot_period_s=10, heartbeat_period_s=10)
+    p, client, c = _demarre(reader=_Lecteur(), config=config)
+    p.run_due()
+    c.advance(60)
+    p.run_due()
+    p.stop()
+    suffixes = {t.removeprefix("boiler/") for t in _topics(client)}
+    assert suffixes <= set(V1_SUFFIXES)
+
+
+def test_aucune_ecriture() -> None:
+    source = pathlib.Path(publisher_module.__file__).read_text(encoding="utf-8")
+    for interdit in ("def write", "WriteResult", ".write("):
         assert interdit not in source
+
+
+# ---------------------------------------------------------------------------
+# Comportements combines, caracterises explicitement
+# ---------------------------------------------------------------------------
+
+
+def test_exception_du_lecteur_apres_une_erreur_mqtt_deja_collectee() -> None:
+    """CARACTERISATION d'un comportement DELIBERE et DOCUMENTE, pas une recette.
+
+    Quand une erreur de publication a deja ete collectee et qu'une lecture
+    ulterieure fait lever le lecteur, l'exception du lecteur remonte SEULE : les
+    erreurs MQTT deja collectees sont perdues.
+
+    Ce n'est pas une recommandation generale de perdre des erreurs. C'est le
+    prix assume d'un arbitrage precis : une exception du lecteur signale un
+    DEFAUT — C6 garantit qu'aucune issue de transport ne leve —, et l'emballer
+    dans un `ExceptionGroup` avec du bruit de publication le noierait. Le
+    diagnostic prime sur l'exhaustivite.
+
+    Ce test FIGE ce comportement pour qu'il ne puisse ni changer en silence, ni
+    passer pour un oubli.
+    """
+
+    class _MqttKoSurTelemetrie(FakeMqttClient):
+        def publish(self, topic, payload, qos=0, retain=False):
+            if "/telemetry/" in topic:
+                raise RuntimeError(f"KO scalaire {topic}")
+            return super().publish(topic, payload, qos=qos, retain=retain)
+
+    class _LecteurQuiLeveALaSeconde(_Lecteur):
+        def read(self, command: str):
+            if len(self.appels) >= 1:
+                self.appels.append(command)
+                raise LookupError("defaut identifiable du lecteur")
+            return super().read(command)
+
+    client = _MqttKoSurTelemetrie()
+    r = _LecteurQuiLeveALaSeconde()
+    p, _, c = _demarre(reader=r, mqtt=client)
+    etat_chaine_avant = p.state.chain_status
+
+    with pytest.raises(LookupError, match="defaut identifiable") as capture:
+        p.run_due()
+
+    # L'exception du lecteur remonte SEULE, identite intacte.
+    assert type(capture.value) is LookupError
+    assert not isinstance(capture.value, ExceptionGroup)
+    assert capture.value.__cause__ is None
+    assert capture.value.__context__ is None
+
+    # Une erreur MQTT avait bien ete collectee avant : elle ne remonte pas.
+    assert r.appels == ["getTempA", "getTempKist"]
+    assert not any(
+        "/telemetry/" in h.publication.topic for h in client.publications
+    )
+
+    # La premiere mesure reste projetee OK et replanifiee.
+    premiere = p.state.measurements["outdoor_temperature"]
+    assert premiere.last_result is TransportStatus.OK
+    assert premiere.has_value is True
+    dues = {s.role for s in p.due_measurements()}
+    assert "outdoor_temperature" not in dues
+
+    # La mesure ayant leve, et toutes les suivantes, restent dues.
+    assert "supply_temperature" in dues
+    assert dues == {s.role for s in V1_MEASUREMENTS[1:]}
+
+    # Aucun cycle cloture, aucune `chain` fabriquee, aucune conversion.
+    assert p.state.cycle_completed is False
+    assert p.state.chain_status is etat_chaine_avant
+    assert p.state.chain_cause is None
+    assert p.state.measurements["supply_temperature"].last_result is None
+    assert not any(
+        m.last_result is TransportStatus.TRANSPORT_ERROR
+        for m in p.state.measurements.values()
+    )
+
+
+class _HorlogeQuiAvanceALaLecture(VirtualClock):
+    """Fait avancer le monotone a chaque consultation, comme un cycle long.
+
+    `VirtualClock.advance` deplace `now()` ET `monotonic()` ensemble, ce qui
+    reproduit fidelement le temps qui passe pendant des lectures sequentielles
+    de plusieurs secondes (C5 : 2,7 a 4,0 s par lecture).
+    """
+
+    def __init__(self, *a, pas: float = 0.0, **kw) -> None:
+        super().__init__(*a, **kw)
+        self.pas = pas
+
+    def monotonic(self) -> float:
+        valeur = super().monotonic()
+        if self.pas:
+            self.advance(self.pas)
+        return valeur
+
+
+def test_lot_de_taches_fige_au_debut_de_run_due() -> None:
+    """Une tache devenue due PENDANT l'appel n'est jamais traitee dans cet appel.
+
+    Sans ce gel, un cycle long declencherait en cascade le battement et
+    l'instantane periodique dont les echeances tombent en cours de route — puis,
+    au reveil suivant, de nouveau. Le lot est fige des la premiere lecture du
+    monotone.
+    """
+    # 8 lectures + recalculs : le monotone progresse largement au-dela de 10 s
+    # pendant l'appel, donc au-dela des echeances de battement et d'instantane.
+    horloge = _HorlogeQuiAvanceALaLecture(_DEBUT, monotonic_start=1000.0, pas=1.0)
+    config = ReadSurfaceConfig(snapshot_period_s=10, heartbeat_period_s=10)
+    r = _Lecteur()
+    p, client, _ = _demarre(reader=r, clock=horloge, config=config)
+
+    debut = len(client.publications)
+    p.run_due()
+    premier = [t for t, _, _, _ in _depuis(client, debut)]
+
+    # Le monotone a franchi les echeances de +10 s pendant l'appel.
+    assert horloge.monotonic() > 1010.0
+
+    # Chaque mesure initialement due est traitee AU PLUS UNE FOIS.
+    assert r.appels == _CMDS
+    assert len(r.appels) == len(set(r.appels))
+
+    # Aucun battement : son echeance a ete franchie EN COURS d'appel.
+    assert not any(t.endswith("bridge/heartbeat") for t in premier)
+
+    # Instantanes : 8 intermediaires + 1 de fin de cycle, et RIEN de plus. Aucun
+    # instantane periodique supplementaire du seul fait du franchissement.
+    assert premier.count("boiler/bridge/telemetry_status") == 9
+    assert sum(1 for t in premier if "/telemetry/" in t) == 8
+    assert len(premier) == 17
+
+    # -- second appel : la tache devenue due est traitee, une seule fois -----
+    r.appels.clear()
+    milieu = len(client.publications)
+    p.run_due()
+    second = [t for t, _, _, _ in _depuis(client, milieu)]
+
+    # Le battement, reporte du premier appel, est publie ICI — et une seule
+    # fois, bien que plusieurs periodes de 10 s aient ete franchies.
+    assert second == ["boiler/bridge/heartbeat"]
+
+    # Les mesures ne sont PAS encore dues : leurs echeances ont ete recalculees
+    # a la fin de chaque tentative, jamais depuis l'echeance theorique manquee.
+    assert r.appels == []
+
+    # -- troisieme appel : rien n'est du, donc rien n'est publie ------------
+    fin = len(client.publications)
+    p.run_due()
+    assert _depuis(client, fin) == []
+
+    # -- quatrieme appel, apres une avance franche : un seul cycle ----------
+    horloge.pas = 0.0  # horloge stable, pour une assertion exacte
+    horloge.advance(120)
+    r.appels.clear()
+    dernier = len(client.publications)
+    p.run_due()
+    quatrieme = [t for t, _, _, _ in _depuis(client, dernier)]
+
+    assert r.appels == _CMDS  # UN passage, pas douze
+    assert quatrieme.count("boiler/bridge/telemetry_status") == 9
+    assert quatrieme.count("boiler/bridge/heartbeat") == 1  # UN au maximum
+    # Ordre deterministe : le battement vient en dernier.
+    assert quatrieme[-1] == "boiler/bridge/heartbeat"
