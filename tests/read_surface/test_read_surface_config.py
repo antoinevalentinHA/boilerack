@@ -20,10 +20,69 @@ def test_defaut_contractuel() -> None:
     assert ReadSurfaceConfig().prefix == "boiler"
 
 
-def test_un_seul_champ_en_c7c3a() -> None:
-    """Ni `snapshot_period_s` ni `heartbeat_period_s` : aucun consommateur ici."""
+def test_champs_exacts() -> None:
+    """Trois champs apres C7-C3B, et rien d'autre : chacun a un consommateur."""
     champs = {f.name for f in dataclasses.fields(ReadSurfaceConfig)}
-    assert champs == {"prefix"}
+    assert champs == {"prefix", "snapshot_period_s", "heartbeat_period_s"}
+
+
+def test_defauts_contractuels_des_cadences() -> None:
+    """§7.4 : la republication **SHOULD** valoir la plus petite periode cible."""
+    config = ReadSurfaceConfig()
+    assert config.snapshot_period_s == 30
+    assert config.heartbeat_period_s == 30
+    assert config.heartbeat_enabled is True
+
+
+@pytest.mark.parametrize("periode", [1, 30, 90, 3600])
+def test_periode_snapshot_valide(periode: int) -> None:
+    assert ReadSurfaceConfig(snapshot_period_s=periode).snapshot_period_s == periode
+
+
+@pytest.mark.parametrize("periode", [True, False, 30.0, "30", None])
+def test_periode_snapshot_non_entiere_refusee(periode: object) -> None:
+    with pytest.raises(ValueError, match="snapshot_period_s doit etre un entier"):
+        ReadSurfaceConfig(snapshot_period_s=periode)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("periode", [0, -1, -30])
+def test_periode_snapshot_non_positive_refusee(periode: int) -> None:
+    with pytest.raises(ValueError, match="strictement positif"):
+        ReadSurfaceConfig(snapshot_period_s=periode)
+
+
+def test_heartbeat_desactivable() -> None:
+    """§9 : « Un producteur **MAY** l'omettre s'il documente la rupture »."""
+    config = ReadSurfaceConfig(heartbeat_period_s=None)
+    assert config.heartbeat_period_s is None
+    assert config.heartbeat_enabled is False
+
+
+@pytest.mark.parametrize("periode", [1, 30, 60])
+def test_heartbeat_periode_positive_acceptee(periode: int) -> None:
+    assert ReadSurfaceConfig(heartbeat_period_s=periode).heartbeat_period_s == periode
+
+
+@pytest.mark.parametrize("periode", [True, False, 30.0, "30"])
+def test_heartbeat_non_entier_refuse(periode: object) -> None:
+    with pytest.raises(ValueError, match="heartbeat_period_s doit etre un entier"):
+        ReadSurfaceConfig(heartbeat_period_s=periode)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("periode", [0, -1])
+def test_heartbeat_non_positif_refuse(periode: int) -> None:
+    with pytest.raises(ValueError, match="strictement positif"):
+        ReadSurfaceConfig(heartbeat_period_s=periode)
+
+
+def test_borne_haute_du_snapshot_non_verifiee_ici() -> None:
+    """La borne de §7.4 depend des specs : elle est verifiee par le publieur.
+
+    `ReadSurfaceConfig` ne connait pas les mesures injectees ; une periode de
+    120 s est donc acceptee ici, et refusee a la construction du publieur avec
+    `V1_MEASUREMENTS` (plus petit `fresh_max_s` = 90 s).
+    """
+    assert ReadSurfaceConfig(snapshot_period_s=120).snapshot_period_s == 120
 
 
 def test_gelee() -> None:
