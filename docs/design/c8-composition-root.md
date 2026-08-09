@@ -123,6 +123,10 @@ Ce serait une politique, et rien dans les contrats ne l'exige. Le decoupage du
 sommeil, ou une attente interruptible, releverait d'un lot ulterieur avec une
 exigence ecrite.
 
+> Ce lot ulterieur existe desormais : voir `c9-process-lifecycle.md`, qui
+> introduit une attente interruptible et un reveil sur signal. Les grandeurs
+> decrites ci-dessus restent celles de C8 seul, ou aucun reveil n'existe.
+
 ## Attente
 
 Fondee sur le temps **monotone**, jamais sur l'heure murale : le module
@@ -205,6 +209,12 @@ exigence ecrite pour arbitrer :
 Chacun de ces choix est une decision structurelle, donc arbitrable par l'humain
 et non par le code. `build_runtime` est la brique sur laquelle un tel point
 d'entree se posera sans rien reecrire : il ne manque que ces arbitrages.
+
+> Ces arbitrages ont depuis ete repartis sur deux lots. La gestion des signaux
+> et son branchement sur le `StopSignal` reviennent a C9
+> (`c9-process-lifecycle.md`). La source de configuration, les noms des cles
+> publiques, la journalisation, le mode de deploiement et le point d'entree
+> installe lui-meme reviennent a C10, non encore ouvert.
 
 ## Surface publique du lot
 

@@ -732,6 +732,35 @@ def test_build_runtime_n_ouvre_ni_socket_ni_processus(monkeypatch) -> None:
     assert rt.publisher.started is False
 
 
+def test_build_runtime_accepte_une_horloge_injectee(monkeypatch) -> None:
+    """Couture ouverte par C9 : l'horloge fournie est celle qui est cablee.
+
+    Le parametre est optionnel et reserve aux mots-cles ; les appels a deux
+    arguments positionnels de ce fichier restent valides sans modification.
+    """
+    monkeypatch.setattr(PahoMqttClient, "_build_client", staticmethod(lambda cfg: _FauxPaho()))
+    horloge = _clock()
+    rt = build_runtime(_config(), NeverStop(), clock=horloge)
+    assert rt.runner._clock is horloge  # type: ignore[attr-defined]
+    assert rt.publisher._clock is horloge  # type: ignore[attr-defined]
+
+
+def test_build_runtime_partage_l_horloge_injectee(monkeypatch) -> None:
+    """L'invariant d'instance unique vaut aussi pour une horloge injectee."""
+    monkeypatch.setattr(PahoMqttClient, "_build_client", staticmethod(lambda cfg: _FauxPaho()))
+    rt = build_runtime(_config(), NeverStop(), clock=_clock())
+    assert rt.runner._clock is rt.publisher._clock  # type: ignore[attr-defined]
+
+
+def test_le_parametre_d_horloge_est_reserve_aux_mots_cles() -> None:
+    """Une horloge ne peut pas etre fournie par accident en position."""
+    import inspect
+
+    parametres = inspect.signature(build_runtime).parameters
+    assert parametres["clock"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parametres["clock"].default is None
+
+
 def test_build_runtime_accepte_des_specs_personnalisees(monkeypatch) -> None:
     monkeypatch.setattr(PahoMqttClient, "_build_client", staticmethod(lambda cfg: _FauxPaho()))
     lentes = (
