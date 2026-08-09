@@ -255,12 +255,14 @@ class Runtime:
     runner: ReadSurfaceRunner
 
 
-def build_runtime(config: RuntimeConfig, stop: StopSignal) -> Runtime:
+def build_runtime(
+    config: RuntimeConfig, stop: StopSignal, *, clock: Clock | None = None
+) -> Runtime:
     """Construit les adaptateurs concrets et les cable. **Seul endroit** ou ils le sont.
 
     Assemble :
 
-    - `SystemClock` — horloge reelle ;
+    - `SystemClock` — horloge reelle, sauf si une autre est injectee ;
     - `PahoMqttClient` — client MQTT reel ; sa construction n'ouvre **aucune
       socket**, seul `connect()` le ferait ;
     - `SubprocessRunner` + `VClientCliReader` — lecteur reel ; la construction ne
@@ -270,8 +272,15 @@ def build_runtime(config: RuntimeConfig, stop: StopSignal) -> Runtime:
     Aucune connexion, aucune lecture, aucune publication n'a lieu ici : c'est
     `runner.run()` qui agit. Cette fonction ne doit jamais etre appelee dans un
     test sans double ni monkeypatch de la frontiere Paho.
+
+    HORLOGE — `clock` est optionnel et reserve aux mots-cles. Omis, le
+    comportement est celui d'origine : une nouvelle `SystemClock`. Fourni, c'est
+    cette instance qui est utilisee — le lot C9 y injecte une horloge dont
+    l'attente est interrompue par un signal. Dans les deux cas, le publieur et
+    le runner recoivent **exactement la meme instance** : sans quoi le temps du
+    runner et celui du publieur pourraient diverger.
     """
-    clock = SystemClock()
+    clock = clock if clock is not None else SystemClock()
     mqtt: MqttClient = PahoMqttClient(config.mqtt)
     reader: MeasurementReader = VClientCliReader(config.vclient, SubprocessRunner())
     publisher = ReadSurfacePublisher(
