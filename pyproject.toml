@@ -34,6 +34,12 @@ dependencies = ["paho-mqtt>=2.1,<3"]
 # Outils de test uniquement. Strictement separes des dependances d'execution.
 dev = ["pytest>=8"]
 
+# Commande installee (lot C10). `python -m boilerack` reste equivalent : les
+# deux chemins appellent la meme fonction, et `__main__.py` ne porte aucune
+# logique propre. Aucune dependance n'est ajoutee.
+[project.scripts]
+boilerack = "boilerack.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/antoinevalentinHA/boilerack"
 

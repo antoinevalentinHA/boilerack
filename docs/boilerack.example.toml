@@ -1,0 +1,39 @@
+# Exemple de configuration Boilerack.
+#
+# Copiez ce fichier, adaptez les deux valeurs obligatoires, puis lancez :
+#
+#     boilerack --config /chemin/vers/votre/boilerack.toml
+#
+# Le MOT DE PASSE MQTT ne se met JAMAIS dans ce fichier. Il est fourni
+# exclusivement par la variable d'environnement BOILERACK_MQTT_PASSWORD, ce qui
+# permet de versionner ce fichier sans versionner de secret :
+#
+#     export BOILERACK_MQTT_PASSWORD='...'
+#
+# Toute cle inconnue est refusee : une faute de frappe provoque une erreur
+# nommee, jamais un reglage silencieusement ignore.
+#
+# Reference complete : docs/design/c10-user-interface.md
+
+[mqtt]
+# OBLIGATOIRE — nom ou adresse du broker MQTT.
+host = "broker.exemple.invalid"
+
+# port = 1883
+# client_id = "boilerack"     # doit differer entre deux instances sur un meme broker
+# keepalive = 60              # secondes
+# username = "boilerack"      # identifiant, jamais le mot de passe
+# tls = false                 # TLS avec le magasin de certificats du systeme
+
+[vclient]
+# OBLIGATOIRE — chemin ou nom de l'executable vclient.
+executable = "vclient"
+
+# host = "vcontrold.exemple.invalid"   # hote du demon vcontrold, si distant
+# port = 3002                 # port du demon vcontrold, si distant
+# read_timeout_s = 5.0        # secondes ; un entier est aussi accepte
+
+[read_surface]
+# prefix = "boiler"           # racine de TOUS les topics publies
+# snapshot_period_s = 30      # secondes ; borne par la fraicheur des mesures
+# heartbeat_period_s = 30     # secondes ; 0 desactive le battement

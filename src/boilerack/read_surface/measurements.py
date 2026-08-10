@@ -27,7 +27,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final, Sequence
 
-__all__ = ["MeasurementSpec", "default_fresh_max", "V1_MEASUREMENTS"]
+__all__ = [
+    "MeasurementSpec",
+    "default_fresh_max",
+    "check_snapshot_period",
+    "V1_MEASUREMENTS",
+]
 
 #: Facteur contractuel du seuil de fraicheur par defaut (§7.2). Le facteur 3 est
 #: retenu, et non 2, parce que la duree d'une lecture reelle observee en C5 —
@@ -115,6 +120,36 @@ def _check_collection(specs: Sequence[MeasurementSpec]) -> None:
     suffixes = [spec.suffix for spec in specs]
     if len(set(suffixes)) != len(suffixes):
         raise ValueError("les suffixes d'une collection de mesures doivent etre uniques")
+
+
+def check_snapshot_period(
+    specs: Sequence[MeasurementSpec], snapshot_period_s: int
+) -> None:
+    """Verifie §7.4 : la republication ne doit pas depasser la fraicheur.
+
+    « Periode de republication : **MUST** etre inferieure ou egale au plus
+    petit `fresh_max` de la surface. » La borne est donc **dynamique** : elle
+    depend des mesures reellement declarees, et non d'une constante.
+
+    AUTORITE UNIQUE — cette fonction est le seul endroit du depot ou la regle
+    est ecrite. `ReadSurfacePublisher` y delegue, et tout appelant souhaitant
+    valider une configuration AVANT de construire quoi que ce soit doit
+    l'appeler plutot que recalculer `min(fresh_max_s)` pour son compte : une
+    seconde ecriture divergerait au premier changement de la surface.
+
+    SURFACE VIDE — aucune borne n'existe alors, et aucune verification n'est
+    faite. Comportement etabli par C7-C3B, conserve ici a l'identique.
+
+    Module PUR : aucune horloge, aucun reseau, aucun processus.
+    """
+    if not specs:
+        return
+    plus_petit = min(spec.fresh_max_s for spec in specs)
+    if snapshot_period_s > plus_petit:
+        raise ValueError(
+            f"snapshot_period_s ({snapshot_period_s}) doit etre inferieur ou "
+            f"egal au plus petit fresh_max_s de la surface ({plus_petit})"
+        )
 
 
 def _v1() -> tuple[MeasurementSpec, ...]:
