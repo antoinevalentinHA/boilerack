@@ -29,6 +29,54 @@ processus — jamais de succès supposé.
 - un broker MQTT accessible en réseau local ;
 - Python ≥ 3.11.
 
+## Installation et lancement
+
+> Rien n'a été éprouvé contre un broker, un `vcontrold` ou une chaudière réels.
+> Ce qui suit décrit l'interface, pas une mise en production validée.
+
+```sh
+pip install .
+```
+
+Copiez `docs/boilerack.example.toml`, puis adaptez les deux valeurs
+obligatoires — l'hôte du broker et le chemin de `vclient` :
+
+```toml
+[mqtt]
+host = "broker.exemple.invalid"
+
+[vclient]
+executable = "vclient"
+```
+
+Le mot de passe MQTT, s'il y en a un, ne se met **jamais** dans ce fichier : il
+est fourni exclusivement par la variable d'environnement
+`BOILERACK_MQTT_PASSWORD`. Le fichier de configuration reste ainsi versionnable.
+
+```sh
+export BOILERACK_MQTT_PASSWORD='...'   # facultatif
+boilerack --config /chemin/boilerack.toml
+```
+
+`python -m boilerack --config /chemin/boilerack.toml` est strictement
+équivalent, et reste utilisable quand la commande installée n'est pas dans le
+`PATH`.
+
+`--log-level` accepte `DEBUG`, `INFO` (défaut), `WARNING`, `ERROR` ou
+`CRITICAL`, pour la session en cours seulement.
+
+Codes de sortie :
+
+| Code | Signification |
+|---|---|
+| `0` | arrêt normal, ou arrêt demandé par `SIGTERM` |
+| `130` | arrêt demandé par `SIGINT` (Ctrl-C) |
+| `2` | erreur d'usage de la commande, ou configuration invalide |
+| `1` | panne, avec sa trace d'appels |
+
+Le détail de chaque clé, des validations et des garanties figure dans
+[docs/design/c10-user-interface.md](docs/design/c10-user-interface.md).
+
 ## Compatibilité
 
 Vérifié sur **une seule installation** : régulation `VScotHO1` (`20CB`),

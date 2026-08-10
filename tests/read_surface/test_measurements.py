@@ -11,6 +11,7 @@ from boilerack.read_surface import measurements as measurements_module
 from boilerack.read_surface.measurements import (
     V1_MEASUREMENTS,
     MeasurementSpec,
+    check_snapshot_period,
     default_fresh_max,
 )
 from boilerack.read_surface.topics import TELEMETRY_SUFFIXES
@@ -250,3 +251,93 @@ def test_module_sans_dependance_technique() -> None:
 
 def test_module_ne_depend_d_aucune_autre_partie_du_projet() -> None:
     assert "boilerack" not in _modules_importes(measurements_module)
+
+
+# ---------------------------------------------------------------------------
+# Borne de republication (§7.4) — autorite unique, partagee
+# ---------------------------------------------------------------------------
+
+#: Surfaces artificielles a bornes distinctes de celle de la v1. Elles rendent
+#: le test sensible a toute constante codee en dur, dans les DEUX sens.
+_BORNE_BASSE = (
+    MeasurementSpec(role="x", read="getX", suffix="telemetry/x", period_s=10, fresh_max_s=40),
+)
+_BORNE_HAUTE = (
+    MeasurementSpec(role="y", read="getY", suffix="telemetry/y", period_s=60, fresh_max_s=200),
+)
+
+
+@pytest.mark.parametrize("periode", [1, 30, 89, 90])
+def test_periode_sous_la_borne_v1_acceptee(periode: int) -> None:
+    assert check_snapshot_period(V1_MEASUREMENTS, periode) is None
+
+
+@pytest.mark.parametrize("periode", [91, 120, 10_000])
+def test_periode_au_dessus_de_la_borne_v1_refusee(periode: int) -> None:
+    with pytest.raises(ValueError, match="snapshot_period_s"):
+        check_snapshot_period(V1_MEASUREMENTS, periode)
+
+
+def test_le_message_nomme_la_periode_et_la_borne() -> None:
+    with pytest.raises(ValueError) as capture:
+        check_snapshot_period(V1_MEASUREMENTS, 91)
+    message = str(capture.value)
+    assert "91" in message
+    assert "90" in message
+
+
+@pytest.mark.parametrize(
+    ("specs", "periode", "accepte"),
+    [
+        (_BORNE_BASSE, 40, True),
+        (_BORNE_BASSE, 41, False),
+        (_BORNE_HAUTE, 200, True),
+        (_BORNE_HAUTE, 201, False),
+        (_BORNE_HAUTE, 120, True),
+    ],
+)
+def test_la_borne_suit_les_specs_et_non_une_constante(specs, periode, accepte) -> None:
+    """La borne est DYNAMIQUE. Une constante `90` trahirait dans un sens ou
+    dans l'autre : elle accepterait 41 sur la surface basse, et refuserait 120
+    sur la surface haute."""
+    if accepte:
+        assert check_snapshot_period(specs, periode) is None
+    else:
+        with pytest.raises(ValueError):
+            check_snapshot_period(specs, periode)
+
+
+def test_surface_vide_ne_borne_rien() -> None:
+    """Comportement etabli par C7-C3B et conserve a l'identique : sans mesure,
+    aucune borne n'existe, donc rien n'est verifie."""
+    assert check_snapshot_period((), 10_000) is None
+
+
+def test_une_seule_mesure_borne_toute_la_surface() -> None:
+    """C'est le PLUS PETIT `fresh_max_s` qui borne, pas une moyenne."""
+    melange = _BORNE_BASSE + _BORNE_HAUTE
+    assert check_snapshot_period(melange, 40) is None
+    with pytest.raises(ValueError):
+        check_snapshot_period(melange, 41)
+
+
+def test_l_autorite_est_exportee() -> None:
+    """Elle doit etre publique : le chargeur de configuration l'appelle."""
+    assert "check_snapshot_period" in measurements_module.__all__
+
+
+def test_le_publieur_delegue_a_l_autorite() -> None:
+    """Verifie sur la source : le publieur ne doit pas garder sa propre copie.
+
+    Une seconde ecriture de la regle divergerait au premier changement de la
+    surface, et la validation de configuration cesserait d'etre fidele.
+    """
+    import ast
+    import inspect
+
+    from boilerack.read_surface import publisher as module_publieur
+
+    source = inspect.getsource(module_publieur)
+    assert "check_snapshot_period" in source
+    corps = ast.unparse(ast.parse(inspect.getsource(module_publieur.ReadSurfacePublisher)))
+    assert "fresh_max_s" not in corps, "le publieur ne doit plus recalculer la borne"

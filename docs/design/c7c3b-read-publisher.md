@@ -232,6 +232,11 @@ reellement injectees**, que la configuration ne connait pas : elle est donc
 verifiee dans `ReadSurfacePublisher.__init__`, contre les specs recues et non
 contre une constante globale. Avec `V1_MEASUREMENTS`, le plafond est **90 s**.
 
+> Depuis C10, le publieur applique toujours cette regle au meme endroit, mais
+> il la **delegue** a `check_snapshot_period` — desormais l'autorite unique,
+> partagee avec la validation de configuration qui doit refuser une valeur hors
+> borne avant tout demarrage. Le comportement observable est inchange.
+
 Aucun topic complet n'est stocke ; `MqttConfig` n'est ni modifie ni reutilise.
 
 ## API publique

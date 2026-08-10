@@ -56,7 +56,11 @@ from typing import Final, Protocol, Sequence
 
 from boilerack.clock import Clock
 from boilerack.read_surface.config import ReadSurfaceConfig
-from boilerack.read_surface.measurements import V1_MEASUREMENTS, MeasurementSpec
+from boilerack.read_surface.measurements import (
+    V1_MEASUREMENTS,
+    MeasurementSpec,
+    check_snapshot_period,
+)
 from boilerack.read_surface.payload import format_scalar
 from boilerack.read_surface.snapshot import build_snapshot, snapshot_to_json
 from boilerack.read_surface.state import ReadSurfaceState, complete_cycle, record_result
@@ -141,18 +145,12 @@ class ReadSurfacePublisher:
         self._specs: tuple[MeasurementSpec, ...] = tuple(specs)
         self._config = config if config is not None else ReadSurfaceConfig()
 
-        # §7.4 : « Periode de republication : **MUST** etre inferieure ou egale
-        # au plus petit `fresh_max` de la surface. » Ce controle depend des
-        # specs REELLEMENT injectees, il ne peut donc pas vivre dans la
-        # configuration seule.
-        if self._specs:
-            plus_petit = min(spec.fresh_max_s for spec in self._specs)
-            if self._config.snapshot_period_s > plus_petit:
-                raise ValueError(
-                    f"snapshot_period_s ({self._config.snapshot_period_s}) doit "
-                    f"etre inferieur ou egal au plus petit fresh_max_s de la "
-                    f"surface ({plus_petit})"
-                )
+        # §7.4 : la republication ne doit pas depasser la fraicheur. Ce controle
+        # depend des specs REELLEMENT injectees, il ne peut donc pas vivre dans
+        # la configuration seule. La regle est DELEGUEE a `check_snapshot_period`
+        # pour qu'elle n'existe qu'a un seul endroit : un appelant qui valide
+        # une configuration avant construction appelle la meme autorite.
+        check_snapshot_period(self._specs, self._config.snapshot_period_s)
 
         self._online_topic = build_topic(self._config.prefix, _ONLINE_SUFFIX)
         self._status_topic = build_topic(self._config.prefix, _STATUS_SUFFIX)
