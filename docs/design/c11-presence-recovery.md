@@ -153,6 +153,8 @@ Ils justifient les clauses de C11 ; ils n'en sont pas.
 | P9 | `suppress_exceptions` vaut `False` par defaut : une exception levee dans un callback est journalisee **puis relancee** dans la boucle reseau. Un callback qui bloque retarde keepalive, PUBACK et reception |
 | P10 | La reconnexion automatique existe deja : `reconnect_on_failure` vaut `True`, backoff exponentiel de 1 s a 120 s. Un `disconnect()` volontaire met fin a la boucle — aucune reconnexion n'y succede |
 | P11 | Le testament est **conserve par le client Paho** (`_will_topic`, `_will_payload`, `_will_qos`, `_will_retain`) et reempaquete par `_send_connect`, appele par `reconnect()`. Il est donc reemis dans chaque CONNECT ulterieur |
+| P12 | `connect()` **n'attend aucun CONNACK** : son corps se reduit a `connect_async(...)` puis `reconnect()`, qui se termine par l'envoi du CONNECT. Le CONNACK est lu par le fil reseau, et **aucun backoff ne le retarde** — l'etat etant deja `CONNECTING`, la boucle d'amorcage sort immediatement et lit la socket. Un rappel peut donc survenir des que `loop_start()` a arme le fil, y compris **pendant** la suite du demarrage de l'appelant |
+| P13 | `loop_stop()` **joint** le fil reseau avant de rendre la main. Apres un `disconnect()`, plus aucun rappel de la session close ne peut survenir |
 
 ### 5.1 Interdictions derivees
 
@@ -331,24 +333,64 @@ requise, et aucune ne doit etre introduite : la seule information utile est
 
 ### 8.3 Etat initial et demarrage
 
-`start()` connecte, puis publie `online` — comportement etabli par C7-C3A,
-inchange. Le CONNACK, lui, arrive **apres**, sur le fil reseau. Sans precaution,
-la notification qui en resulte armerait une reprise et ferait republier `online`
-au premier cycle, pour rien.
+`start()` ouvre la connexion, puis publie `online` — comportement etabli par
+C7-C3A, inchange. La primitive doit donc partir d'une base coherente avec cette
+annonce, faute de quoi le CONNACK initial armerait une reprise et ferait
+republier `online` au premier cycle, pour rien.
+
+**Aucun ordre entre le CONNACK et la suite de `start()` ne peut etre suppose.**
+P12 l'etablit : l'ouverture n'attend pas le CONNACK, le fil reseau le lit des
+son arrivee et aucun backoff ne le retarde. Un rappel peut donc survenir
+**pendant** `start()`. Une redaction anterieure de cette clause posait la base
+*apres* la publication de `online` et raisonnait sur « le CONNACK qui suit » :
+cette relation d'ordre n'existe pas, et le raisonnement qu'elle portait etait
+faux.
+
+**Le danger n'est pas la republication redondante.** Un succes recu tot serait
+de toute facon desarme par la pose de la base. Le danger est l'inverse, et il
+est plus grave : **une base posee tard ecrase un echec reellement observe**.
+L'etat redeviendrait « connecte » alors que la connexion a echoue ; la reussite
+suivante ne serait plus une transition ; aucune reprise ne serait armee — et le
+defaut que C11 corrige reapparaitrait entier, sur le chemin meme que cette
+clause etait censee couvrir.
 
 Clause : **`start()` place la primitive dans l'etat connecte et desarme tout
-marqueur, apres avoir publie `online`.** La notification de CONNACK qui suit ne
-constitue alors aucune transition, et n'arme rien.
+marqueur AVANT d'ouvrir la connexion**, c'est-a-dire avant l'appel qui rend un
+rappel possible.
 
-Cette base est optimiste — au moment ou `start()` publie `online`, le CONNACK
-n'est pas encore recu. Elle l'est **exactement autant** que la publication de
-`online` elle-meme, qui est deja contractee ainsi. Et si l'optimisme se revele
-faux, la notification d'echec de CONNACK (§6.5) fait retomber l'etat a « non
-connecte », de sorte qu'une connexion ulterieure reussie constituera bien une
-transition et republiera `online`. L'hypothese se corrige d'elle-meme ; elle ne
-se propage pas.
+Cette place est sure **par construction, non par chronometrie** : les rappels ne
+sont emis que par le fil reseau, ce fil n'existe pas avant `loop_start()` (P8),
+et `loop_start()` est interne a l'ouverture de la connexion. Aucun rappel ne
+peut donc preceder la base.
 
-`stop()` desarme le marqueur.
+Il en decoule, sans qu'aucun ordre temporel ne soit suppose :
+
+| Evenement | Etat | Reprise |
+|---|---|---|
+| Base posee par `start()` | connecte | desarmee |
+| Premier CONNACK **reussi** | reste connecte — aucune transition | aucune |
+| Premier CONNACK **en echec** (§6.5) | passe non connecte — **le fait observe a autorite sur la base** | aucune |
+| Reussite **ulterieure**, apres un echec | transition non connecte -> connecte | **exactement une** |
+
+La base reste optimiste : au moment ou elle est posee, aucun CONNACK n'a ete
+recu. Elle l'est **exactement autant** que la publication de `online` qui la
+suit, deja contractee ainsi. La difference tient a ceci : toute notification
+reelle a desormais **autorite** sur elle, quel que soit l'instant ou elle
+survient.
+
+**Redemarrage.** `stop()` desarme le marqueur, et la deconnexion met fin a la
+boucle reseau en joignant le fil (P13) : aucun rappel de la session close ne
+peut survivre. Un `start()` ulterieur repose donc la base dans les memes
+conditions de surete.
+
+**Echec de l'ouverture.** Si l'ouverture leve, `start()` propage l'exception
+telle quelle : la politique d'erreur existante n'est pas modifiee, et le
+publieur reste non demarre. La primitive conserve alors une base « connecte,
+desarmee » qui ne correspond a rien — mais cet etat est **fonctionnellement
+inobservable** : une reprise n'est consommee qu'apres la verification de
+demarrage, et un `start()` ulterieur repose la base. Aucun `try/except` ne doit
+etre ajoute pour « nettoyer » cet etat : ce serait modifier une politique
+d'erreur pour un etat que personne ne peut lire.
 
 ### 8.4 Connexions echouees
 
@@ -639,6 +681,24 @@ etablissables hors ligne, sur doubles deterministes et horloge injectee.
 21. Une composition de la surface de lecture avec un client depourvu de la
     capacite **echoue visiblement**.
 
+### Course du premier CONNACK
+
+Ces proprietes verrouillent §8.3. Les proprietes 24 et 26 portent sur une
+**emission**, jamais sur une valeur retenue finale : c'est la seule facon de
+distinguer « republie » de « n'a jamais eu besoin de l'etre ».
+
+22. Premier CONNACK **reussi** recu **pendant** `start()`, avant sa fin : aucune
+    reprise, et aucune emission de `bridge/online` au-dela de celle de `start()`.
+23. Premier CONNACK **en echec** recu pendant `start()` : l'etat final de la
+    primitive est **non connecte** — la base ne l'a pas ecrase.
+24. Premier CONNACK en echec pendant `start()`, **puis** reussite : **exactement
+    une** nouvelle emission `bridge/online` = `online`.
+25. Premier CONNACK reussi : **aucune** republication redondante au premier
+    cycle.
+26. Premier CONNACK en echec : la premiere reprise legitime **n'est pas perdue**.
+27. L'ouverture de connexion qui leve : exception propagee inchangee, publieur
+    non demarre, aucune reprise consommable ensuite.
+
 ---
 
 ## 17. Mutations discriminantes
@@ -662,6 +722,8 @@ Aucun test n'est ecrit a ce stade. **Aucune mutation n'est declaree tuee.**
 | 13 | Publier directement depuis le rappel Paho | 18 |
 | 14 | Rendre le double incapable de declencher l'evenement | 20 |
 | 15 | Emettre un second `will_set()` apres reconnexion | §13 |
+| 16 | Poser la base **apres** l'ouverture de la connexion, ou apres les publications | 23, 24, 26 |
+| 17 | Faire que la base ecrase une notification reelle deja recue | 23 |
 
 ---
 
