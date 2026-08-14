@@ -10,7 +10,13 @@ import pytest
 
 from boilerack.adapters.config import MqttConfig
 from boilerack.adapters.mqtt_paho import PahoMqttClient
-from boilerack.transport.mqtt import Message, MqttClient, MqttWill
+from boilerack.transport.mqtt import (
+    ConnectionEvents,
+    Message,
+    MqttClient,
+    MqttWill,
+    PresenceMqttClient,
+)
 from adapter_support import FakeMqttMessage, FakePahoClient
 
 
@@ -395,3 +401,140 @@ def test_exception_du_handler_capturee_non_propagee(caplog) -> None:
         # Ne doit PAS remonter dans la boucle Paho.
         fake.fire_on_message(FakeMqttMessage(topic="t", payload=b"x"))
     assert any("handler" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# C11 — capacite de cycle de connexion
+# ---------------------------------------------------------------------------
+
+
+class _ReasonCode:
+    """Double FIDELE au `ReasonCode` de Paho 2.1.0 sur le seul point qui compte.
+
+    Le vrai objet expose `is_failure` et **ne supporte pas** `int()` : la
+    conversion y leve. Un double qui se contenterait d'un entier emprunterait le
+    chemin de repli de `_reason_is_success` et laisserait la discrimination
+    reelle de C11 sans preuve.
+
+    Borne a cet usage : ce double ne pretend rien reproduire d'autre de Paho.
+    """
+
+    def __init__(self, is_failure: bool) -> None:
+        self.is_failure = is_failure
+
+    def __int__(self) -> int:  # pragma: no cover - doit lever, jamais reussir
+        raise TypeError("int() n'est pas supporte par ReasonCode")
+
+    def __str__(self) -> str:
+        return "echec" if self.is_failure else "succes"
+
+
+def _connecte(adapter):
+    """Enregistre un collecteur de transitions et le rend."""
+    vues: list[bool] = []
+    adapter.set_connection_handler(vues.append)
+    return vues
+
+
+def test_adaptateur_porte_la_capacite_de_connexion() -> None:
+    adapter, _ = _adapter()
+    assert isinstance(adapter, ConnectionEvents)
+    assert isinstance(adapter, PresenceMqttClient)
+
+
+def test_connack_reussi_notifie_vrai() -> None:
+    adapter, fake = _adapter()
+    vues = _connecte(adapter)
+    fake.on_connect(fake, None, {}, _ReasonCode(is_failure=False), None)
+    assert vues == [True]
+    assert adapter.connected is True
+
+
+def test_connack_echoue_notifie_faux() -> None:
+    """R6 : obligatoire. Sans cela, une reussite ulterieure n'est plus une transition."""
+    adapter, fake = _adapter()
+    vues = _connecte(adapter)
+    fake.on_connect(fake, None, {}, _ReasonCode(is_failure=True), None)
+    assert vues == [False]
+    assert adapter.connected is False
+
+
+def test_is_failure_est_reellement_lu_et_non_le_repli_entier() -> None:
+    """`int()` leve sur le vrai `ReasonCode` : seul `is_failure` est praticable."""
+    with pytest.raises(TypeError):
+        int(_ReasonCode(is_failure=False))
+    adapter, fake = _adapter()
+    vues = _connecte(adapter)
+    fake.on_connect(fake, None, {}, _ReasonCode(is_failure=False), None)
+    fake.on_connect(fake, None, {}, _ReasonCode(is_failure=True), None)
+    assert vues == [True, False]
+
+
+def test_deconnexion_notifie_faux() -> None:
+    adapter, fake = _adapter()
+    vues = _connecte(adapter)
+    fake.fire_on_disconnect(reason=7)
+    assert vues == [False]
+
+
+def test_sans_handler_les_transitions_ne_levent_pas() -> None:
+    """Un consommateur sans obligation de presence n'enregistre rien : legitime."""
+    adapter, fake = _adapter()
+    fake.fire_on_connect(success=True)
+    fake.fire_on_disconnect(reason=7)  # ne doit rien lever
+
+
+def test_handler_remplace_pour_la_connexion() -> None:
+    adapter, fake = _adapter()
+    a, b = [], []
+    adapter.set_connection_handler(a.append)
+    adapter.set_connection_handler(b.append)
+    fake.fire_on_connect(success=True)
+    assert a == [] and b == [True]
+
+
+def test_enregistrement_du_handler_ne_rejoue_aucun_etat() -> None:
+    """Enregistrer apres coup ne fabrique pas une transition qui n'a pas eu lieu."""
+    adapter, fake = _adapter()
+    fake.fire_on_connect(success=True)
+    vues = _connecte(adapter)
+    assert vues == []
+
+
+def test_exception_du_handler_de_connexion_absorbee(caplog) -> None:
+    """Paho relancerait l'exception dans sa boucle reseau : elle meurt ici."""
+    adapter, fake = _adapter()
+
+    def _boom(_connected):
+        raise RuntimeError("handler de connexion casse")
+
+    adapter.set_connection_handler(_boom)
+    with caplog.at_level(logging.ERROR):
+        fake.fire_on_connect(success=True)
+        fake.fire_on_disconnect(reason=7)
+    assert any("handler de connexion" in r.message for r in caplog.records)
+
+
+def test_le_callback_est_possible_seulement_apres_l_ouverture_reseau() -> None:
+    """R4 : `loop_start()` est le DERNIER appel de `connect()`.
+
+    C'est ce qui rend sure la base posee avant l'ouverture : tant que la boucle
+    reseau n'est pas armee, aucun rappel ne peut survenir. Verrouille ici pour
+    qu'un reordonnancement de `connect()` ne passe pas inapercu.
+    """
+    fake = FakePahoWithWill()
+    adapter = PahoMqttClient(MqttConfig(host="h"), client=fake)
+    adapter.connect(will=_WILL)
+    assert fake.calls == ["will_set", "connect", "loop_start"]
+    assert fake.calls[-1] == "loop_start"
+
+
+def test_aucun_second_will_set_hors_connexion() -> None:
+    """Le testament est pose une fois ; Paho le reemet dans ses CONNECT suivants."""
+    fake = FakePahoWithWill()
+    adapter = PahoMqttClient(MqttConfig(host="h"), client=fake)
+    adapter.set_connection_handler(lambda _c: None)
+    adapter.connect(will=_WILL)
+    fake.fire_on_disconnect(reason=7)
+    fake.fire_on_connect(success=True)
+    assert len(fake.will_sets) == 1

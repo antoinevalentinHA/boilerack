@@ -20,6 +20,7 @@ from boilerack.adapters.config import MqttConfig, VclientConfig
 from boilerack.adapters.mqtt_paho import PahoMqttClient
 from boilerack.adapters.vclient_cli import VClientCliReader
 from boilerack.clock import SystemClock
+from boilerack.connection_state import ConnectionState
 from boilerack.read_surface import ReadSurfaceConfig, ReadSurfacePublisher
 from boilerack.read_surface.measurements import V1_MEASUREMENTS, MeasurementSpec
 from boilerack.read_surface.state import ChainStatus
@@ -127,13 +128,14 @@ def _runner(publisher, clock=None, stop=None) -> ReadSurfaceRunner:
     )
 
 
-def _reel(reader=None, mqtt=None, clock=None, config=None, stop=None):
+def _reel(reader=None, mqtt=None, clock=None, config=None, stop=None, connection=None):
     """Vrai publieur, vrai runner, doubles pour MQTT, lecteur et horloge."""
     c = clock if clock is not None else _clock()
     client = mqtt if mqtt is not None else FakeMqttClient()
     p = ReadSurfacePublisher(
         mqtt=client,
         clock=c,
+        connection=connection if connection is not None else ConnectionState(),
         reader=reader if reader is not None else _Lecteur(),
         config=config if config is not None else ReadSurfaceConfig(),
     )
@@ -173,7 +175,9 @@ def test_le_publieur_ne_construit_aucun_adaptateur() -> None:
     import inspect
 
     parametres = set(inspect.signature(ReadSurfacePublisher.__init__).parameters)
-    assert parametres == {"self", "mqtt", "clock", "reader", "specs", "config"}
+    assert parametres == {
+        "self", "mqtt", "clock", "connection", "reader", "specs", "config"
+    }
     source = pathlib.Path(
         inspect.getfile(ReadSurfacePublisher)
     ).read_text(encoding="utf-8")
@@ -815,3 +819,42 @@ def test_aucun_secret_ni_valeur_de_site() -> None:
     assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", source)  # adresse IP
     for interdit in ("password", "passwd", "/home/", "/dev/tty", "localhost", "192.168"):
         assert interdit not in source.lower()
+
+
+# ---------------------------------------------------------------------------
+# C11 — cablage de l'etat de connexion par la racine de composition
+# ---------------------------------------------------------------------------
+
+
+def test_build_runtime_cable_l_etat_de_connexion(monkeypatch) -> None:
+    """La racine cree la primitive ; le publieur l'abonne au client reel."""
+    vues: list[str] = []
+
+    class _Paho:
+        on_connect = on_disconnect = on_publish = on_message = None
+
+        def will_set(self, *a, **k): ...
+        def will_clear(self): ...
+        def connect(self, *a, **k): ...
+        def disconnect(self): ...
+        def loop_start(self): ...
+        def loop_stop(self): ...
+        def subscribe(self, *a, **k): ...
+        def publish(self, *a, **k): ...
+
+    faux = _Paho()
+    monkeypatch.setattr(PahoMqttClient, "_build_client", staticmethod(lambda cfg: faux))
+    rt = build_runtime(
+        RuntimeConfig(
+            mqtt=MqttConfig(host="broker.invalid"),
+            vclient=VclientConfig(executable="vclient"),
+        ),
+        NeverStop(),
+    )
+    # Le rappel a bien ete enregistre par le publieur sur le client construit.
+    assert rt.publisher._mqtt._connection_handler is not None
+    # Et il alimente reellement la primitive du publieur.
+    rt.publisher._mqtt._connection_handler(False)
+    rt.publisher._mqtt._connection_handler(True)
+    assert rt.publisher._connection.consume_recovery() is True
+    assert vues == []

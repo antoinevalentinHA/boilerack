@@ -8,11 +8,14 @@ vivent dans `boilerack.testing`.
 from __future__ import annotations
 
 from boilerack.transport.mqtt import (
+    ConnectionEvents,
+    ConnectionHandler,
     Message,
     MessageHandler,
     MqttClient,
     MqttWill,
     NotConnectedError,
+    PresenceMqttClient,
     Publication,
     PublishHandle,
     Subscription,
@@ -25,11 +28,14 @@ from boilerack.transport.vclient import (
 )
 
 __all__ = [
+    "ConnectionEvents",
+    "ConnectionHandler",
     "Message",
     "MessageHandler",
     "MqttClient",
     "MqttWill",
     "NotConnectedError",
+    "PresenceMqttClient",
     "Publication",
     "PublishHandle",
     "Subscription",

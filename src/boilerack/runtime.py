@@ -43,10 +43,11 @@ from boilerack.adapters.mqtt_paho import PahoMqttClient
 from boilerack.adapters.process_runner import SubprocessRunner
 from boilerack.adapters.vclient_cli import VClientCliReader
 from boilerack.clock import Clock, SystemClock
+from boilerack.connection_state import ConnectionState
 from boilerack.read_surface.config import ReadSurfaceConfig
 from boilerack.read_surface.measurements import V1_MEASUREMENTS, MeasurementSpec
 from boilerack.read_surface.publisher import MeasurementReader, ReadSurfacePublisher
-from boilerack.transport.mqtt import MqttClient
+from boilerack.transport.mqtt import PresenceMqttClient
 
 __all__ = [
     "StopSignal",
@@ -281,11 +282,17 @@ def build_runtime(
     runner et celui du publieur pourraient diverger.
     """
     clock = clock if clock is not None else SystemClock()
-    mqtt: MqttClient = PahoMqttClient(config.mqtt)
+    # L'annotation dit ce que la surface de lecture EXIGE : le port MQTT et la
+    # capacite de notification de connexion (C11).
+    mqtt: PresenceMqttClient = PahoMqttClient(config.mqtt)
     reader: MeasurementReader = VClientCliReader(config.vclient, SubprocessRunner())
+    # C11 : l'etat de connexion est cree ici et remis au publieur, qui l'abonne
+    # lui-meme au client. La racine assemble ; elle ne cable pas de rappel.
+    connection = ConnectionState()
     publisher = ReadSurfacePublisher(
         mqtt=mqtt,
         clock=clock,
+        connection=connection,
         reader=reader,
         specs=config.specs,
         config=config.read_surface,
