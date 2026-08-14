@@ -49,6 +49,7 @@ from typing import Any, Protocol
 
 from boilerack.adapters.config import MqttConfig
 from boilerack.transport.mqtt import (
+    ConnectionHandler,
     Message,
     MessageHandler,
     MqttWill,
@@ -126,6 +127,11 @@ class PahoMqttClient:
         # (entre l'appel `client.publish()` et l'enregistrement du handle).
         self._registering = 0
         self._handler: MessageHandler | None = None
+        # C11 : rappel de cycle de connexion. `None` est LEGITIME — un
+        # consommateur qui n'a pas d'obligation de presence, comme le coeur
+        # transactionnel, n'en enregistre aucun. Ce n'est pas un repli
+        # silencieux : c'est l'absence d'un destinataire.
+        self._connection_handler: ConnectionHandler | None = None
         self._connected = False
 
         self._client: PahoLike = client if client is not None else self._build_client(config)
@@ -305,12 +311,20 @@ class PahoMqttClient:
         reason_code: object,
         properties: object = None,
     ) -> None:
-        if _reason_is_success(reason_code):
-            with self._lock:
-                self._connected = True
+        etabli = _reason_is_success(reason_code)
+        with self._lock:
+            self._connected = etabli
+        if etabli:
             logger.info("connexion MQTT etablie")
         else:
+            # C11 : un CONNACK en echec n'est JAMAIS une connexion etablie. Le
+            # dire est le seul moyen d'empecher un etat suppose de survivre a un
+            # fait contraire — sans quoi une reussite ulterieure ne serait plus
+            # une transition, et la reprise de presence serait perdue.
             logger.warning("echec de connexion MQTT reason=%s", reason_code)
+        # Notification HORS VERROU : aucun rappel externe n'est appele sous
+        # verrou, invariant deja pose par ce module.
+        self._notifier(etabli)
 
     def _on_disconnect(
         self,
@@ -324,11 +338,37 @@ class PahoMqttClient:
         with self._lock:
             self._connected = False
         logger.warning("deconnexion MQTT reason=%s", reason_code)
+        self._notifier(False)
+
+    def _notifier(self, connected: bool) -> None:
+        """Transmet une transition au rappel enregistre, sans jamais laisser filer.
+
+        Une exception du rappel serait relancee par Paho dans sa boucle reseau —
+        `suppress_exceptions` vaut `False` par defaut — et pourrait la rompre.
+        Elle est donc journalisee et absorbee ICI, a la frontiere, ou elle ne
+        peut nuire a personne d'autre.
+        """
+        handler = self._connection_handler
+        if handler is None:
+            return
+        try:
+            handler(connected)
+        except Exception:  # large mais non aveugle : journalisee, jamais relancee
+            logger.exception("le handler de connexion a leve connected=%s", connected)
 
     # -- entree ---------------------------------------------------------------
 
     def set_message_handler(self, handler: MessageHandler) -> None:
         self._handler = handler
+
+    def set_connection_handler(self, handler: ConnectionHandler) -> None:
+        """Enregistre le rappel de cycle de connexion (C11). Aucun effet de bord.
+
+        Enregistrement pur : aucune socket, aucun processus, aucune notification
+        immediate. L'etat courant n'est PAS rejoue vers un rappel qui arrive
+        apres coup — ce serait fabriquer une transition qui n'a pas eu lieu.
+        """
+        self._connection_handler = handler
 
     # -- inspection ----------------------------------------------------------
 

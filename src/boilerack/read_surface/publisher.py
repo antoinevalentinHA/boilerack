@@ -65,7 +65,8 @@ from boilerack.read_surface.payload import format_scalar
 from boilerack.read_surface.snapshot import build_snapshot, snapshot_to_json
 from boilerack.read_surface.state import ReadSurfaceState, complete_cycle, record_result
 from boilerack.read_surface.topics import build_topic
-from boilerack.transport.mqtt import MqttClient, MqttWill
+from boilerack.connection_state import ConnectionState
+from boilerack.transport.mqtt import MqttWill, PresenceMqttClient
 from boilerack.transport.vclient import ReadResult, TransportStatus
 
 __all__ = ["MeasurementReader", "ReadSurfacePublisher"]
@@ -129,8 +130,9 @@ class ReadSurfacePublisher:
 
     def __init__(
         self,
-        mqtt: MqttClient,
+        mqtt: PresenceMqttClient,
         clock: Clock,
+        connection: ConnectionState,
         reader: MeasurementReader | None = None,
         specs: Sequence[MeasurementSpec] = V1_MEASUREMENTS,
         config: ReadSurfaceConfig | None = None,
@@ -141,6 +143,7 @@ class ReadSurfacePublisher:
         # module et rend explicite le cas « aucune configuration fournie ».
         self._mqtt = mqtt
         self._clock = clock
+        self._connection = connection
         self._reader = reader
         self._specs: tuple[MeasurementSpec, ...] = tuple(specs)
         self._config = config if config is not None else ReadSurfaceConfig()
@@ -170,6 +173,15 @@ class ReadSurfacePublisher:
         self._next_due: dict[str, float] = {}
         self._next_snapshot_due: float | None = None
         self._next_heartbeat_due: float | None = None
+
+        # C11 : la capacite de notification est REQUISE, jamais sondee. L'appel
+        # est direct — un client qui ne la porte pas fait echouer la
+        # construction, visiblement. Aucun `hasattr`, aucun repli : tolerer
+        # l'absence reviendrait a livrer une surface qui pretend honorer C7-B §5
+        # sans le pouvoir. Enregistrement PUR : aucune entree-sortie ici, et
+        # place APRES la validation, pour ne pas laisser un rappel branche sur
+        # un publieur dont la construction echoue.
+        self._mqtt.set_connection_handler(self._connection.notify)
 
     # -- inspection ----------------------------------------------------------
 
@@ -237,6 +249,14 @@ class ReadSurfacePublisher:
         if self._started:
             raise RuntimeError("start() a deja ete appele : cycle de vie incoherent")
 
+        # C11 §8.3 — BASE AVANT L'OUVERTURE, et non apres les publications.
+        # A cet instant aucun appel n'a encore ete fait au transport, donc aucun
+        # rappel n'est possible : la place est sure par CONSTRUCTION, non par
+        # chronometrie. Poser la base plus tard ecraserait un echec de CONNACK
+        # deja observe, et la reussite suivante ne serait plus une transition :
+        # la reprise serait perdue.
+        self._connection.mark_connected()
+
         self._mqtt.connect(will=self.will())
         # Le client est connecte : l'etat de cycle de vie reflete la realite,
         # meme si une publication echoue juste apres.
@@ -301,6 +321,11 @@ class ReadSurfacePublisher:
         self._next_due = {}
         self._next_snapshot_due = None
         self._next_heartbeat_due = None
+        # C11 : aucune reprise en attente ne survit a l'arret. Desarmement
+        # EXPLICITE, et non deduit d'une notification de deconnexion : le
+        # transport n'est pas tenu d'en emettre une pour un `disconnect()`
+        # volontaire, et la surete de l'arret ne doit dependre d'aucun rappel.
+        self._connection.disarm()
 
         annonce: Exception | None = None
         try:
@@ -359,6 +384,9 @@ class ReadSurfacePublisher:
 
         Ordre, fige au debut de l'appel :
 
+        0. reprise de presence, si une connexion a ete retablie depuis la
+           derniere consommation (C11) — republication de `online`, et rien
+           d'autre : ni echeance touchee, ni etat de lecture modifie ;
         1. instant monotone captute UNE fois — l'ensemble des taches dues ne
            change plus pendant l'appel, meme si les lectures prennent du temps ;
         2. mesures dues, dans l'ordre des specs, lues **sequentiellement** — C6
@@ -403,6 +431,15 @@ class ReadSurfacePublisher:
         erreurs: list[Exception] = []
         resultats: dict[str, TransportStatus] = {}
         snapshot_publie = False
+
+        # C11 — etape 0 : reprise de presence. Placee ici, elle herite de deux
+        # garanties sans ecrire une ligne d'ordonnancement : la verification de
+        # demarrage l'a precedee, et le runner a deja consulte l'arret avant
+        # d'appeler cette methode. L'arret prime donc toujours sur une reprise.
+        # `_tenter` applique le QoS et la retention contractuels, et une erreur
+        # de publication rejoint le groupe du cycle, comme toutes les autres.
+        if self._connection.consume_recovery():
+            self._tenter(erreurs, self._online_topic, _ONLINE)
 
         for spec in dues:
             # Une exception inattendue du lecteur remonte ici, sans cloture.

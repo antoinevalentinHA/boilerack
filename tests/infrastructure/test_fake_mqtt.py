@@ -196,3 +196,42 @@ def test_aucune_publication_sans_appel() -> None:
     client = _connected()
     assert client.publications == ()
     assert client.subscriptions == ()
+
+
+# ---------------------------------------------------------------------------
+# C11 — capacite de cycle de connexion
+# ---------------------------------------------------------------------------
+
+
+def test_double_porte_la_capacite_de_connexion() -> None:
+    from boilerack.transport.mqtt import ConnectionEvents, PresenceMqttClient
+
+    client = FakeMqttClient()
+    assert isinstance(client, ConnectionEvents)
+    assert isinstance(client, PresenceMqttClient)
+
+
+def test_declencheurs_transmettent_l_etat_resultant() -> None:
+    client = FakeMqttClient()
+    vues: list[bool] = []
+    client.set_connection_handler(vues.append)
+    client.fire_connected()
+    client.fire_disconnected()
+    client.fire_connected()
+    assert vues == [True, False, True]
+
+
+def test_aucune_transition_automatique_sur_connect_ou_disconnect() -> None:
+    """Le double ne SIMULE pas Paho : le test choisit ses transitions."""
+    client = FakeMqttClient()
+    vues: list[bool] = []
+    client.set_connection_handler(vues.append)
+    client.connect()
+    client.disconnect()
+    assert vues == []
+
+
+def test_declencheur_sans_handler_est_une_erreur_visible() -> None:
+    """Un double muet rendrait les tests du publieur aveugles a l'evenement."""
+    with pytest.raises(RuntimeError):
+        FakeMqttClient().fire_connected()

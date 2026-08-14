@@ -25,6 +25,15 @@ from typing import Callable, Final, Protocol, runtime_checkable
 MessageHandler = Callable[["Message"], None]
 """Rappel invoque pour chaque `Message` entrant remis par le transport."""
 
+ConnectionHandler = Callable[[bool], None]
+"""Rappel invoque a chaque transition du cycle de connexion (C11 §6.4).
+
+Recoit **l'etat resultant** : `True` pour « connexion etablie », `False` pour
+« non connectee ». Ni code de raison, ni drapeaux, ni proprietes : C11 n'en
+consomme aucun, et les exposer creerait une surface de compatibilite sans
+consommateur.
+"""
+
 #: Jokers MQTT : un topic de PUBLICATION ne peut pas en porter.
 _WILDCARDS: Final = ("+", "#")
 
@@ -197,3 +206,38 @@ class MqttClient(Protocol):
 
     def set_message_handler(self, handler: MessageHandler) -> None:
         ...
+
+
+@runtime_checkable
+class ConnectionEvents(Protocol):
+    """CAPACITE de notification du cycle de connexion (C11 §6).
+
+    Volontairement DISTINCTE de `MqttClient`, qui reste inchange : le coeur
+    transactionnel consomme le port pour publier des ACK et n'a aucun besoin de
+    presence. La capacite est requise la ou l'obligation existe — la surface de
+    lecture, qui doit honorer C7-B §5 — et nulle part ailleurs.
+
+    OBLIGATIONS DE L'EMETTEUR (C11 §6.5). Un implementeur **MUST** appeler le
+    rappel avec `True` a chaque connexion reellement etablie, avec `False` a
+    chaque echec d'etablissement et a chaque deconnexion observee ; il **MUST
+    NOT** invoquer deux rappels concurremment, ni laisser une exception du
+    rappel remonter vers sa source, ni interpreter, filtrer ou retarder une
+    transition — la decision appartient au fil metier.
+    """
+
+    def set_connection_handler(self, handler: ConnectionHandler) -> None:
+        ...
+
+
+@runtime_checkable
+class PresenceMqttClient(MqttClient, ConnectionEvents, Protocol):
+    """Ce dont la surface de lecture a besoin : le port ET la capacite.
+
+    Un client incapable de signaler ses reconnexions rend le respect de C7-B §5
+    impossible apres la premiere connexion. La capacite n'est donc **pas
+    optionnelle** pour ce consommateur : une composition qui ne peut pas la
+    fournir doit echouer, visiblement, a la construction (C11 §6.3).
+
+    Meme limite que `MqttClient` : `isinstance` ne verifie QUE la presence des
+    noms. La conformite reelle se prouve par le COMPORTEMENT.
+    """

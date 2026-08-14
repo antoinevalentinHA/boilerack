@@ -16,7 +16,14 @@ Pilotage par le test :
 
 - `program_publish_failure()` fait echouer les prochaines publications ;
 - `confirm_pending()` confirme les publications demandees encore en attente ;
-- `deliver()` injecte un message entrant (avec drapeau `dup` eventuel).
+- `deliver()` injecte un message entrant (avec drapeau `dup` eventuel) ;
+- `fire_connected()` / `fire_disconnected()` declenchent une transition du
+  cycle de connexion (C11).
+
+Ce double ne SIMULE PAS Paho : il expose la meme semantique de capacite — un
+booleen d'etat resultant — et rien de son mecanisme. Aucune transition n'est
+declenchee automatiquement par `connect()` ou `disconnect()` : c'est le test qui
+les choisit, faute de quoi les scenarios deviendraient ambigus.
 """
 
 from __future__ import annotations
@@ -45,6 +52,7 @@ class FakeMqttClient:
         self._pending_failures = 0
         self._connected_will: MqttWill | None = None
         self._on_message: Callable[[Message], None] | None = None
+        self._on_connection: Callable[[bool], None] | None = None
 
     # ------------------------------------------------------------------
     # Protocole MqttClient
@@ -106,11 +114,31 @@ class FakeMqttClient:
         """Enregistre un rappel appele a chaque message entrant."""
         self._on_message = handler
 
+    def set_connection_handler(self, handler: Callable[[bool], None]) -> None:
+        """Enregistre le rappel de cycle de connexion (C11). Aucun effet de bord."""
+        self._on_connection = handler
+
     def deliver(self, message: Message) -> None:
         """Injecte un message entrant et notifie le rappel eventuel."""
         self._inbox.append(message)
         if self._on_message is not None:
             self._on_message(message)
+
+    def fire_connected(self) -> None:
+        """Notifie une connexion etablie. Declenchee par le TEST, jamais seule."""
+        self._fire_connection(True)
+
+    def fire_disconnected(self) -> None:
+        """Notifie une connexion perdue ou non etablie. Declenchee par le TEST."""
+        self._fire_connection(False)
+
+    def _fire_connection(self, connected: bool) -> None:
+        if self._on_connection is None:
+            raise RuntimeError(
+                "aucun handler de connexion enregistre : "
+                "set_connection_handler() n'a pas ete appele"
+            )
+        self._on_connection(connected)
 
     # ------------------------------------------------------------------
     # Inspection

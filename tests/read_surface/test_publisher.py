@@ -17,6 +17,7 @@ from boilerack.read_surface.publisher import ReadSurfacePublisher
 from boilerack.read_surface.state import ChainStatus
 from boilerack.read_surface.topics import V1_SUFFIXES
 from boilerack.testing import FakeMqttClient, VirtualClock
+from boilerack.connection_state import ConnectionState
 from boilerack.transport.mqtt import MqttWill, NotConnectedError
 from boilerack.transport.vclient import ReadResult, TransportStatus
 
@@ -27,11 +28,13 @@ def _clock() -> VirtualClock:
     return VirtualClock(_DEBUT, monotonic_start=1000.0)
 
 
-def _publieur(prefix: str = "boiler", mqtt=None, reader=None, clock=None, config=None):
+def _publieur(prefix: str = "boiler", mqtt=None, reader=None, clock=None, config=None,
+              connection=None):
     client = mqtt if mqtt is not None else FakeMqttClient()
     p = ReadSurfacePublisher(
         mqtt=client,
         clock=clock if clock is not None else _clock(),
+        connection=connection if connection is not None else ConnectionState(),
         reader=reader,
         config=config if config is not None else ReadSurfaceConfig(prefix=prefix),
     )
@@ -69,7 +72,8 @@ def test_prefixe_personnalise_normalise() -> None:
 
 
 def test_configuration_par_defaut_sans_argument() -> None:
-    p = ReadSurfacePublisher(mqtt=FakeMqttClient(), clock=_clock())
+    p = ReadSurfacePublisher(mqtt=FakeMqttClient(), clock=_clock(),
+                             connection=ConnectionState())
     assert p.online_topic == "boiler/bridge/online"
 
 
@@ -571,7 +575,9 @@ def test_lecteur_injecte_jamais_construit() -> None:
     import inspect
 
     parametres = set(inspect.signature(ReadSurfacePublisher.__init__).parameters)
-    assert parametres == {"self", "mqtt", "clock", "reader", "specs", "config"}
+    assert parametres == {
+        "self", "mqtt", "clock", "connection", "reader", "specs", "config"
+    }
 
 
 def test_aucune_attente_de_confirmation() -> None:
@@ -1353,7 +1359,8 @@ def test_due_at_refuse_apres_stop() -> None:
 
 def test_aucun_lecteur_appele_avant_start() -> None:
     r = _Lecteur()
-    ReadSurfacePublisher(mqtt=FakeMqttClient(), clock=_clock(), reader=r)
+    ReadSurfacePublisher(mqtt=FakeMqttClient(), clock=_clock(),
+                         connection=ConnectionState(), reader=r)
     assert r.appels == []
 
 
@@ -1368,6 +1375,7 @@ def test_snapshot_period_superieure_au_plus_petit_fresh_max_refusee() -> None:
         ReadSurfacePublisher(
             mqtt=FakeMqttClient(),
             clock=_clock(),
+            connection=ConnectionState(),
             config=ReadSurfaceConfig(snapshot_period_s=91),
         )
 
@@ -1376,6 +1384,7 @@ def test_snapshot_period_egale_au_plus_petit_fresh_max_acceptee() -> None:
     p = ReadSurfacePublisher(
         mqtt=FakeMqttClient(),
         clock=_clock(),
+        connection=ConnectionState(),
         config=ReadSurfaceConfig(snapshot_period_s=90),
     )
     assert p.started is False
@@ -1393,6 +1402,7 @@ def test_borne_verifiee_contre_les_specs_injectees() -> None:
     p = ReadSurfacePublisher(
         mqtt=FakeMqttClient(),
         clock=_clock(),
+        connection=ConnectionState(),
         specs=lentes,
         config=ReadSurfaceConfig(snapshot_period_s=200),
     )
@@ -1584,3 +1594,280 @@ def test_lot_de_taches_fige_au_debut_de_run_due() -> None:
     assert quatrieme.count("boiler/bridge/heartbeat") == 1  # UN au maximum
     # Ordre deterministe : le battement vient en dernier.
     assert quatrieme[-1] == "boiler/bridge/heartbeat"
+
+
+# ---------------------------------------------------------------------------
+# C11 — reprise de presence apres reconnexion
+# ---------------------------------------------------------------------------
+
+
+class _SansCapacite:
+    """Client conforme a `MqttClient` mais DEPOURVU de la capacite C11."""
+
+    def connect(self, will=None): ...
+    def disconnect(self): ...
+    def subscribe(self, topic, qos=0): ...
+    def publish(self, topic, payload, qos=0, retain=False): ...
+    def set_message_handler(self, handler): ...
+
+
+class _ConnexionQuiLeve(FakeMqttClient):
+    def connect(self, will=None):
+        raise OSError("ouverture impossible")
+
+
+class _PresenceQuiLeve(FakeMqttClient):
+    """Fait echouer, une fois, la publication de presence — et elle seule."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.armee = False
+
+    def publish(self, topic, payload, qos=0, retain=False):
+        if self.armee and topic.endswith("bridge/online"):
+            self.armee = False
+            raise RuntimeError("publication de presence impossible")
+        return super().publish(topic, payload, qos=qos, retain=retain)
+
+
+def _online_depuis(client, repere: int) -> list[tuple[str, bytes, int, bool]]:
+    """Publications de presence emises APRES l'indice `repere`.
+
+    La tranche est prise sur le journal COMPLET puis filtree : filtrer d'abord
+    puis trancher avec un indice global rendrait l'assertion vacue.
+    """
+    return [p for p in _publies(client)[repere:] if p[0].endswith("bridge/online")]
+
+
+def test_composition_sans_capacite_echoue_a_la_construction() -> None:
+    """C11 §6.3 : ni `hasattr`, ni repli — un echec dur, visible, immediat."""
+    from boilerack.transport.mqtt import MqttClient
+
+    client = _SansCapacite()
+    assert isinstance(client, MqttClient)  # le port est bien satisfait
+    with pytest.raises(AttributeError):
+        ReadSurfacePublisher(
+            mqtt=client, clock=_clock(), connection=ConnectionState()
+        )
+
+
+def test_le_publieur_abonne_la_primitive_au_client() -> None:
+    etat = ConnectionState()
+    _, client = _publieur(connection=etat)
+    client.fire_connected()
+    assert etat.connected is True
+
+
+def test_reconnexion_republie_online_une_fois() -> None:
+    """Le defaut historique : telemetrie fraiche et presence retenue `offline`."""
+    etat = ConnectionState()
+    p, client = _publieur(connection=etat, reader=_Lecteur())
+    p.start()
+    repere = len(client.publications)
+
+    client.fire_disconnected()  # perte inattendue ; le broker applique le testament
+    client.fire_connected()  # Paho se reconnecte
+    p.run_due()
+
+    neuf = [
+        (h.publication.topic, h.publication.payload, h.publication.qos, h.publication.retain)
+        for h in client.publications[repere:]
+    ]
+    online = [x for x in neuf if x[0] == "boiler/bridge/online"]
+    assert online == [("boiler/bridge/online", b"online", 1, True)]
+
+
+def test_connack_initial_reussi_ne_republie_rien() -> None:
+    """La base posee par `start()` neutralise le CONNACK initial."""
+    p, client = _publieur(reader=_Lecteur())
+    p.start()
+    repere = len(client.publications)
+    client.fire_connected()
+    p.run_due()
+    assert _online_depuis(client, repere) == []
+
+
+def test_echec_initial_n_est_pas_ecrase_par_la_base() -> None:
+    """§8.3 : le fait observe a autorite, meme s'il precede la fin de `start()`."""
+    etat = ConnectionState()
+    p, client = _publieur(connection=etat, reader=_Lecteur())
+    p.start()
+    client.fire_disconnected()  # CONNACK initial en echec
+    assert etat.connected is False
+
+
+def test_echec_initial_puis_reussite_republie_exactement_une_fois() -> None:
+    """La sequence que l'ancien placement de la base faisait perdre."""
+    p, client = _publieur(reader=_Lecteur())
+    p.start()
+    client.fire_disconnected()
+    repere = len(client.publications)
+    client.fire_connected()
+    p.run_due()
+    p.run_due()  # un second cycle ne republie pas
+    neuf = [x for x in _publies(client)[repere:] if x[0] == "boiler/bridge/online"]
+    assert neuf == [("boiler/bridge/online", b"online", 1, True)]
+
+
+def test_deconnexion_avant_consommation_ne_republie_rien() -> None:
+    p, client = _publieur(reader=_Lecteur())
+    p.start()
+    client.fire_disconnected()
+    client.fire_connected()
+    client.fire_disconnected()  # annule la reprise en attente
+    repere = len(client.publications)
+    p.run_due()
+    assert _online_depuis(client, repere) == []
+
+
+def test_reprise_ne_publie_aucun_autre_topic() -> None:
+    """Ni scalaire, ni instantane, ni battement : seule la presence est restauree."""
+    horloge = _clock()
+    p, client = _publieur(clock=horloge, reader=_Lecteur())
+    p.start()
+    p.run_due()  # epuise les echeances initiales
+    repere = len(client.publications)
+    client.fire_disconnected()
+    client.fire_connected()
+    p.run_due()  # aucune echeance due : la reprise est seule
+    assert [x[0] for x in _publies(client)[repere:]] == ["boiler/bridge/online"]
+
+
+def test_reprise_ne_touche_ni_echeances_ni_fraicheur() -> None:
+    """La reprise est ORTHOGONALE a l'ordonnancement et a l'etat de lecture."""
+    p, client = _publieur(reader=_Lecteur())
+    p.start()
+    p.run_due()
+    echeances = (p.due_at(), dict(p._next_due), p._next_snapshot_due, p._next_heartbeat_due)
+    etat_avant = p.state
+
+    client.fire_disconnected()
+    client.fire_connected()
+    p.run_due()
+
+    assert (p.due_at(), dict(p._next_due), p._next_snapshot_due, p._next_heartbeat_due) == echeances
+    assert p.state is etat_avant
+
+
+def test_aucune_reprise_apres_arret() -> None:
+    p, client = _publieur(reader=_Lecteur())
+    p.start()
+    client.fire_disconnected()
+    client.fire_connected()  # reprise armee
+    p.stop()
+    with pytest.raises(RuntimeError):
+        p.run_due()
+
+
+def test_arret_sur_sans_notification_de_deconnexion() -> None:
+    """R5 : la surete de `stop()` ne depend d'aucun rappel volontaire.
+
+    Aucun `fire_disconnected()` n'est emis pendant l'arret : un `start()`
+    ulterieur ne doit produire aucune republication redondante.
+    """
+    p, client = _publieur(reader=_Lecteur())
+    p.start()
+    client.fire_connected()
+    p.stop()
+    repere = len(client.publications)
+    p.start()
+    client.fire_connected()
+    p.run_due()
+    assert _online_depuis(client, repere) == [
+        ("boiler/bridge/online", b"online", 1, True)
+    ]  # celui de start()
+
+
+def test_ouverture_qui_leve_laisse_le_publieur_non_demarre() -> None:
+    """§12 : politique d'erreur inchangee, etat residuel inobservable."""
+    p, _ = _publieur(mqtt=_ConnexionQuiLeve(), reader=_Lecteur())
+    with pytest.raises(OSError):
+        p.start()
+    assert p.started is False
+    with pytest.raises(RuntimeError):
+        p.run_due()
+
+
+def test_echec_de_publication_de_reprise_rejoint_le_groupe_du_cycle() -> None:
+    """Aucune politique d'erreur nouvelle : la reprise suit celle des autres.
+
+    L'erreur est COLLECTEE, jamais absorbee, et n'interrompt pas le cycle : les
+    mesures dues restent traitees.
+    """
+    client = _PresenceQuiLeve()
+    lecteur = _Lecteur()
+    p, _ = _publieur(mqtt=client, reader=lecteur)
+    p.start()
+    p.run_due()  # epuise les echeances initiales
+    client.fire_disconnected()
+    client.fire_connected()
+    client.armee = True
+    lus_avant = len(lecteur.appels)
+
+    with pytest.raises(ExceptionGroup) as capture:
+        p.run_due()
+
+    assert len(capture.value.exceptions) == 1
+    assert isinstance(capture.value.exceptions[0], RuntimeError)
+    assert len(lecteur.appels) >= lus_avant  # le cycle n'a pas ete interrompu
+
+
+def test_arret_desarme_toute_reprise_en_attente() -> None:
+    """§8.3 : `stop()` desarme. Verifie sur la primitive, seul point observable."""
+    etat = ConnectionState()
+    p, client = _publieur(connection=etat, reader=_Lecteur())
+    p.start()
+    client.fire_disconnected()
+    client.fire_connected()  # reprise armee
+    p.stop()
+    assert etat.consume_recovery() is False
+
+
+class _ConnackPendantStart(FakeMqttClient):
+    """Client dont le CONNACK survient PENDANT `start()`, avant sa fin.
+
+    Fidele au point qui compte : l'ouverture arme la boucle reseau en son sein,
+    de sorte qu'un rappel peut etre traite avant que `start()` ne rende la main.
+    Aucune autre mecanique de Paho n'est reproduite.
+    """
+
+    def __init__(self, etabli: bool) -> None:
+        super().__init__()
+        self.etabli = etabli
+
+    def connect(self, will=None):
+        super().connect(will)
+        self._fire_connection(self.etabli)
+
+
+def test_connack_reussi_pendant_start_ne_republie_rien() -> None:
+    """La base precede l'ouverture : un succes recu tot n'arme rien."""
+    client = _ConnackPendantStart(etabli=True)
+    p, _ = _publieur(mqtt=client, reader=_Lecteur())
+    p.start()
+    repere = len(client.publications)
+    p.run_due()
+    assert _online_depuis(client, repere) == []
+
+
+def test_connack_echoue_pendant_start_puis_reussite_republie_une_fois() -> None:
+    """LE test de la course initiale.
+
+    Un echec de CONNACK observe AVANT la fin de `start()` ne doit pas etre
+    ecrase par la base : sans quoi la reussite suivante ne serait plus une
+    transition, et la reprise serait definitivement perdue. C'est le defaut
+    exact que corrige le placement de la base avant l'ouverture.
+    """
+    etat = ConnectionState()
+    client = _ConnackPendantStart(etabli=False)
+    p, _ = _publieur(mqtt=client, connection=etat, reader=_Lecteur())
+    p.start()
+
+    assert etat.connected is False  # le fait observe a eu autorite sur la base
+
+    repere = len(client.publications)
+    client.fire_connected()  # reussite ulterieure
+    p.run_due()
+    assert _online_depuis(client, repere) == [
+        ("boiler/bridge/online", b"online", 1, True)
+    ]
