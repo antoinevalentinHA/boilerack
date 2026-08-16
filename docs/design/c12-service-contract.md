@@ -175,6 +175,33 @@ BOILERACK_MQTT_PASSWORD=...
 Il est charge par `EnvironmentFile=`, ce qui laisse l'unite **versionnable sans
 secret**.
 
+### Forme STRICTE, sans prefixe
+
+```text
+EnvironmentFile=/etc/boilerack/boilerack.env
+```
+
+La forme tolerante — `EnvironmentFile=-/etc/...`, qui fait ignorer un fichier
+manquant — est **REJETEE**. Avec elle, un chemin errone ou un fichier supprime
+ferait disparaitre le secret **en silence** : le pont tenterait alors une
+connexion sans mot de passe, et l'exploitant ne l'apprendrait qu'au refus du
+broker, voire jamais. La forme stricte transforme cette faute en **echec de
+demarrage immediat et lisible**, ce qui est la doctrine constante du projet.
+
+### VARIABLE optionnelle, FICHIER obligatoire — la distinction
+
+Ces deux propositions ne se contredisent pas, et il faut les tenir ensemble :
+
+| Niveau | Regle | Autorite |
+|---|---|---|
+| **Programme** | `BOILERACK_MQTT_PASSWORD` est **optionnelle** : absente, le chargement reussit et le mot de passe vaut `None` | C10, **inchange** |
+| **Exploitation** | `/etc/boilerack/boilerack.env` est **attendu par l'unite** : absent, le service ne demarre pas | C12 |
+
+Consequence pratique, a documenter pour l'exploitant : une installation **sans
+authentification MQTT** cree tout de meme ce fichier, **eventuellement vide**. Le
+fichier peut donc exister sans definir la variable — C10 n'est ni durci, ni
+contredit : C12 ne parle que du fichier, C10 ne parle que de la variable.
+
 Clauses normatives :
 
 - **le fichier d'unite versionne ne contient AUCUN secret**, ni reel, ni factice,
@@ -197,7 +224,7 @@ C12 **ne redefinit rien** ; il fixe ce qu'un superviseur doit en conclure.
 | Code | Origine | Sens | Attendu du superviseur |
 |---|---|---|---|
 | `0` | C9/C10 | arret propre, notamment sur `SIGTERM` | **succes** — aucun redemarrage |
-| `130` | C9/C10 | interruption clavier (`SIGINT`) | ne survient pas sous service ; aucun redemarrage attendu |
+| `130` | C9/C10 | interruption (`SIGINT`) | **aucun redemarrage**, et **aucune requalification en succes** : l'interruption reste un echec visible (§8.1) |
 | `2` | C10 | usage ou configuration invalide | **echec permanent** — aucun redemarrage (§8) |
 | `1` | C10 | panne, avec trace | **echec transitoire possible** — redemarrage (§8) |
 
@@ -217,19 +244,39 @@ une hypothese non ecrite.
 
 ```text
 Restart=on-failure
-RestartPreventExitStatus=2
+RestartPreventExitStatus=2 130
 ```
 
 `on-failure` plutot que `always` : un arret propre (`0`) est un arret **voulu**,
 et le relancer contrarierait `systemctl stop`.
 
-`RestartPreventExitStatus=2` retire le code de configuration de la politique de
-redemarrage. Sans lui, un TOML invalide produirait une boucle : echec immediat,
-redemarrage, echec immediat. L'exploitant verrait un service qui s'agite au lieu
-d'un service **arrete et visible**, avec sa cause dans le journal.
+**Le code `2` est soustrait au redemarrage.** Sans cela, un TOML invalide
+produirait une boucle : echec immediat, redemarrage, echec immediat. L'exploitant
+verrait un service qui s'agite au lieu d'un service **arrete et visible**, avec sa
+cause dans le journal. C'est l'objectif normatif : **une erreur de configuration
+reste arretee et lisible ; elle ne boucle jamais.**
 
-C'est l'objectif normatif : **une erreur de configuration reste arretee et
-lisible ; elle ne boucle jamais.**
+**Le code `130` l'est aussi.** Sous `Restart=on-failure`, un `130` serait sinon
+relance : une interruption **demandee** deviendrait un redemarrage subi. Ce code
+ne peut naitre d'aucune action de systemd lui-meme — `systemctl stop` envoie
+`SIGTERM` (§7), et un service n'a pas de terminal —, mais il reste atteignable
+par une action deliberee d'administrateur, typiquement
+`systemctl kill --signal=SIGINT`. La clause couvre ce cas plutot que de s'en
+remettre a son improbabilite.
+
+**`SuccessExitStatus=130` est REJETE.** Ce serait l'autre facon d'empecher le
+redemarrage, et elle est refusee : elle requalifierait l'interruption en
+**succes**, alors que C9 a choisi `130` precisement pour dire **qui** a demande
+l'arret. La distinction serait effacee au niveau du superviseur, et l'unite
+paraitrait s'etre arretee normalement.
+
+Consequence assumee, a connaitre : apres un `SIGINT` administratif explicite,
+l'unite reste en etat d'**echec** — visible dans `systemctl status` — sans etre
+relancee. C'est le comportement voulu : **absence de redemarrage automatique
+ET visibilite de l'interruption**, plutot qu'une requalification de confort.
+
+Le chemin normal d'arret reste inchange : `systemctl stop` envoie `SIGTERM`,
+Boilerack rend `0`, et l'unite s'arrete proprement sans redemarrage.
 
 ### 8.2 Le cas du code `1`, mesure
 
@@ -296,9 +343,10 @@ Clauses attendues et leur justification :
 | `Type` | `simple` | Le processus ne se dedouble pas, ne se detache pas, et n'implemente aucun protocole de disponibilite. `notify` exigerait `sd_notify`, que Boilerack ne fournit pas — l'ajouter serait hors perimetre |
 | `ExecStart` | §5 | script installe, chemin absolu, `--config` explicite |
 | `User` / `Group` | `boilerack` | §4.2, moindre privilege |
-| `EnvironmentFile` | `/etc/boilerack/boilerack.env` | §6, secret hors unite |
+| `EnvironmentFile` | `/etc/boilerack/boilerack.env`, **sans prefixe `-`** | §6, secret hors unite, absence du fichier bloquante |
 | `Restart` | `on-failure` | §8.1 |
-| `RestartPreventExitStatus` | `2` | §8.1 |
+| `RestartPreventExitStatus` | `2 130` | §8.1 — configuration et interruption, ni l'une ni l'autre relancee |
+| `SuccessExitStatus` | **absente** | §8.1 — `130` n'est pas requalifie en succes |
 | `RestartSec` | `10` | §8.3, derive |
 | `KillSignal` | `SIGTERM` | §7, socle de C9 rendu explicite |
 | `TimeoutStopSec` | §10 | derive d'une borne partielle |
@@ -448,7 +496,9 @@ A ecrire tel quel, sans attenuation :
 - que `systemctl stop` obtienne effectivement le code `0` et l'annonce `offline` ;
 - que `TimeoutStopSec` suffise reellement dans le pire cas ;
 - que `journald` capture correctement les lignes emises ;
-- que `RestartPreventExitStatus` empeche effectivement la boucle sur `2` ;
+- que `RestartPreventExitStatus` empeche effectivement le redemarrage sur `2`
+  et sur `130` ;
+- qu'un fichier d'environnement absent empeche effectivement le demarrage ;
 - que les valeurs de `StartLimitIntervalSec` et `StartLimitBurst` de la
   distribution cible rendent `RestartSec=10` suffisant ;
 - que l'utilisateur `boilerack` dispose des droits necessaires pour executer
@@ -482,9 +532,12 @@ noms de tests ne sont pas fixes ici ; les proprietes le sont.
 6. `ExecStart` fournit explicitement `--config`.
 7. Le chemin de configuration est exactement `/etc/boilerack/boilerack.toml`.
 8. Le gabarit **ne contient aucun secret**, ni reel ni factice.
-9. Le gabarit reference `/etc/boilerack/boilerack.env` par `EnvironmentFile`.
+9. Le gabarit reference `/etc/boilerack/boilerack.env` par `EnvironmentFile`,
+   **sous la forme stricte**, sans prefixe `-`.
 10. `User` est renseigne et **different de `root`**.
-11. `Restart=on-failure` et `RestartPreventExitStatus=2` sont presents.
+11. `Restart=on-failure` est present, et `RestartPreventExitStatus` porte
+    **`2` ET `130`**.
+11bis. `SuccessExitStatus` est **absente** : `130` n'est pas requalifie en succes.
 12. `KillSignal=SIGTERM` est present.
 13. `TimeoutStopSec` est strictement superieur au plancher de §10.
 14. Le gabarit ne contient **aucun chemin local a une machine de developpement**.
@@ -518,8 +571,11 @@ Aucun test n'est ecrit a ce stade. **Aucune mutation n'est declaree tuee.**
 | 3 | Chemin de configuration errone | 7 |
 | 4 | Secret inscrit directement dans l'unite | 8 |
 | 5 | `EnvironmentFile` errone ou absent | 9 |
+| 5bis | `EnvironmentFile` sous forme **tolerante** (`-`) | 9 |
 | 6 | `User=root` | 10 |
-| 7 | Suppression de `RestartPreventExitStatus=2` | 11 |
+| 7 | Suppression de `RestartPreventExitStatus` | 11 |
+| 7bis | Suppression du seul `130`, en gardant `2` | 11 |
+| 7ter | Ajout de `SuccessExitStatus=130` | 11bis |
 | 8 | `Restart=always` | 11 |
 | 9 | `KillSignal` different de `SIGTERM` | 12 |
 | 10 | `TimeoutStopSec` inferieur au plancher | 13 |
