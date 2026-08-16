@@ -1,0 +1,74 @@
+# Gabarit d'unite systemd pour Boilerack — lot C12.
+#
+# GABARIT, PAS UNE UNITE INSTALLEE. Aucune conformite terrain n'est revendiquee :
+# son contenu est valide statiquement, jamais charge par un systemd reel.
+# Voir docs/design/c12-service-contract.md, §13 et §14.
+#
+# Prerequis d'exploitation, non fournis par ce depot :
+#   /opt/boilerack/venv        environnement virtuel dedie, contenant le paquet
+#   /etc/boilerack/boilerack.toml   configuration, 0640 root:boilerack
+#   /etc/boilerack/boilerack.env    secret,        0640 root:boilerack
+#   utilisateur et groupe dedies `boilerack`, non privilegies
+#
+# Le fichier d'environnement est ATTENDU : son absence empeche le demarrage.
+# Une installation sans authentification MQTT le cree tout de meme, eventuellement
+# vide — la variable BOILERACK_MQTT_PASSWORD, elle, reste optionnelle.
+
+[Unit]
+Description=Boilerack — pont MQTT de lecture pour chaudieres Viessmann via vcontrold
+Documentation=https://github.com/antoinevalentinHA/boilerack
+
+# Ordonne le demarrage apres la configuration de la PILE RESEAU LOCALE.
+# Ne dit rien de la disponibilite du broker MQTT, qui est un service applicatif
+# distant qu'aucun target systemd ne connait. Si le broker est absent, le
+# demarrage sort en 1 et la politique de redemarrage s'applique.
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# Le processus ne se dedouble pas, ne se detache pas, et n'implemente aucun
+# protocole de disponibilite : `notify` exigerait sd_notify, que Boilerack ne
+# fournit pas.
+Type=simple
+
+# Moindre privilege : aucune ecriture disque, aucun repertoire d'etat, aucun port
+# en ecoute, aucune capacite particuliere ne sont requis.
+User=boilerack
+Group=boilerack
+
+# Le script console INSTALLE, en chemin absolu — pas `python -m boilerack` : le
+# service ne dispose d'aucun PATH utile, et le script du venv porte deja son
+# interpreteur. `--config` est explicite parce que Boilerack ne cherche jamais sa
+# configuration : il la recoit.
+ExecStart=/opt/boilerack/venv/bin/boilerack --config /etc/boilerack/boilerack.toml
+
+# Secret hors unite : ce fichier n'est pas versionne. Forme STRICTE, sans prefixe
+# `-` : son absence doit empecher le demarrage plutot que faire disparaitre le
+# secret en silence.
+EnvironmentFile=/etc/boilerack/boilerack.env
+
+# Un arret propre (0) est un arret voulu ; le relancer contrarierait
+# `systemctl stop`.
+Restart=on-failure
+
+# 2   : configuration ou usage invalide — reste arrete et lisible, ne boucle jamais.
+# 130 : interruption SIGINT — pas de relance, et pas de requalification en succes :
+#       l'interruption reste visible dans l'etat de l'unite.
+RestartPreventExitStatus=2 130
+
+# Un broker durablement injoignable au demarrage fait sortir en 1. Sans ce delai,
+# les relances epuiseraient la limite de demarrage de systemd et l'unite finirait
+# en echec — l'inverse de la resilience recherchee.
+RestartSec=10s
+
+# Tout le cycle de vie C9 repose sur SIGTERM. Rendu explicite plutot que
+# dependre d'un defaut que rien n'oblige a rester stable.
+KillSignal=SIGTERM
+
+# Superieur au pire cas de la phase de lecture — 8 mesures x 5,0 s = 40 s — car un
+# cycle deja commence n'est jamais tronque. En dessous, SIGKILL couperait le cycle
+# et `offline` ne serait jamais publie. A REVOIR si `read_timeout_s` est augmente.
+TimeoutStopSec=90s
+
+[Install]
+WantedBy=multi-user.target
