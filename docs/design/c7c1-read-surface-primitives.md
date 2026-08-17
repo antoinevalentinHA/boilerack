@@ -52,7 +52,7 @@ Deux notions distinctes, et c'est délibéré :
 | **Appartenant à la surface v1** | l'un des **onze** de `V1_SUFFIXES` | l'énumération et ses tests |
 
 `build_topic` n'est volontairement pas restreint aux onze. Le respect de la
-surface — §11 : « Tout autre topic **MUST NOT** etre publie » — est une
+surface — §11 : « Tout autre topic **MUST NOT** être publié » — est une
 propriété du futur publieur et de ses tests de conformité, pas d'un assembleur
 de chaînes. Aucun mécanisme d'enregistrement, d'extension ou de greffon n'est
 introduit : la surface v1 est **close**.
@@ -82,7 +82,7 @@ Trois lectures ont été faites, toutes signalées plutôt que résolues en sile
 1. **Un préfixe qui ne contient que des barres** (`/`, `//`) se normalise en
    chaîne vide. Il est refusé au même titre que la chaîne vide : le préfixe
    *effectif* serait vide, donc sans espace de noms, ce que §3.3 refuse par son
-   motif même — « eviter les collisions sur un broker partage ».
+   motif même — « éviter les collisions sur un broker partagé ».
 2. **Le contrôle du `$` porte sur le préfixe normalisé**, si bien que `/$SYS`
    est refusé comme `$SYS` : le topic produit commencerait par `$`. En
    revanche `maison/$x` est **accepté** — le contrat n'interdit `$` qu'en

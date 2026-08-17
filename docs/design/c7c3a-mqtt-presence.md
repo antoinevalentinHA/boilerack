@@ -74,7 +74,7 @@ politique de reconnexion n'est ajoutée.
 
 Paho documente que le testament **n'est pas émis** lorsque le client se
 déconnecte proprement. L'annonce explicite exigée par §5 — « `offline` avant
-deconnexion » — n'est donc **pas redondante** :
+déconnexion » — n'est donc **pas redondante** :
 
 | Événement | Mécanisme |
 |---|---|
@@ -205,7 +205,7 @@ consommateur** dans ce lot, qui ne publie ni sur cadence ni de battement : ils
 seront introduits en C7-C3B avec l'ordonnancement qui les utilise.
 
 Le préfixe est normalisé à la construction et **seule** la forme normalisée est
-conservée — §3.3 : « Le rejet **MUST** survenir a la construction de la
+conservée — §3.3 : « Le rejet **MUST** survenir à la construction de la
 configuration, avant toute connexion ». Aucun topic complet n'est stocké : tout
 topic se dérive du préfixe et d'un suffixe contractuel via `build_topic` (§3.2).
 
