@@ -181,7 +181,7 @@ laisserait croire à une vitalité que rien n'a encore établie.
 | Déclencheur | Clause |
 |---|---|
 | après chaque lecture **réussie** | §4.6 étape 3, **MUST** |
-| à la **clôture** du cycle | non impose ; c'est l'instant où `chain` change, et il est publié même si toutes les lectures ont échoué |
+| à la **clôture** du cycle | non imposé ; c'est l'instant où `chain` change, et il est publié même si toutes les lectures ont échoué |
 | **périodiquement** | §7.4, **MUST** — « même si rien n'a changé », avec un `ts` à jour |
 
 Toute publication **tentée** de l'instantané repousse l'échéance périodique :
