@@ -29,6 +29,7 @@ import argparse
 import ast
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -44,11 +45,13 @@ from installer_support import (
     charger_installateur,
     contenus,
     empreinte,
+    UmaskDouble,
     espionner_les_processus,
     interdire_les_actes_systeme,
     interdire_toute_ecriture,
     liens_symboliques_disponibles,
     racine_systeme_factice,
+    umask_fidele,
 )
 
 install = charger_installateur()
@@ -93,6 +96,29 @@ def _peupler(racine: pathlib.Path) -> None:
     """Depose de quoi rendre visible le moindre effet parasite sur la racine."""
     (racine / "temoin").mkdir(exist_ok=True)
     (racine / "temoin" / "fichier.txt").write_bytes(b"temoin\n")
+
+
+#: Chemin factice rendu par la resolution PC8 substituee. N'existe pas, et n'a
+#: pas besoin d'exister : aucun test n'execute `useradd`.
+SHELL_FACTICE = "/chemin/factice/nologin"
+
+
+@pytest.fixture
+def mode_reel(monkeypatch):
+    """Substitue les deux predicats du mode reel — PC6 et PC8.
+
+    AUCUN privilege reel n'est demande, AUCUN `nologin` du systeme hote n'est
+    cherche. Le compteur d'appels sert a prouver qu'une SEULE resolution a lieu.
+    """
+    appels = {"resolution": 0}
+
+    def _resoudre():
+        appels["resolution"] += 1
+        return SHELL_FACTICE
+
+    monkeypatch.setattr(install, "_est_admin_reel", lambda: True)
+    monkeypatch.setattr(install, "_resoudre_shell_non_connectable", _resoudre)
+    return appels
 
 
 def _installer(checkout, racine, systeme, **kwargs):
@@ -207,18 +233,25 @@ def test_aucune_variable_d_environnement_ne_redefinit_la_racine_systeme(
         monkeypatch.setenv(nom, str(tmp_path))
     assert install.classer_racine(tmp_path).designe_le_systeme is False
 
-    # Preuve structurelle : l'installateur ne lit AUCUNE variable d'environnement.
-    # Une recherche textuelle heurterait le mot « environnement », qui figure
-    # legitimement dans le modele de `boilerack.env`.
+    # Preuve structurelle, portee sur les DEUX fonctions qui decident de la
+    # racine de reference. La porter sur tout le module serait trop large : la
+    # resolution de PC8 consulte legitimement `PATH` pour trouver `nologin`, ce
+    # qui ne redefinit aucune racine.
     arbre = ast.parse(CHEMIN_INSTALLATEUR.read_text(encoding="utf-8"))
-    lectures = {
-        noeud.attr
-        for noeud in ast.walk(arbre)
-        if isinstance(noeud, ast.Attribute)
-        and isinstance(noeud.value, ast.Name)
-        and noeud.value.id == "os"
-    }
-    assert lectures & {"environ", "getenv", "environb"} == set()
+    concernees = {"_racine_systeme_par_defaut", "classer_racine"}
+    vues = set()
+    for noeud in ast.walk(arbre):
+        if isinstance(noeud, ast.FunctionDef) and noeud.name in concernees:
+            vues.add(noeud.name)
+            lectures = {
+                fils.attr
+                for fils in ast.walk(noeud)
+                if isinstance(fils, ast.Attribute)
+                and isinstance(fils.value, ast.Name)
+                and fils.value.id == "os"
+            }
+            assert lectures & {"environ", "getenv", "environb"} == set(), noeud.name
+    assert vues == concernees, "les deux fonctions doivent exister"
 
 
 # ---------------------------------------------------------------------------
@@ -235,11 +268,12 @@ def test_synthetique_avec_actes_fermes_est_admise(
 
 
 def test_reference_avec_actes_ouverts_est_admise(
-    checkout: pathlib.Path, systeme: pathlib.Path
+    mode_reel, checkout: pathlib.Path, systeme: pathlib.Path
 ) -> None:
     """La seconde combinaison admise, exercee sur la racine de REFERENCE, jamais `/`.
 
-    Les actes systeme passent par un double : aucun `useradd` ni `chown` reel.
+    Les actes systeme passent par un double, et les predicats PC6/PC8 sont
+    substitues : aucun privilege reel, aucun `useradd` ni `chown` reel.
     """
     resultat, _, actes = _installer(checkout, systeme, systeme, actes_ouverts=True)
     assert resultat.code == install.CODE_SUCCES
@@ -289,7 +323,8 @@ def test_alias_de_la_racine_de_reference_avec_actes_fermes_est_refuse(
 
 
 def test_les_quatre_combinaisons_sont_traitees_sans_exception(
-    checkout: pathlib.Path, synthetique: pathlib.Path, systeme: pathlib.Path
+    mode_reel, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
 ) -> None:
     """Enumeration close : deux admises, deux refusees, aucune issue tierce."""
     attendu = {
@@ -658,7 +693,9 @@ def test_l_identite_est_declaree(
 ) -> None:
     resultat, _, _ = _installer(checkout, synthetique, systeme)
     assert _actes(resultat, "groupe") == {install.GROUPE: "cree si absent"}
-    assert _actes(resultat, "utilisateur") == {install.UTILISATEUR: "cree si absent"}
+    assert _actes(resultat, "utilisateur") == {
+        install.UTILISATEUR: install.SHELL_NON_RESOLU
+    }
 
 
 def test_le_mode_synthetique_n_execute_aucun_acte_systeme(
@@ -676,7 +713,7 @@ def test_le_mode_synthetique_n_execute_aucun_acte_systeme(
 
 
 def test_le_mode_reel_applique_les_actes_declares(
-    checkout: pathlib.Path, systeme: pathlib.Path
+    mode_reel, checkout: pathlib.Path, systeme: pathlib.Path
 ) -> None:
     """Le double enregistre ; rien n'est execute sur la machine de developpement."""
     resultat, _, double_actes = _installer(
@@ -712,18 +749,34 @@ def test_les_metadonnees_sont_reappliquees_aux_fichiers_existants(
         assert _actes(resultat, "mode")[relatif] == "0640"
 
 
-def test_le_groupe_b_reprend_les_modes_du_contrat_en_toutes_lettres() -> None:
-    """Ni C12 ni C13 ne fixent de valeur numerique pour les emplacements du venv.
+def test_les_modes_du_groupe_b_sont_ceux_du_contrat() -> None:
+    """P17 : C13 §7.2 fixe `0755` pour les deux emplacements, proprietaire `root`."""
+    assert install.METADONNEES_GROUPE_B == (
+        (install.CHEMIN_VENV, "root", "0755"),
+        (install.CHEMIN_COMMANDE, "root", "0755"),
+    )
 
-    En inventer une serait fabriquer une regle absente du corpus. Le manque est
-    donc porte tel quel, et `_appliquer_actes_reels` refuse un mode non numerique.
-    """
-    modes = {cible: mode for cible, _prop, mode in install.METADONNEES_GROUPE_B}
-    assert modes == {
-        install.CHEMIN_VENV: "lecture pour tous",
-        install.CHEMIN_COMMANDE: "executable",
-    }
-    assert not any(mode.isdigit() for mode in modes.values())
+
+def test_tous_les_modes_contractes_sont_numeriques() -> None:
+    """P17 : aucun mode n'est ecrit en toutes lettres, donc tous sont applicables."""
+    for cible, _prop, mode in install.METADONNEES_GROUPE_A + install.METADONNEES_GROUPE_B:
+        assert mode.isdigit(), cible
+        int(mode, 8)
+
+
+def test_les_modes_du_groupe_b_laissent_les_autres_lire_et_traverser() -> None:
+    """P17 : C12 §12 exige que le service, ni root ni membre de root, execute."""
+    for _cible, _prop, mode in install.METADONNEES_GROUPE_B:
+        autres = int(mode, 8) & 0o7
+        assert autres & 0o4, "lecture pour les autres"
+        assert autres & 0o1, "traversee ou execution pour les autres"
+
+
+def test_le_groupe_des_cibles_du_venv_reste_non_fixe() -> None:
+    """C12 ne nomme que `root` : inventer un groupe ajouterait une regle."""
+    for _cible, proprietaire, _mode in install.METADONNEES_GROUPE_B:
+        assert proprietaire == "root"
+        assert ":" not in proprietaire
 
 
 # ---------------------------------------------------------------------------
@@ -748,7 +801,7 @@ def test_au_moment_de_l_etape_venv_tout_le_groupe_a_est_deja_pose(
 
 
 def test_les_metadonnees_du_groupe_b_ne_sont_posees_qu_apres_le_venv(
-    checkout: pathlib.Path, systeme: pathlib.Path
+    mode_reel, checkout: pathlib.Path, systeme: pathlib.Path
 ) -> None:
     """M18 : le groupe B ne peut pas porter sur un venv qui n'existe pas."""
     double_actes = DoubleActes()
@@ -809,7 +862,7 @@ def test_l_echec_de_l_etape_venv_laisse_le_reste_en_place(
 
 
 def test_aucun_acte_du_groupe_b_si_le_venv_echoue(
-    checkout: pathlib.Path, systeme: pathlib.Path
+    mode_reel, checkout: pathlib.Path, systeme: pathlib.Path
 ) -> None:
     """Le groupe B suit la creation REUSSIE du venv, jamais son echec."""
     double_actes = DoubleActes()
@@ -1348,3 +1401,664 @@ def test_installation_reelle_du_venv_sous_racine_synthetique(
     )
     assert not etranger.exists(), "la recreation du venv doit tout emporter"
     assert script.is_file()
+
+
+# ---------------------------------------------------------------------------
+# `umask` de l'etape venv — contrat §8.3ter, propriete P19
+# ---------------------------------------------------------------------------
+
+
+#: Valeur arbitraire posee avant l'etape venv, pour prouver qu'elle est bien
+#: RESTAUREE et non remplacee par un defaut.
+UMASK_ANTERIEUR = 0o077
+
+
+def _installer_avec_umask(monkeypatch, checkout, racine, systeme, echouer=False):
+    """Installe en substituant un `umask` fidele. Rend (double_umask, double_venv)."""
+    double_umask = UmaskDouble(UMASK_ANTERIEUR)
+    monkeypatch.setattr(os, "umask", double_umask)
+    double_venv = DoubleVenv(racine, echouer=echouer)
+    if echouer:
+        with pytest.raises(RuntimeError):
+            _installer(checkout, racine, systeme, double_venv=double_venv)
+    else:
+        _installer(checkout, racine, systeme, double_venv=double_venv)
+    return double_umask, double_venv
+
+
+def test_l_umask_est_pose_a_0022_pendant_l_etape_venv(
+    monkeypatch, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
+) -> None:
+    """P19 : observe au moment precis ou `venv` et `pip` produisent l'arbre."""
+    double_umask, double_venv = _installer_avec_umask(
+        monkeypatch, checkout, synthetique, systeme
+    )
+    assert install.UMASK_ETAPE_VENV == 0o022
+    assert double_umask.poses[0] == 0o022
+    assert double_venv.umask_a_l_appel == 0o022
+
+
+def test_l_umask_anterieur_est_restaure_apres_succes(
+    monkeypatch, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
+) -> None:
+    double_umask, _ = _installer_avec_umask(monkeypatch, checkout, synthetique, systeme)
+    assert double_umask.valeur == UMASK_ANTERIEUR
+    assert double_umask.poses[-1] == UMASK_ANTERIEUR
+
+
+def test_l_umask_anterieur_est_restaure_apres_echec(
+    monkeypatch, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
+) -> None:
+    """P19 : la restauration vaut succes OU echec.
+
+    Sans elle, une panne de l'etape venv laisserait le processus sous un `umask`
+    qu'il n'a pas choisi.
+    """
+    double_umask, _ = _installer_avec_umask(
+        monkeypatch, checkout, synthetique, systeme, echouer=True
+    )
+    assert double_umask.valeur == UMASK_ANTERIEUR
+    assert double_umask.poses[-1] == UMASK_ANTERIEUR
+
+
+def test_l_umask_n_est_pose_que_pour_l_etape_venv(
+    monkeypatch, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
+) -> None:
+    """Sa portee est STRICTEMENT l'etape venv : rien avant, rien apres.
+
+    La sequence est assertee en entier plutot que filtree. Les deux poses
+    centrales sont l'OBSERVATION elle-meme : lire un `umask` impose de le poser,
+    et le double de venv le remet aussitot. Les deux extremites sont donc les
+    seules poses de l'installateur.
+    """
+    double_umask, _ = _installer_avec_umask(monkeypatch, checkout, synthetique, systeme)
+    assert double_umask.poses == [0o022, 0, 0o022, UMASK_ANTERIEUR]
+
+
+def test_l_umask_reel_est_effectivement_pose(
+    checkout: pathlib.Path, synthetique: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """Meme preuve, sans double, la ou la plateforme tient un `umask` POSIX.
+
+    Ecartee explicitement ailleurs : MESURE faite, Windows relit `0o000` apres
+    avoir pose `0o022`. Y asserter la valeur effective ne prouverait rien.
+    """
+    if not umask_fidele():
+        pytest.skip("cette plateforme ne tient pas un `umask` POSIX fidele")
+    anterieur = os.umask(0o077)
+    try:
+        double = DoubleVenv(synthetique)
+        _installer(checkout, synthetique, systeme, double_venv=double)
+        assert double.umask_a_l_appel == 0o022
+        courant = os.umask(0o077)
+        assert courant == 0o077, "l'umask anterieur doit avoir ete restaure"
+    finally:
+        os.umask(anterieur)
+
+
+# ---------------------------------------------------------------------------
+# PC6 — privileges en mode reel, propriete P21
+# ---------------------------------------------------------------------------
+
+
+def test_pc6_refuse_sans_privileges_et_sans_effet(
+    monkeypatch, checkout: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """P21 : refus code 2 AVANT tout effet. Aucun privilege reel n'est demande."""
+    _peupler(systeme)
+    avant = empreinte(systeme)
+    monkeypatch.setattr(install, "_est_admin_reel", lambda: False)
+    monkeypatch.setattr(
+        install, "_resoudre_shell_non_connectable", lambda: SHELL_FACTICE
+    )
+    interdire_toute_ecriture(monkeypatch)
+
+    with pytest.raises(install.RefusPrecondition) as refus:
+        _installer(checkout, systeme, systeme, actes_ouverts=True)
+
+    assert "PC6" in str(refus.value)
+    assert empreinte(systeme) == avant
+
+
+def test_pc6_n_est_pas_evaluee_en_mode_synthetique(
+    monkeypatch, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
+) -> None:
+    """Le mode synthetique n'execute aucun acte privilegie : l'exiger serait faux."""
+    monkeypatch.setattr(install, "_est_admin_reel", lambda: False)
+    resultat, _, _ = _installer(checkout, synthetique, systeme)
+    assert resultat.code == install.CODE_SUCCES
+
+
+def test_le_predicat_de_privilege_est_faux_hors_posix(monkeypatch) -> None:
+    """Hors POSIX, `os.geteuid` n'existe pas et le mode reel n'a pas de sens."""
+    monkeypatch.delattr(os, "geteuid", raising=False)
+    assert install._est_admin_reel() is False
+
+
+# ---------------------------------------------------------------------------
+# PC8 — compte non connectable, propriete P21
+# ---------------------------------------------------------------------------
+
+
+def test_pc8_admet_l_installation_quand_le_shell_est_resolu(
+    mode_reel, checkout: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    resultat, _, _ = _installer(checkout, systeme, systeme, actes_ouverts=True)
+    assert resultat.code == install.CODE_SUCCES
+
+
+def test_pc8_refuse_sans_shell_et_sans_effet(
+    monkeypatch, checkout: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """P21 : refus code 2 AVANT tout effet."""
+    _peupler(systeme)
+    avant = empreinte(systeme)
+    monkeypatch.setattr(install, "_est_admin_reel", lambda: True)
+    monkeypatch.setattr(install, "_resoudre_shell_non_connectable", lambda: None)
+    interdire_toute_ecriture(monkeypatch)
+
+    with pytest.raises(install.RefusPrecondition) as refus:
+        _installer(checkout, systeme, systeme, actes_ouverts=True)
+
+    assert "PC8" in str(refus.value)
+    assert empreinte(systeme) == avant
+
+
+def test_le_shell_resolu_est_celui_transporte_jusqu_a_l_acte(
+    mode_reel, checkout: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """Le chemin resolu par PC8 est exactement celui que porte l'acte."""
+    resultat, _, _ = _installer(checkout, systeme, systeme, actes_ouverts=True)
+    assert _actes(resultat, "utilisateur") == {install.UTILISATEUR: SHELL_FACTICE}
+
+
+def test_une_seule_resolution_du_shell(
+    mode_reel, checkout: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """Aucune seconde recherche divergente apres les preconditions."""
+    _installer(checkout, systeme, systeme, actes_ouverts=True)
+    assert mode_reel["resolution"] == 1
+
+
+def test_aucun_chemin_de_shell_absolu_n_est_normatif() -> None:
+    """Le contrat interdit d'inscrire un chemin absolu comme autorite.
+
+    Les deux repertoires connus figurent comme INDICES DE RECHERCHE, jamais
+    comme valeur retenue d'avance : ce qui est rendu est le resultat d'une
+    resolution, et son absence fait refuser.
+    """
+    assert install._INDICES_DE_RECHERCHE_SHELL == ("/usr/sbin", "/sbin")
+    source = CHEMIN_INSTALLATEUR.read_text(encoding="utf-8")
+    assert "/usr/sbin/nologin" not in source
+    assert "/sbin/nologin" not in source
+
+
+def test_la_resolution_rend_none_quand_rien_n_est_trouve(monkeypatch) -> None:
+    monkeypatch.setattr(install.shutil, "which", lambda *a, **k: None)
+    assert install._resoudre_shell_non_connectable() is None
+
+
+def test_la_resolution_rend_le_chemin_trouve(monkeypatch) -> None:
+    monkeypatch.setattr(
+        install.shutil, "which", lambda *a, **k: "/quelque/part/nologin"
+    )
+    assert install._resoudre_shell_non_connectable() == "/quelque/part/nologin"
+
+
+# ---------------------------------------------------------------------------
+# Identite — existence et propagation d'echec, propriete P20
+# ---------------------------------------------------------------------------
+
+
+class _Executions:
+    """Enregistre les commandes au lieu de les executer. Aucun appel systeme."""
+
+    def __init__(self, echouer_sur=None) -> None:
+        self.commandes: list[list[str]] = []
+        self.echouer_sur = echouer_sur
+
+    def __call__(self, args, **kwargs):
+        self.commandes.append([str(a) for a in args])
+        assert kwargs.get("check") is True, "un echec ne doit jamais etre avale"
+        if self.echouer_sur is not None and args[0] == self.echouer_sur:
+            raise subprocess.CalledProcessError(1, args)
+
+        class _Termine:
+            returncode = 0
+
+        return _Termine()
+
+
+def _appliquer(monkeypatch, actes, racine, presents, echouer_sur=None):
+    """Exerce l'applicateur reel avec identite et sous-processus substitues."""
+    executions = _Executions(echouer_sur)
+    monkeypatch.setattr(install.subprocess, "run", executions)
+    monkeypatch.setattr(
+        install, "_identite_existe", lambda genre, nom: genre in presents
+    )
+    monkeypatch.setattr(install.shutil, "chown", lambda *a, **k: None)
+    monkeypatch.setattr(install.os, "chmod", lambda *a, **k: None)
+    install._appliquer_actes_reels(actes, racine)
+    return executions
+
+
+def _actes_identite(shell: str = "/x/nologin"):
+    return (
+        install.ActeSysteme(
+            genre="groupe", cible=install.GROUPE, valeur="cree si absent"
+        ),
+        install.ActeSysteme(
+            genre="utilisateur", cible=install.UTILISATEUR, valeur=shell
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "presents, attendus",
+    [
+        (set(), ["groupadd", "useradd"]),
+        ({"groupe"}, ["useradd"]),
+        ({"utilisateur"}, ["groupadd"]),
+        ({"groupe", "utilisateur"}, []),
+    ],
+)
+def test_l_identite_n_est_creee_que_si_absente(
+    monkeypatch, presents, attendus, tmp_path: pathlib.Path
+) -> None:
+    """P20 : « cree si absent » est constate, pas presume."""
+    executions = _appliquer(monkeypatch, _actes_identite(), tmp_path, presents)
+    assert [c[0] for c in executions.commandes] == attendus
+
+
+def test_le_shell_resolu_est_passe_a_useradd(
+    monkeypatch, tmp_path: pathlib.Path
+) -> None:
+    """D7 : aucun chemin code en dur ; c'est le resultat de PC8 qui est utilise."""
+    executions = _appliquer(
+        monkeypatch, _actes_identite("/resolu/nologin"), tmp_path, set()
+    )
+    useradd = [c for c in executions.commandes if c[0] == "useradd"][0]
+    assert "--shell" in useradd
+    assert useradd[useradd.index("--shell") + 1] == "/resolu/nologin"
+
+
+@pytest.mark.parametrize("commande", ["groupadd", "useradd"])
+def test_l_echec_d_une_creation_necessaire_est_une_panne_explicite(
+    monkeypatch, commande: str, tmp_path: pathlib.Path
+) -> None:
+    """P20 : jamais ignore. `check=True`, et l'erreur remonte telle quelle."""
+    with pytest.raises(subprocess.CalledProcessError):
+        _appliquer(
+            monkeypatch, _actes_identite(), tmp_path, set(), echouer_sur=commande
+        )
+
+
+def test_aucune_creation_n_est_tentee_si_l_identite_existe(
+    monkeypatch, tmp_path: pathlib.Path
+) -> None:
+    executions = _appliquer(
+        monkeypatch, _actes_identite(), tmp_path, {"groupe", "utilisateur"}
+    )
+    assert executions.commandes == []
+
+
+# ---------------------------------------------------------------------------
+# Ordre identite / appropriation — contrat §8.3bis, propriete P20
+# ---------------------------------------------------------------------------
+
+
+def test_l_identite_precede_toute_appropriation(
+    mode_reel, checkout: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """P20 : un `chown ...:boilerack` echouerait si le groupe n'existait pas."""
+    resultat, _, _ = _installer(checkout, systeme, systeme, actes_ouverts=True)
+    genres = [a.genre for a in resultat.actes_systeme]
+    dernier_identite = max(
+        i for i, g in enumerate(genres) if g in ("groupe", "utilisateur")
+    )
+    premiere_appropriation = min(
+        i
+        for i, a in enumerate(resultat.actes_systeme)
+        if a.genre == "proprietaire" and install.GROUPE in a.valeur
+    )
+    assert dernier_identite < premiere_appropriation
+
+
+def test_l_ordre_est_conserve_par_l_applicateur(
+    mode_reel, checkout: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """L'ordre declare doit etre celui applique, sans quoi la garantie est vide."""
+    double_actes = DoubleActes()
+    _installer(
+        checkout, systeme, systeme, actes_ouverts=True, double_actes=double_actes
+    )
+    genres = [a.genre for a in double_actes.appliques]
+    assert genres[0] == "groupe"
+    assert genres[1] == "utilisateur"
+
+
+# ---------------------------------------------------------------------------
+# Garde destructive — contrat §8.3quater, propriete P22
+# ---------------------------------------------------------------------------
+
+
+def _hors_racine(tmp_path: pathlib.Path, nom: str) -> pathlib.Path:
+    cible = tmp_path / "hors_racine" / nom
+    cible.mkdir(parents=True)
+    (cible / "TEMOIN").write_bytes(b"je ne dois pas etre supprime\n")
+    return cible
+
+
+def test_installation_supprime_un_venv_normal(
+    checkout: pathlib.Path, synthetique: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """Cas A : cible sous la racine, suppression autorisee."""
+    _installer(checkout, synthetique, systeme)
+    resultat, _, _ = _installer(checkout, synthetique, systeme)
+    assert resultat.code == install.CODE_SUCCES
+
+
+def test_installation_refuse_un_opt_symbolique_vers_l_exterieur(
+    tmp_path: pathlib.Path, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
+) -> None:
+    """Cas B : `<racine>/opt/boilerack` pointe dehors — le venv resout hors racine."""
+    if not liens_symboliques_disponibles(tmp_path):
+        pytest.skip("creation de lien symbolique indisponible sur cette plateforme")
+    dehors = _hors_racine(tmp_path, "faux_opt")
+    (dehors / "venv").mkdir()
+    (dehors / "venv" / "TEMOIN").write_bytes(b"hors racine\n")
+    (synthetique / "opt").mkdir(parents=True)
+    (synthetique / install.CHEMIN_OPT).symlink_to(dehors, target_is_directory=True)
+
+    with pytest.raises(install.RefusPrecondition) as refus:
+        _installer(checkout, synthetique, systeme)
+
+    assert "n'est pas sous la racine" in str(refus.value)
+    assert (dehors / "venv" / "TEMOIN").is_file(), "rien ne doit avoir ete supprime"
+
+
+def test_installation_refuse_un_venv_symbolique_vers_l_exterieur(
+    tmp_path: pathlib.Path, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
+) -> None:
+    """Cas C : le venv lui-meme est un lien vers l'exterieur."""
+    if not liens_symboliques_disponibles(tmp_path):
+        pytest.skip("creation de lien symbolique indisponible sur cette plateforme")
+    dehors = _hors_racine(tmp_path, "faux_venv")
+    (synthetique / install.CHEMIN_OPT).mkdir(parents=True)
+    (synthetique / install.CHEMIN_VENV).symlink_to(dehors, target_is_directory=True)
+
+    with pytest.raises(install.RefusPrecondition):
+        _installer(checkout, synthetique, systeme)
+
+    assert (dehors / "TEMOIN").is_file()
+
+
+def test_desinstallation_supprime_un_opt_normal(
+    checkout: pathlib.Path, synthetique: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """Cas D et F : cibles sous la racine, suppressions autorisees."""
+    _installer(checkout, synthetique, systeme)
+    resultat = install.desinstaller(racine=synthetique, racine_systeme=systeme)
+    assert resultat.code == install.CODE_SUCCES
+    assert not (synthetique / install.CHEMIN_OPT).exists()
+    assert not (synthetique / install.CHEMIN_UNITE).exists()
+
+
+def test_desinstallation_refuse_un_opt_resolu_hors_racine(
+    tmp_path: pathlib.Path, synthetique: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """Cas E : refus, et rien n'est supprime."""
+    if not liens_symboliques_disponibles(tmp_path):
+        pytest.skip("creation de lien symbolique indisponible sur cette plateforme")
+    dehors = _hors_racine(tmp_path, "opt_dehors")
+    (synthetique / "opt").mkdir(parents=True)
+    (synthetique / install.CHEMIN_OPT).symlink_to(dehors, target_is_directory=True)
+    avant = empreinte(synthetique)
+
+    with pytest.raises(install.RefusPrecondition):
+        install.desinstaller(racine=synthetique, racine_systeme=systeme)
+
+    assert empreinte(synthetique) == avant
+    assert (dehors / "TEMOIN").is_file()
+
+
+def test_desinstallation_refuse_une_unite_resolue_hors_racine(
+    tmp_path: pathlib.Path, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
+) -> None:
+    """Cas G : refus, et rien n'est supprime — y compris `/opt/boilerack`."""
+    if not liens_symboliques_disponibles(tmp_path):
+        pytest.skip("creation de lien symbolique indisponible sur cette plateforme")
+    _installer(checkout, synthetique, systeme)
+    dehors = tmp_path / "hors_racine"
+    dehors.mkdir(exist_ok=True)
+    ailleurs = dehors / "boilerack.service"
+    ailleurs.write_bytes(b"unite hors racine\n")
+    unite = synthetique / install.CHEMIN_UNITE
+    unite.unlink()
+    unite.symlink_to(ailleurs)
+    avant = empreinte(synthetique)
+
+    with pytest.raises(install.RefusPrecondition):
+        install.desinstaller(racine=synthetique, racine_systeme=systeme)
+
+    assert empreinte(synthetique) == avant
+    assert ailleurs.is_file()
+    assert (synthetique / install.CHEMIN_OPT).is_dir(), "aucune suppression partielle"
+
+
+def test_la_garde_refuse_la_racine_elle_meme(synthetique: pathlib.Path) -> None:
+    """Descendant STRICT : admettre l'egalite autoriserait de supprimer la racine."""
+    with pytest.raises(install.RefusPrecondition):
+        install._verifier_cible_destructive(synthetique, synthetique.resolve())
+
+
+def test_la_garde_admet_un_descendant_strict(synthetique: pathlib.Path) -> None:
+    install._verifier_cible_destructive(
+        synthetique / "opt" / "boilerack" / "venv", synthetique.resolve()
+    )
+
+
+def test_la_garde_venv_laisse_subsister_les_effets_anterieurs(
+    tmp_path: pathlib.Path, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
+) -> None:
+    """Nuance contractuelle : le contrat ne borne ici que la SUPPRESSION.
+
+    La garde de l'etape 8 se declenche APRES les etapes 3 a 7. Le refus ne
+    signifie donc pas « aucun effet » — il signifie « aucune suppression ». Le
+    dire autrement serait mentir sur l'etat final.
+    """
+    if not liens_symboliques_disponibles(tmp_path):
+        pytest.skip("creation de lien symbolique indisponible sur cette plateforme")
+    dehors = _hors_racine(tmp_path, "opt_cible")
+    (synthetique / "opt").mkdir(parents=True)
+    (synthetique / install.CHEMIN_OPT).symlink_to(dehors, target_is_directory=True)
+
+    with pytest.raises(install.RefusPrecondition):
+        _installer(checkout, synthetique, systeme)
+
+    assert (synthetique / install.CHEMIN_ETC).is_dir()
+    assert (synthetique / install.CHEMIN_CONFIG).is_file()
+    assert (synthetique / install.CHEMIN_SECRET).is_file()
+    assert (synthetique / install.CHEMIN_UNITE).is_file()
+    assert (dehors / "TEMOIN").is_file(), "aucune suppression hors racine"
+
+
+# ---------------------------------------------------------------------------
+# Absence de normalisation recursive — contrat §7.3, propriete P18
+# ---------------------------------------------------------------------------
+
+
+def test_les_cibles_de_metadonnees_sont_exactement_celles_du_contrat(
+    checkout: pathlib.Path, synthetique: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """P18 : sept emplacements nommes, et aucun autre."""
+    resultat, _, _ = _installer(checkout, synthetique, systeme)
+    cibles = {
+        a.cible for a in resultat.actes_systeme if a.genre in ("proprietaire", "mode")
+    }
+    attendues = {
+        c for c, _p, _m in install.METADONNEES_GROUPE_A + install.METADONNEES_GROUPE_B
+    }
+    assert cibles == attendues
+    assert len(attendues) == 7
+
+
+def test_aucune_cible_interne_au_venv_hors_la_commande(
+    checkout: pathlib.Path, synthetique: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """P18 : rien sous le venv n'est vise, sinon le script console contracte."""
+    resultat, _, _ = _installer(checkout, synthetique, systeme)
+    internes = {
+        a.cible
+        for a in resultat.actes_systeme
+        if a.cible.startswith(install.CHEMIN_VENV + "/")
+    }
+    assert internes == {install.CHEMIN_COMMANDE}
+
+
+def test_aucun_parcours_recursif_dans_l_applicateur() -> None:
+    """P18 : ni `walk`, ni `rglob`, ni `glob` dans l'application des metadonnees."""
+    arbre = ast.parse(CHEMIN_INSTALLATEUR.read_text(encoding="utf-8"))
+    for noeud in ast.walk(arbre):
+        if isinstance(noeud, ast.FunctionDef) and noeud.name == "_appliquer_actes_reels":
+            appels = {
+                fils.attr for fils in ast.walk(noeud) if isinstance(fils, ast.Attribute)
+            }
+            assert appels & {"walk", "rglob", "glob", "iterdir"} == set()
+            return
+    pytest.fail("_appliquer_actes_reels introuvable")
+
+
+# ---------------------------------------------------------------------------
+# Garde destructive — preuve de CABLAGE, portable
+# ---------------------------------------------------------------------------
+#
+# Les preuves comportementales ci-dessus passent toutes par un lien symbolique,
+# indisponible sur certaines plateformes. Mesure a l'appui : elles y sont
+# ecartees, et la garde s'y retrouve alors sans aucune preuve — une suppression
+# du garde-fou passerait inapercue. Les deux tests suivants ferment ce trou
+# PORTABLEMENT : ils verifient que la garde est bien APPELEE sur chaque cible
+# destructive, et qu'un refus de sa part empeche effectivement la suppression.
+
+
+class _GardeEspionne:
+    """Enregistre les cibles soumises a la garde, et refuse."""
+
+    def __init__(self) -> None:
+        self.cibles: list[pathlib.Path] = []
+
+    def __call__(self, cible, racine):
+        self.cibles.append(pathlib.Path(cible))
+        raise install.RefusPrecondition("refus simule par la garde")
+
+
+def test_la_garde_est_appelee_sur_le_venv_avant_toute_suppression(
+    monkeypatch, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
+) -> None:
+    """P22, cablage : sans cet appel, l'etape 8 supprimerait sans controle."""
+    _installer(checkout, synthetique, systeme)
+    temoin = synthetique / install.CHEMIN_VENV / "TEMOIN"
+    temoin.write_bytes(b"je ne dois pas etre supprime\n")
+
+    espion = _GardeEspionne()
+    monkeypatch.setattr(install, "_verifier_cible_destructive", espion)
+
+    with pytest.raises(install.RefusPrecondition):
+        _installer(checkout, synthetique, systeme)
+
+    assert espion.cibles == [synthetique / install.CHEMIN_VENV]
+    assert temoin.is_file(), "aucune suppression ne doit avoir eu lieu"
+
+
+def test_la_garde_est_appelee_sur_les_deux_cibles_de_la_desinstallation(
+    monkeypatch, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
+) -> None:
+    """P22, cablage : `/opt/boilerack` ET l'unite sont soumis a la garde."""
+    _installer(checkout, synthetique, systeme)
+    avant = empreinte(synthetique)
+
+    espion = _GardeEspionne()
+    monkeypatch.setattr(install, "_verifier_cible_destructive", espion)
+
+    with pytest.raises(install.RefusPrecondition):
+        install.desinstaller(racine=synthetique, racine_systeme=systeme)
+
+    assert espion.cibles == [synthetique / install.CHEMIN_OPT]
+    assert empreinte(synthetique) == avant, "aucune suppression ne doit avoir eu lieu"
+
+
+def test_la_garde_couvre_aussi_l_unite_a_la_desinstallation(
+    monkeypatch, checkout: pathlib.Path, synthetique: pathlib.Path,
+    systeme: pathlib.Path,
+) -> None:
+    """P22, cablage : l'unite est soumise a la garde meme sans `/opt/boilerack`.
+
+    Le refus portant sur la premiere cible masquerait l'absence de garde sur la
+    seconde : on retire donc `/opt/boilerack` pour que l'unite soit la premiere
+    cible soumise.
+    """
+    _installer(checkout, synthetique, systeme)
+    shutil.rmtree(synthetique / install.CHEMIN_OPT)
+    avant = empreinte(synthetique)
+
+    espion = _GardeEspionne()
+    monkeypatch.setattr(install, "_verifier_cible_destructive", espion)
+
+    with pytest.raises(install.RefusPrecondition):
+        install.desinstaller(racine=synthetique, racine_systeme=systeme)
+
+    assert espion.cibles == [synthetique / install.CHEMIN_UNITE]
+    assert empreinte(synthetique) == avant
+
+
+# ---------------------------------------------------------------------------
+# PC6 — preuve d'ANTERIORITE, portable
+# ---------------------------------------------------------------------------
+
+
+def test_pc6_est_evaluee_avant_la_creation_des_repertoires(
+    monkeypatch, checkout: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """P21 : deplacer PC6 apres le premier effet doit tomber.
+
+    Le refus est declenche par le predicat, et l'assertion porte sur le fait
+    qu'AUCUN repertoire contractuel n'existe apres coup — ce qui ne serait pas
+    vrai si la precondition avait ete evaluee plus tard.
+    """
+    monkeypatch.setattr(install, "_est_admin_reel", lambda: False)
+    monkeypatch.setattr(
+        install, "_resoudre_shell_non_connectable", lambda: SHELL_FACTICE
+    )
+
+    with pytest.raises(install.RefusPrecondition) as refus:
+        _installer(checkout, systeme, systeme, actes_ouverts=True)
+
+    assert "PC6" in str(refus.value)
+    for relatif in (install.CHEMIN_ETC, install.CHEMIN_REPERTOIRE_UNITES):
+        assert not (systeme / relatif).exists(), relatif
+
+
+def test_pc8_est_evaluee_avant_la_creation_des_repertoires(
+    monkeypatch, checkout: pathlib.Path, systeme: pathlib.Path
+) -> None:
+    """P21 : meme preuve pour PC8."""
+    monkeypatch.setattr(install, "_est_admin_reel", lambda: True)
+    monkeypatch.setattr(install, "_resoudre_shell_non_connectable", lambda: None)
+
+    with pytest.raises(install.RefusPrecondition) as refus:
+        _installer(checkout, systeme, systeme, actes_ouverts=True)
+
+    assert "PC8" in str(refus.value)
+    for relatif in (install.CHEMIN_ETC, install.CHEMIN_REPERTOIRE_UNITES):
+        assert not (systeme / relatif).exists(), relatif
