@@ -1,4 +1,4 @@
-"""Installateur Boilerack (lots C13-B1 et C13-B2).
+"""Installateur Boilerack (lots C13-B1, C13-B2 et C13-B3-b).
 
 Implemente `docs/design/c13-installation-contract.md` : le noyau de surete
 — preconditions, classification de racine, refus avant tout effet — et les
@@ -22,13 +22,16 @@ AUCUN `systemctl`, DANS AUCUN MODE
     commandes systemd sont des DONNEES restituees a l'humain, jamais executees.
     Contrat §13.
 
-DEUX COUTURES, ET DEUX SEULEMENT
-    `construire_venv` et `appliquer_actes` sont injectables. Ce ne sont pas des
-    abstractions de confort : la premiere isole la seule etape couteuse et
-    dependante d'un index de paquets, la seconde isole les seuls actes exigeant
-    de vrais privileges. Sans elles, la suite ne pourrait ni s'executer hors
-    ligne, ni prouver le mode reel sans creer d'utilisateur sur la machine de
-    developpement. Elles n'ont ni hierarchie, ni registre, ni strategie.
+COUTURES
+    DEUX COLLABORATEURS injectables — `construire_venv` et `appliquer_actes` —,
+    plus quelques PREDICATS ET VALEURS substituables qui servent uniquement a
+    eprouver des refus : `_racine_systeme_par_defaut`, `_inscriptible`,
+    `_est_admin_reel`, `_resoudre_shell_non_connectable`, `_identite_existe`, et
+    la version de Python passee a `installer`. Les deux premiers remplacent un
+    travail ; les autres ne repondent qu'a une question. Sans eux, la suite ne
+    pourrait ni s'executer hors ligne, ni eprouver le mode reel sans creer
+    d'utilisateur sur la machine de developpement. Aucun n'a de hierarchie, de
+    registre ni de strategie.
 
 `main` REND UN ENTIER
     Comme la CLI du runtime, dont ce module reprend la grille de codes sans
@@ -72,8 +75,10 @@ __all__ = [
     "MODELE_ENVIRONNEMENT",
     "PYTHON_MINIMAL",
     "REPERTOIRES_HORS_VENV",
+    "SHELL_NON_RESOLU",
     "SOURCE_CONFIG",
     "SOURCE_UNITE",
+    "UMASK_ETAPE_VENV",
     "UTILISATEUR",
     "ActeSysteme",
     "Racine",
@@ -140,16 +145,21 @@ METADONNEES_GROUPE_A: Final = (
 
 #: Contrat §7.3, groupe B : pose APRES la creation reussie du venv.
 #:
-#: LES MODES SONT REPRIS TELS QUE LE CONTRAT LES ECRIT, en toutes lettres. C12
-#: §4.1 dit « lecture pour tous » et « executable » ; ni C12 ni C13 ne fixent de
-#: valeur numerique pour ces deux emplacements. En inventer une ici serait
-#: fabriquer une regle que le corpus ne porte pas. La consequence est assumee et
-#: visible : `_appliquer_actes_reels` REFUSE un mode non numerique, de sorte que
-#: le manque se signale au lieu de se combler tout seul.
+#: C12 §4.1 exprime le besoin en toutes lettres — « lecture pour tous » et
+#: « executable » — sous une colonne qu'il intitule « Mode indicatif ». C13 §7.2
+#: en fixe la traduction numerique : `0755` pour les deux, propriete `root`. Le
+#: GROUPE reste volontairement non fixe, C12 ne nommant que `root` ici.
 METADONNEES_GROUPE_B: Final = (
-    (CHEMIN_VENV, "root", "lecture pour tous"),
-    (CHEMIN_COMMANDE, "root", "executable"),
+    (CHEMIN_VENV, "root", "0755"),
+    (CHEMIN_COMMANDE, "root", "0755"),
 )
+
+#: Contrat §8.3ter. Fixe pour la SEULE duree de l'etape venv, puis restaure.
+UMASK_ETAPE_VENV: Final = 0o022
+
+#: Valeur portee par l'acte `utilisateur` lorsque aucune resolution n'a eu lieu,
+#: c'est-a-dire en mode synthetique, ou PC8 n'est pas evaluee.
+SHELL_NON_RESOLU: Final = "non resolu"
 
 #: Actes humains restants, contrat §8.2 et §13.1. `daemon-reload` est PREMIER :
 #: l'unite fraichement deposee doit etre relue avant toute activation.
@@ -358,6 +368,86 @@ def _verifier_racine_utilisable(racine: Racine) -> None:
         raise RefusPrecondition(f"PC5 : racine non inscriptible : {racine.resolue}")
 
 
+def _est_admin_reel() -> bool:
+    """Couture minimale : les tests substituent ce predicat.
+
+    Le contrat §5 retient `euid == 0` parce qu'il est deterministe et
+    verifiable ; modeliser les capacites, un LSM ou `sudo` serait inverifiable
+    hors terrain. `os.geteuid` n'existe pas hors POSIX : ailleurs, le mode reel
+    n'a pas de sens et le predicat est faux.
+    """
+    geteuid = getattr(os, "geteuid", None)
+    return geteuid is not None and geteuid() == 0
+
+
+def _verifier_privileges() -> None:
+    """PC6. Mode reel seulement, evaluee AVANT TOUT EFFET."""
+    if not _est_admin_reel():
+        raise RefusPrecondition(
+            "PC6 : privileges d'administration requis en mode reel "
+            "(euid 0 sur POSIX)"
+        )
+
+
+#: Repertoires ou `nologin` reside habituellement sans figurer dans le `PATH`
+#: d'un processus non interactif. Ce sont des INDICES DE RECHERCHE, jamais une
+#: autorite : ce qui compte est le resultat de la resolution, et son absence
+#: fait refuser. Le contrat n'inscrit aucun chemin absolu comme norme.
+_INDICES_DE_RECHERCHE_SHELL: Final = ("/usr/sbin", "/sbin")
+
+
+def _resoudre_shell_non_connectable() -> str | None:
+    """PC8. Resout l'executable rendant le compte non connectable.
+
+    Strategie, volontairement la plus petite possible : chercher `nologin` dans
+    le `PATH`, puis, a defaut, dans le `PATH` complete des deux repertoires
+    d'indices ci-dessus. Aucune liste de distributions, aucun chemin absolu
+    retenu d'avance : si rien n'est trouve, la precondition refuse.
+    """
+    trouve = shutil.which("nologin")
+    if trouve is not None:
+        return trouve
+    chemin = os.pathsep.join(
+        [os.environ.get("PATH", ""), *_INDICES_DE_RECHERCHE_SHELL]
+    )
+    return shutil.which("nologin", path=chemin)
+
+
+def _verifier_compte_non_connectable() -> str:
+    """PC8. Mode reel seulement, evaluee AVANT TOUT EFFET.
+
+    Rend le chemin resolu, que l'appelant transporte jusqu'a la creation du
+    compte : il n'y a **qu'une seule resolution**, et aucune recherche
+    divergente plus tard.
+    """
+    shell = _resoudre_shell_non_connectable()
+    if shell is None:
+        raise RefusPrecondition(
+            "PC8 : aucun executable `nologin` resolvable sur la cible ; le "
+            "compte ne pourrait pas etre rendu non connectable"
+        )
+    return shell
+
+
+def _verifier_cible_destructive(cible: Path, racine: Path) -> None:
+    """Garde destructive du contrat §8.3quater.
+
+    La cible resolue doit etre un descendant **strict** de la racine resolue.
+    L'egalite est exclue : aucune cible destructive contractee n'est la racine,
+    et l'admettre autoriserait sa suppression.
+
+    La resolution suit les liens symboliques, y compris ceux des composantes
+    intermediaires : c'est precisement le cas que cette garde ferme, un
+    `<racine>/opt/boilerack` symbolique faisant porter la suppression hors de la
+    racine.
+    """
+    resolue = Path(cible).resolve()
+    if racine not in resolue.parents:
+        raise RefusPrecondition(
+            f"suppression refusee : {resolue} n'est pas sous la racine {racine}"
+        )
+
+
 # ---------------------------------------------------------------------------
 # Coutures : construction du venv, application des actes systeme
 # ---------------------------------------------------------------------------
@@ -385,43 +475,65 @@ def construire_venv_reel(venv: Path, checkout: Path) -> None:
     )
 
 
-def _appliquer_actes_reels(actes: Sequence[ActeSysteme], racine: Path) -> None:
-    """Applique les actes systeme. MODE REEL UNIQUEMENT — jamais exerce ici.
+def _identite_existe(genre: str, nom: str) -> bool:
+    """Couture minimale : les tests substituent ce predicat.
 
-    Fonction volontairement mince : elle n'est couverte par aucun test, et cela
-    est declare plutot que masque. C'est la raison de la garder inspectable et
-    sans branche superflue. Contrat §20 : `useradd`, `chown` et les modes reels
-    appartiennent a la qualification terrain.
-
-    Elle REFUSE un mode non numerique. Les deux emplacements du groupe B portent
-    un mode ecrit en toutes lettres, faute de valeur numerique dans le corpus
-    (voir `METADONNEES_GROUPE_B`) : le manque se signale ici au lieu d'etre
-    comble par une valeur inventee.
+    Le contrat §8.3bis dit « cree si absent » : constater l'absence est donc un
+    acte a part entiere. `grp` et `pwd` sont POSIX ; hors POSIX le mode reel n'a
+    pas de sens et la question ne se pose pas.
     """
-    for acte in actes:  # pragma: no cover - mode reel, jamais exerce hors terrain
+    if genre == "groupe":
+        import grp
+
+        try:
+            grp.getgrnam(nom)
+        except KeyError:
+            return False
+        return True
+    import pwd
+
+    try:
+        pwd.getpwnam(nom)
+    except KeyError:
+        return False
+    return True
+
+
+def _appliquer_actes_reels(actes: Sequence[ActeSysteme], racine: Path) -> None:
+    """Applique les actes systeme. MODE REEL UNIQUEMENT.
+
+    Fonction volontairement mince. Contrat §20 : le comportement d'un `useradd`
+    reel, d'un `chown` reel et des modes reels appartient a la qualification
+    terrain ; ce qui est eprouvable ici est la DECISION — appeler ou non, avec
+    quels arguments, et propager l'echec.
+
+    L'identite n'est creee que si elle est **absente** (§8.3bis), et une creation
+    necessaire qui echoue leve : `check=True`, sans capture, pour que le
+    diagnostic de la commande atteigne l'operateur. Aucun echec n'est avale.
+
+    Le **shell** du compte est celui que PC8 a resolu, transporte par la valeur
+    de l'acte : il n'y a **aucune seconde resolution**.
+    """
+    for acte in actes:
         if acte.genre == "groupe":
-            subprocess.run(["groupadd", "--system", acte.cible], check=False)
+            if not _identite_existe("groupe", acte.cible):
+                subprocess.run(["groupadd", "--system", acte.cible], check=True)
         elif acte.genre == "utilisateur":
-            subprocess.run(
-                ["useradd", "--system", "--no-create-home", "--shell",
-                 "/usr/sbin/nologin", "--gid", GROUPE, acte.cible],
-                check=False,
-            )
+            if not _identite_existe("utilisateur", acte.cible):
+                subprocess.run(
+                    ["useradd", "--system", "--no-create-home", "--shell",
+                     acte.valeur, "--gid", GROUPE, acte.cible],
+                    check=True,
+                )
         elif acte.genre == "proprietaire":
             shutil.chown(racine / acte.cible, *_proprietaire(acte.valeur))
         elif acte.genre == "mode":
-            if not acte.valeur.isdigit():
-                raise NotImplementedError(
-                    f"mode non numerique pour {acte.cible} : {acte.valeur!r}. "
-                    "Ni C12 ni C13 n'en fixent la valeur ; elle doit etre "
-                    "arbitree avant toute application reelle."
-                )
             os.chmod(racine / acte.cible, int(acte.valeur, 8))
         else:
             raise ValueError(f"genre d'acte inconnu : {acte.genre!r}")
 
 
-def _proprietaire(valeur: str) -> tuple[str, str | None]:  # pragma: no cover
+def _proprietaire(valeur: str) -> tuple[str, str | None]:
     """Decoupe `user` ou `user:group`."""
     if ":" in valeur:
         utilisateur, groupe = valeur.split(":", 1)
@@ -475,6 +587,10 @@ def installer(
     checkout = Path(checkout)
     _verifier_checkout(checkout)
     _verifier_racine_utilisable(racine_classee)
+    shell = SHELL_NON_RESOLU
+    if actes_ouverts:
+        _verifier_privileges()
+        shell = _verifier_compte_non_connectable()
 
     # --- FRONTIERE : les effets commencent ici -----------------------------
     base = racine_classee.resolue
@@ -483,9 +599,13 @@ def installer(
     messages: list[str] = []
 
     # 2. Identite. En mode synthetique elle est DECLAREE, jamais creee.
+    # Elle precede l'appropriation (§8.3bis) : un changement de proprietaire vers
+    # `root:boilerack` echoue si le groupe n'existe pas encore. L'acte
+    # `utilisateur` porte le shell resolu par PC8, ou `SHELL_NON_RESOLU` en mode
+    # synthetique, ou aucune resolution n'a lieu.
     actes: list[ActeSysteme] = [
         ActeSysteme(genre="groupe", cible=GROUPE, valeur="cree si absent"),
-        ActeSysteme(genre="utilisateur", cible=UTILISATEUR, valeur="cree si absent"),
+        ActeSysteme(genre="utilisateur", cible=UTILISATEUR, valeur=shell),
     ]
 
     # 3. Repertoires hors venv.
@@ -513,10 +633,23 @@ def installer(
         appliquer_actes(tuple(actes), base)
 
     # 8. SEULE ETAPE DESTRUCTIVE : le venv est detruit puis recree.
+    #
+    # La garde de §8.3quater precede la suppression : une cible resolue hors de
+    # la racine est refusee, et rien n'est supprime. A ce stade, les effets des
+    # etapes 3 a 7 existent deja — le contrat ne borne ici que la SUPPRESSION.
+    #
+    # Le `umask` de §8.3ter couvre la SEULE creation du venv et l'installation du
+    # paquet, et il est restaure succes ou echec : la destruction, elle, reste en
+    # dehors de sa portee.
     venv = base / CHEMIN_VENV
+    _verifier_cible_destructive(venv, base)
     if venv.exists():
         shutil.rmtree(venv)
-    construire_venv(venv, checkout)
+    umask_anterieur = os.umask(UMASK_ETAPE_VENV)
+    try:
+        construire_venv(venv, checkout)
+    finally:
+        os.umask(umask_anterieur)
 
     # 9. Metadonnees du groupe B, apres creation reussie du venv.
     actes_b = _actes_de_metadonnees(METADONNEES_GROUPE_B)
@@ -581,16 +714,23 @@ def desinstaller(
             f"{_COMMANDE_DESACTIVATION}"
         )
 
+    # Garde de §8.3quater sur les DEUX cibles supprimees ici, avant toute
+    # suppression : si l'une resout hors de la racine, rien n'est supprime.
+    opt = base / CHEMIN_OPT
+    unite = base / CHEMIN_UNITE
+    if opt.exists():
+        _verifier_cible_destructive(opt, base)
+    if entree_existe(unite):
+        _verifier_cible_destructive(unite, base)
+
     # --- FRONTIERE : les effets commencent ici -----------------------------
     messages: list[str] = []
-    opt = base / CHEMIN_OPT
     if opt.exists():
         shutil.rmtree(opt)
         messages.append(f"programme supprime : {opt}")
     else:
         messages.append(f"rien a supprimer : {opt} est absent")
 
-    unite = base / CHEMIN_UNITE
     if entree_existe(unite):
         unite.unlink()
         messages.append(f"unite supprimee : {unite}")

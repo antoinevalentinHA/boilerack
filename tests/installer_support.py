@@ -147,11 +147,17 @@ class DoubleVenv:
         self.appels: list[tuple[pathlib.Path, pathlib.Path]] = []
         self.empreinte_a_l_appel: tuple | None = None
         self.contenus_a_l_appel: dict[str, str] | None = None
+        self.umask_a_l_appel: int | None = None
 
     def __call__(self, venv: pathlib.Path, checkout: pathlib.Path) -> None:
         self.appels.append((venv, checkout))
         self.empreinte_a_l_appel = empreinte(self.racine)
         self.contenus_a_l_appel = contenus(self.racine)
+        # Lire le `umask` impose de le poser : on le remet aussitot. C'est la
+        # seule facon d'observer §8.3ter au moment precis ou il doit s'appliquer.
+        courant = os.umask(0)
+        os.umask(courant)
+        self.umask_a_l_appel = courant
         if self.echouer:
             raise RuntimeError("construction du venv en echec (simulee)")
         if self.squelette:
@@ -283,6 +289,34 @@ def subprocess_module():
     import subprocess
 
     return subprocess
+
+
+class UmaskDouble:
+    """`umask` fidele, tenu en memoire.
+
+    Necessaire, et non par confort : MESURE sur Windows, `os.umask(0o022)` est
+    relu `0o000` — seuls les bits `0o600` y survivent. Un test qui asserterait la
+    valeur effective n'y prouverait donc rien. Ce double reproduit la semantique
+    POSIX — poser une valeur, rendre la precedente — et rend la DISCIPLINE de
+    §8.3ter verifiable a l'identique sur les deux plateformes.
+    """
+
+    def __init__(self, initial: int) -> None:
+        self.valeur = initial
+        self.poses: list[int] = []
+
+    def __call__(self, nouveau: int) -> int:
+        self.poses.append(nouveau)
+        ancien = self.valeur
+        self.valeur = nouveau
+        return ancien
+
+
+def umask_fidele() -> bool:
+    """Mesure, plutot que suppose, si la plateforme tient un `umask` POSIX."""
+    anterieur = os.umask(0o022)
+    relu = os.umask(anterieur)
+    return relu == 0o022
 
 
 def liens_symboliques_disponibles(base: pathlib.Path) -> bool:
