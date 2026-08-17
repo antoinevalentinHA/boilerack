@@ -122,8 +122,31 @@ n'est pas remplie.
 | PC3 | L'interpreteur qui creera le venv satisfait `sys.version_info >= (3, 11)` | oui |
 | PC4 | Le checkout designe existe et contient `pyproject.toml`, `systemd/boilerack.service` et `docs/boilerack.example.toml` | oui |
 | PC5 | La racine designee existe et est inscriptible | oui |
-| PC6 | En mode reel : les privileges suffisent pour ecrire dans `/opt` et `/etc`, creer l'identite et changer les proprietaires | **non** — terrain |
+| PC6 | En mode reel sur POSIX : l'executant possede les privileges d'administration, **`euid == 0`**. Ce critere couvre ce que le mode reel exige — ecrire dans `/opt` et `/etc`, creer l'identite, changer les proprietaires. A defaut : refus, code de §16, **avant tout effet** | **oui**, par substitution du predicat |
 | PC7 | En mode reel : un index de paquets est joignable, ou un equivalent local | **non** — terrain |
+| PC8 | En mode reel : un executable rendant le compte **non connectable** est resolvable sur la cible. A defaut : refus, code de §16, **avant tout effet** | **oui**, par substitution du predicat |
+
+**PC6 est desormais exigible, et non plus seulement decrite.** Elle etait
+contractee sans critere applicable : une execution reelle sans privilege
+commencait ses effets, puis echouait au premier changement de proprietaire — ce
+que la doctrine « refus avant effet » interdit. `euid == 0` est retenu parce
+qu'il est **deterministe et verifiable** ; modeliser les capacites, un LSM,
+`sudo` ou une distribution particuliere serait invérifiable hors terrain et
+sortirait du perimetre. La precondition est **POSIX** : le mode reel suppose une
+racine designant la racine du systeme, ce qui n'a pas de sens ailleurs.
+
+**PC8 exprime un besoin, pas un chemin.** Le compte systeme `boilerack` cree par
+l'installateur doit etre **non connectable**. Le contrat n'inscrit **aucun chemin
+absolu** — ni `/usr/sbin/nologin`, ni `/sbin/nologin` — parce qu'il ne fixe
+aucune distribution (voir ci-dessous). Il n'impose pas davantage de strategie de
+recherche : **resoudre** l'executable sur la cible est une decision
+d'implementation, sous tests. Ce que le contrat fixe est l'exigence, la necessite
+de la resolution, et le refus lorsqu'elle echoue.
+
+Ces deux preconditions sont **verifiables hors terrain par substitution du
+predicat**, exactement comme la moitie « inscriptible » de PC5. Cette
+verification prouve le **refus et son absence d'effet** ; elle ne prouve rien du
+comportement d'un `useradd` reel, qui reste terrain (§20).
 
 PC1 et PC2 sont evaluees **en premier** : sans elles, aucune des suivantes n'a de
 sens, puisque la racine determine ou porteraient les effets. Elles sont la
@@ -165,12 +188,23 @@ service qui fonctionne serait une **violation** de ce contrat.
 
 ### 7.1 Consommes de C12, sans modification
 
-| Role | Chemin | Proprietaire | Mode |
+| Role | Chemin | Proprietaire | Mode indicatif |
 |---|---|---|---|
 | Code installe | `/opt/boilerack/venv` | `root` | lecture pour tous |
 | Commande | `/opt/boilerack/venv/bin/boilerack` | `root` | executable |
 | Configuration | `/etc/boilerack/boilerack.toml` | `root:boilerack` | `0640` |
 | Secret | `/etc/boilerack/boilerack.env` | `root:boilerack` | `0640` |
+
+**La colonne porte l'intitulé exact de C12 §4.1 : « Mode indicatif ».** C12 y
+décrit un besoin fonctionnel, non une valeur opposable. Deux de ces lignes le
+formulent en toutes lettres — « lecture pour tous » et « executable » — et ne
+peuvent donc pas être appliquées telles quelles à un système de fichiers.
+
+C12 §12 énonce ce besoin sans ambiguïté : le service doit pouvoir **exécuter**
+`/opt/boilerack/venv/bin/boilerack`, et n'a besoin d'**aucune écriture**.
+Traduire ce besoin en une valeur Unix concrète est une **décision
+d'installation** : elle revient donc à C13, et figure en §7.2. Les deux lignes
+`0640` sont déjà numériques et sont reprises sans changement.
 
 ### 7.2 Ajouts de C13, derives et signales comme tels
 
@@ -183,9 +217,37 @@ du shell de l'administrateur. C13 les fixe donc, et les justifie.
 | Racine du code | `/opt/boilerack` | `root:root` | `0755` | code non secret, lisible par tous, conforme a C12 §4.1 |
 | Repertoire de configuration | `/etc/boilerack` | `root:boilerack` | `0750` | le service doit **traverser** ce repertoire pour lire les deux fichiers `0640` du groupe ; `0750` accorde exactement cela et ne divulgue pas le contenu du repertoire aux autres comptes |
 | Unite systemd | `/etc/systemd/system/boilerack.service` | `root:root` | `0644` | fichier d'unite sans secret (C12 §6) ; convention systemd |
+| Code installe | `/opt/boilerack/venv` | `root` | `0755` | traduction numerique du « lecture pour tous » de C12 §4.1 — voir ci-dessous |
+| Commande | `/opt/boilerack/venv/bin/boilerack` | `root` | `0755` | traduction numerique du « executable » de C12 §4.1 — voir ci-dessous |
 
-Ces trois lignes sont des **ajouts C13**, pas des donnees C12. Elles sont
+Ces cinq lignes sont des **ajouts C13**, pas des donnees C12. Elles sont
 attaquables comme telles ; elles ne contredisent aucune clause de C12.
+
+**Le groupe des deux dernieres lignes n'est pas fixe**, et ne doit pas l'etre :
+C12 §4.1 nomme `root` seul pour ces deux emplacements, sans groupe. Le service
+n'y accede pas par le groupe (voir ci-dessous) ; inventer un `root:boilerack`
+ajouterait une regle que le corpus ne porte pas.
+
+#### Pourquoi `0755` pour les deux emplacements du venv
+
+Le raisonnement est fonctionnel, et il part de C12 §12, non d'un usage Unix.
+
+Le service tourne sous l'identite `boilerack` : il n'est **ni `root`, ni membre
+du groupe `root`**. Ce sont donc les bits **« autres »** qui gouvernent son
+acces. C12 §12 exige qu'il puisse **exécuter**
+`/opt/boilerack/venv/bin/boilerack` — ce qui suppose aussi de **traverser** le
+repertoire du venv et d'y **lire** — et precise qu'**aucune ecriture** ne lui est
+requise ni accordee.
+
+| Candidate | Autres | Consequence |
+|---|---|---|
+| `0750` ou `0550` en `root:root` | `---` | **Incompatible** : le service ne peut ni traverser, ni lire, ni executer. Contredit une exigence ecrite de C12 §12 |
+| `0555` | `r-x` | Fonctionne, mais n'apporte **aucune protection reelle** : `root` — le seul compte a posseder le bit d'ecriture retire — contourne de toute facon les controles de permission. Le gain est symbolique, et le mode gene la reinstallation |
+| **`0755`** | `r-x` | **Retenu** : donne aux autres exactement la lecture et la traversee ou l'execution requises, et conserve a `root` la capacite d'administrer sans lutter contre le mode |
+
+Aucune valeur n'est retenue parce qu'elle serait courante : `0750` et `0550` sont
+**eliminees par contradiction** avec C12 §12, et `0755` l'emporte sur `0555` par
+absence de benefice reel de cette derniere.
 
 ### 7.3 Quand chaque metadonnee est posee — deux groupes
 
@@ -204,6 +266,20 @@ rien, ou serait annule aussitot.
 
 `/opt/boilerack` appartient au groupe **A** bien qu'il contienne le venv : il
 n'est jamais detruit par l'etape venv, qui ne supprime que `/opt/boilerack/venv`.
+
+#### Aucune normalisation recursive
+
+**Clause normative.** La pose des metadonnees porte **exclusivement sur les
+emplacements nommes** en §7.1 et §7.2. Le `0755` des deux emplacements du groupe
+B ne signifie **pas** un `chmod` recursif de l'arbre du venv.
+
+Les modes internes du venv restent gouvernes par `venv` et par `pip`, sous le
+`umask` que §8.3ter fixe pendant leur execution. Les ecraser recursivement
+imposerait une politique etrangere aux outils qui ont fabrique cet arbre : selon
+la valeur appliquee, cela rendrait executables des fichiers ordinaires, ou
+retirerait le bit d'execution a des scripts qui en ont besoin.
+
+Un `chmod` recursif de l'arbre du venv est donc une **violation** de ce contrat.
 
 ---
 
@@ -359,7 +435,7 @@ L'ordre est **contracte**, pas laisse a l'implementation, parce qu'il determine
 ce qui subsiste apres un echec.
 
 ```text
-1.  Preconditions PC1 a PC5, et PC6 en mode reel — aucun effet
+1.  Preconditions PC1 a PC5, et PC6 et PC8 en mode reel — aucun effet
 2.  Groupe et utilisateur boilerack, si absents
 3.  Repertoires HORS VENV : /opt/boilerack, /etc/boilerack, /etc/systemd/system
 4.  /etc/boilerack/boilerack.toml — CONTENU depose SI ABSENT SEULEMENT
@@ -367,8 +443,9 @@ ce qui subsiste apres un echec.
 6.  /etc/systemd/system/boilerack.service — toujours depose
 7.  METADONNEES, premier groupe : proprietaires et modes des emplacements
     HORS VENV, tous crees ou presents a ce stade (§7.3, groupe A)
-8.  VENV — SEULE ETAPE DESTRUCTIVE : suppression si present, creation,
-    installation du paquet depuis le checkout
+8.  VENV — SEULE ETAPE DESTRUCTIVE, sous `umask` fixe (§8.3ter) et sous garde
+    destructive (§8.3quater) : suppression si present, creation, installation du
+    paquet depuis le checkout
 9.  METADONNEES, second groupe : proprietaires et modes des emplacements
     DU VENV, apres creation reussie de celui-ci (§7.3, groupe B)
 10. Restitution des actes systeme differes et des actes humains restants
@@ -407,6 +484,87 @@ invocation reprend sans rien perdre.
 L'inversion de cet ordre est une **violation**, sous ses deux formes : deplacer
 le venv **avant** le depot de la configuration et du secret (mute en §18, M13),
 et poser les metadonnees du venv **avant** que le venv existe (mute en §18, M18).
+
+### 8.3bis Identite avant appropriation
+
+**Clause normative.** Les actes d'**identite** — creation ou constat du groupe et
+de l'utilisateur `boilerack` — precedent **tout acte d'appropriation qui
+reference cette identite**.
+
+La raison est mecanique : un changement de proprietaire vers `root:boilerack`
+echoue si le groupe `boilerack` n'existe pas encore. L'etape 2 de §8.3 place donc
+l'identite avant l'etape 7, et cet ordre est **normatif**, non un effet de
+l'ordre de redaction du code.
+
+Invariants de l'identite, en mode reel :
+
+- le groupe n'est cree que s'il est **absent** ; sinon il est constate ;
+- l'utilisateur n'est cree que s'il est **absent** ; sinon il est constate ;
+- une creation **necessaire** qui echoue est une **panne explicite**, jamais
+  ignoree : la faire disparaitre ferait resurgir l'echec plus tard, sous la forme
+  moins lisible d'un changement de proprietaire impossible ;
+- l'utilisateur cree est **non connectable** (PC8) ;
+- la desinstallation ne supprime **ni le groupe, ni l'utilisateur** (§12.2,
+  inchange).
+
+Ce contrat ne prescrit **aucune API** pour constater l'existence ou pour creer :
+c'est une decision d'implementation, sous tests.
+
+### 8.3ter `umask` de l'etape venv
+
+**Clause normative.** L'etape 8 s'execute sous un `umask` **fixe a `0022`**.
+L'installateur sauvegarde le `umask` courant avant l'etape, l'applique pour la
+**seule** duree de la creation du venv et de l'installation du paquet, puis le
+**restaure — succes ou echec**.
+
+Sa portee est **strictement** cette etape. Aucune autre etape n'est concernee.
+
+Justification, et elle n'est pas empruntee a un usage : §7.2 refuse deja de
+laisser au `umask` le mode des repertoires qu'il cree, au motif que « le resultat
+dependrait du shell de l'administrateur ». Le meme raisonnement s'applique a
+l'arbre que l'etape 8 fait produire par `venv` et par `pip`.
+
+Sans cette clause, une installation pourrait **reussir**, poser exactement les
+modes de §7.2, et produire malgre tout un service **incapable de demarrer** : un
+`umask` restrictif rendrait les repertoires intermediaires du venv inaccessibles
+aux « autres », c'est-a-dire a l'identite sous laquelle le service tourne. Aucune
+preuve hors ligne ne detecterait cette situation.
+
+`0022` est la valeur qui laisse `venv` et `pip` produire un arbre traversable et
+lisible par tous, sans qu'aucun `chmod` recursif ne soit necessaire (§7.3).
+
+### 8.3quater Garde destructive
+
+**Clause normative.** Avant **toute suppression** contractee, le chemin **resolu**
+de la cible doit rester **sous la racine resolue**. Sinon : **refus**, code de
+§16, et **aucune suppression**.
+
+La resolution est celle de §8.1bis — composantes `.` et `..` eliminees, liens
+symboliques traverses — et la comparaison porte sur l'appartenance au sous-arbre,
+non sur la ressemblance des chaines.
+
+« Rester sous la racine resolue » signifie ici : **la cible resolue est un
+descendant STRICT de la racine resolue**. L'egalite est exclue : aucune cible
+destructive contractee n'est la racine elle-meme, et l'admettre autoriserait la
+suppression de la racine.
+
+Cibles concernees — celles que le contrat supprime effectivement :
+
+| Operation | Cible |
+|---|---|
+| Installation, etape 8 | `/opt/boilerack/venv` |
+| Desinstallation | `/opt/boilerack` |
+| Desinstallation | `/etc/systemd/system/boilerack.service` |
+
+Le risque ferme est concret : si `<racine>/opt/boilerack` est un **lien
+symbolique** vers l'exterieur, l'etape 8 supprimerait `<cible>/venv` **hors de la
+racine**, sans que rien ne le signale. Que l'auteur du lien ait deja du pouvoir
+ecrire sous la racine n'attenue pas le dommage : une suppression **hors** de la
+racine est d'une autre nature qu'une suppression dedans.
+
+Cette garde n'est **pas** un bac a sable : elle ne restreint aucun acces, ne
+surveille aucune ouverture de fichier et ne couvre pas les cibles non
+destructives. Elle est une resolution suivie d'une preuve d'appartenance.
 
 ### 8.4 Contenus deposes
 
@@ -662,6 +820,11 @@ Ce controle est un examen du **systeme de fichiers**, pas un appel a `systemctl`
 Il est donc exercable en mode synthetique, ce qui est la raison pour laquelle il
 est contracte plutot que laisse a la documentation.
 
+La **garde destructive de §8.3quater** s'applique en outre aux deux suppressions de
+cette section : `/opt/boilerack` et l'unite. Une cible dont le chemin resolu ne
+serait pas un descendant strict de la racine resolue est refusee, et rien n'est
+supprime.
+
 ### 12.4 Ce que la desinstallation ne fait pas
 
 Elle ne demarre ni n'arrete aucun service · elle n'appelle aucun `systemctl` · elle
@@ -805,7 +968,7 @@ C13 reprend la grille de C10 plutot que d'en inventer une.
 | Code | Sens | Trace |
 |---|---|---|
 | `0` | succes — installation, reinstallation ou desinstallation menee a bien | — |
-| `2` | precondition ou usage refuse : **racine absente**, **combinaison racine et actes systeme interdite**, Python trop ancien, checkout incomplet, racine inaccessible, lien d'activation present a la desinstallation | **non**, message nomme |
+| `2` | precondition ou usage refuse : **racine absente**, **combinaison racine et actes systeme interdite**, Python trop ancien, checkout incomplet, racine inaccessible, **privileges insuffisants en mode reel** (PC6), **compte non connectable irresolvable en mode reel** (PC8), **cible destructive hors de la racine resolue** (§8.3quater), lien d'activation present a la desinstallation | **non**, message nomme |
 | `1` | panne en cours d'operation | **oui**, avec sa trace |
 
 **Preserver n'est pas echouer.** Une installation qui trouve `boilerack.toml` ou
@@ -841,6 +1004,12 @@ noms de tests ne sont pas fixes ici ; les proprietes le sont.
 | P14 | **Aucun module du graphe d'import d'execution n'importe l'installateur** : le service n'embarque pas la logique qui ecrit sur le disque |
 | P15 | **Aucune invocation sans racine explicite ne produit d'effet** : l'absence de racine est refusee avant tout effet (PC1) |
 | P16 | **Les deux combinaisons hybrides sont refusees avant tout effet** (PC2), la classification portant sur la **racine resolue** (§8.1bis) : une racine resolue **designant** la racine du systeme avec actes systeme fermes, et une racine resolue **ne la designant pas** avec actes systeme ouverts. Une racine ecrite autrement mais **designant** la racine du systeme — `/.`, `/opt/..`, lien symbolique — est classee **reelle**, donc refusee avec actes fermes |
+| P17 | Les modes contractes pour **tous** les emplacements de §7.2 sont **numeriques et interpretables** ; les deux emplacements du venv portent `0755` et le proprietaire `root` |
+| P18 | **Aucune normalisation recursive** : la pose des metadonnees ne touche que les emplacements nommes, et le contenu interne du venv conserve les modes produits par `venv` et `pip` |
+| P19 | L'etape venv s'execute sous `umask` `0022`, et le `umask` anterieur est **restaure**, y compris lorsque l'etape echoue |
+| P20 | Les actes d'**identite** precedent tout acte d'**appropriation** qui reference cette identite ; une creation necessaire qui echoue est une panne explicite, jamais ignoree |
+| P21 | En mode reel : des privileges insuffisants (PC6) et un compte non connectable irresolvable (PC8) sont refuses **avant tout effet** |
+| P22 | **Aucune suppression ne porte hors de la racine resolue** (§8.3quater) : une cible dont le chemin resolu n'est pas un descendant strict de la racine resolue est refusee, et rien n'est supprime |
 
 Les proprietes P1 a P10 correspondent, dans l'ordre, aux dix proprietes exigees
 par le cadrage du lot. P11 a P16 sont des ajouts derives de l'instruction du
@@ -848,6 +1017,12 @@ contrat et de son audit : refus de securite (§12.3), ordre des effets et pose d
 metadonnees en deux temps (§7.3, §8.3), validation du checkout (§5), separation
 entre le programme et son installateur (§14), et surete de la racine et des
 combinaisons de modes (§8.1).
+
+P17 a P22 sont les proprietes du **chantier de convergence du mode reel** : sans
+elles, le chemin reel restait non convergent — modes non applicables (P17),
+portee indeterminee (P18), arbre du venv dependant du `umask` de l'operateur
+(P19), ordre de l'identite non garanti (P20), preconditions de privilege et de
+compte non exigibles (P21), suppression pouvant porter hors de la racine (P22).
 
 **P15 et P16 sont des proprietes de surete.** Elles ne decrivent pas ce que
 l'installateur fait, mais ce qu'il **refuse de faire**, et leur violation ouvre
@@ -885,6 +1060,12 @@ Aucun test n'est ecrit a ce stade. **Aucune mutation n'est declaree tuee.**
 | M22 | Une racine **ne designant pas** la racine du systeme est acceptee avec les actes systeme **ouverts** | P16 |
 | M23 | La classification porte sur la **representation textuelle** de la racine au lieu de sa **resolution** : une racine dont la resolution designe la racine du systeme — `/.`, `/opt/..`, lien symbolique vers la racine — est acceptee comme **synthetique** avec les actes systeme fermes | P16 |
 | M24 | La classification compare la racine resolue a la **chaine** `/` au lieu de tester l'**identite du repertoire designe** | P16 |
+| M25 | Un mode du groupe B redevient non numerique, ou prend une valeur qui prive les « autres » de lecture ou d'execution — `0750`, `0700`, `0640` | P17 |
+| M26 | Les metadonnees sont posees **recursivement** sur l'arbre du venv | P18 |
+| M27 | Le `umask` n'est pas fixe pendant l'etape venv, ou n'est **pas restaure** apres un echec de cette etape | P19 |
+| M28 | Les actes d'identite sont deplaces **apres** les actes d'appropriation, ou l'echec d'une creation necessaire est ignore | P20 |
+| M29 | PC6 ou PC8 est evaluee **apres** un premier effet, ou n'est pas evaluee du tout | P21 |
+| M30 | La garde destructive est absente, ou compare des **chaines** au lieu de prouver l'appartenance au sous-arbre, ou admet l'**egalite** avec la racine | P22 |
 
 M17 est la plus insidieuse des mutations de contenu : elle ne perd aucune donnee,
 mais elle transforme une reinstallation normale en echec apparent, et pousserait
@@ -900,6 +1081,16 @@ contracte**.
 defauts corriges en §8.1 et §8.1bis : un chemin par lequel une invocation
 incomplete, incoherente ou **ecrite autrement** atteindrait le systeme hote et
 detruirait `/opt/boilerack/venv`.
+
+**M25 a M30 sont les mutations de convergence du mode reel.** Trois d'entre elles
+meritent un mot. **M25** couvre le defaut d'origine — un mode inapplicable — mais
+aussi le defaut symetrique et plus insidieux : un mode parfaitement numerique qui
+prive le service de l'acces que C12 §12 lui garantit. **M27** doit etre eprouvee
+**sur le chemin d'echec** autant que sur le chemin nominal : un `umask` restaure
+seulement en cas de succes laisserait le processus dans un etat modifie apres une
+panne. **M30** distingue trois defaillances : garde absente, garde textuelle, et
+garde admettant l'egalite avec la racine — cette derniere autoriserait la
+suppression de la racine elle-meme.
 
 **M23 et M24 sont les mutations d'alias**, et elles sont distinctes de M21. M21
 suppose une racine ecrite `/` ; M23 et M24 supposent une racine **ecrite
@@ -923,7 +1114,12 @@ secret · la **reapplication de leurs metadonnees** · l'idempotence d'une secon
 installation · l'ordre des effets et la pose des metadonnees en deux temps · le
 **refus des invocations sans racine et des combinaisons interdites** · la
 desinstallation et son refus de securite · les codes de sortie et les messages ·
-les echecs de precondition · le contenu des deux listes d'actes restitues.
+les echecs de precondition · le contenu des deux listes d'actes restitues ·
+**le caractere numerique et la valeur des modes contractes** · **l'absence de
+normalisation recursive** · **le `umask` de l'etape venv et sa restauration, y
+compris apres echec** · **l'ordre identite puis appropriation** · **les refus de
+PC6 et PC8 par substitution de predicat** · **le refus d'une cible destructive
+hors de la racine resolue**.
 
 **Sur le paquet** : que l'installation du paquet dans un venv produit reellement
 la commande `boilerack` — deja acquis par C12, reconduit ici sous racine
@@ -944,8 +1140,13 @@ graphe d'execution (P14) · la suite existante passe inchangee.
 A ecrire tel quel, sans attenuation. **C13, hors terrain, NE PROUVE PAS** :
 
 - qu'un `useradd` reel cree l'utilisateur attendu, avec les droits attendus ;
+- que l'executable resolu par PC8 rende effectivement le compte non connectable ;
+- que `euid == 0` suffise reellement sur la cible : PC6 prouve le **refus** en
+  son absence, jamais la **suffisance** des privileges en sa presence ;
 - qu'un `chown` reel s'applique ;
 - que les modes reels sous la cible Linux sont ceux contractes en §7 ;
+- que l'arbre produit par `venv` et `pip` sous `umask` `0022` soit effectivement
+  traversable et lisible par l'identite du service ;
 - que `/etc/boilerack` en `0750 root:boilerack` laisse effectivement le service
   lire ses deux fichiers ;
 - qu'un systemd reel charge l'unite deposee ;
