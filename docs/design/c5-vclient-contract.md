@@ -136,7 +136,7 @@ aucune valeur actuelle.
 Deux précautions inscrites au contrat :
 
 - `UNKNOWN_COMMAND` ne se déduit **jamais** d'un code retour ni d'une erreur
-  générique : seule la valeur exacte du champ `error` la caractérisé.
+  générique : seule la valeur exacte du champ `error` la caractérise.
 - La signature de `DAEMON_UNREACHABLE` — deux flux vides — est **liée à la
   version caractérisée** et **ne doit pas absorber une erreur locale de
   lancement**, qui relève de `CLIENT_UNAVAILABLE`.
@@ -284,7 +284,7 @@ publication de télémétrie et dérivation de la santé.
 
 **Le défaut est latent** : le jeu de commandes est figé et les définitions sont
 intactes. Il deviendrait actif si la configuration des commandes divergeait.
-Il est démontre sur la capture réelle par
+Il est démontré sur la capture réelle par
 `test_le_filtre_historique_rend_SRV_sur_une_commande_inconnue`.
 
 > **Portée du constat.** Le code du pont historique démontre **son propre

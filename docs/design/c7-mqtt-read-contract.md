@@ -457,9 +457,9 @@ observée — 2,7 à 4,0 s — est du même ordre que certaines périodes : un f
 
 ### 7.4 Cadence de l'instantané
 
-L'instantané **MUST** être republie à intervalle régulier **même si rien n'a
-change**, avec un `ts` à jour. Sans cette règle, un consommateur ne pourrait
-pas distinguer un bridge figé d'un bridge dont rien n'a bouge.
+L'instantané **MUST** être republié à intervalle régulier **même si rien n'a
+changé**, avec un `ts` à jour. Sans cette règle, un consommateur ne pourrait
+pas distinguer un bridge figé d'un bridge dont rien n'a bougé.
 
 Période de republication : **MUST** être inférieure ou égale au plus petit
 `fresh_max` de la surface. **SHOULD** valoir la plus petite période cible.
@@ -504,7 +504,7 @@ aucune lecture encore achevée, la chaîne de lecture n'a simplement pas encore
 produit de résultat. `cause` est `null` parce qu'aucun échec n'a été observé —
 l'absence de résultat n'est pas un échec.
 
-**Transition.** Des la fin du premier cycle, `status` prend la valeur dérivée
+**Transition.** Dès la fin du premier cycle, `status` prend la valeur dérivée
 du tableau ci-dessus, et `cause` celle de la règle ci-dessous.
 
 Trois états, pas davantage : ils recouvrent les cas actionnables sans en
@@ -632,14 +632,14 @@ Le contrat **MUST NOT** :
 | `bridge/online` | ✔ | | | | nom, QoS, retain, testament, payload conservés |
 | `bridge/heartbeat` | ✔ | | | | conservé en `SHOULD`, déclaré redondant |
 | `bridge/version` | | | | **✔** | non retenu en v1 : information de diagnostic sans consommateur décisionnel |
-| `bridge/vcontrold_status` | | | **✔** | | remplacé par `chain` dans l'instantané — **rupture** : le topic disparait |
+| `bridge/vcontrold_status` | | | **✔** | | remplacé par `chain` dans l'instantané — **rupture** : le topic disparaît |
 | `bridge/optolink_status` | | | **✔** | | idem |
 | `error/last` | | | | **✔** | lié au chemin d'écriture, hors surface de lecture |
 | `guard/*` | | | | **✔** | supervision correctrice hors périmètre du produit |
 
 > **Lecture de la matrice.** La colonne « Reporté » recouvre **deux cas
 > distincts**, détaillés plus bas : *reporté faute de preuve* — le topic pourrait
-> revenir — et *hors périmètre* — il n'a jamais relève de ce contrat.
+> revenir — et *hors périmètre* — il n'a jamais relevé de ce contrat.
 >
 > Sur les **16** topics historiques **individuels** hors guard :
 > **10** conservés à l'identique · **2** remplacés · **3** reportés faute de
@@ -662,8 +662,8 @@ Trois catégories distinctes, à ne pas confondre :
 
 | Catégorie | Topics | Sens |
 |---|---|---|
-| **Rupture de la surface de lecture** | `vcontrold_status`, `optolink_status` | le topic disparait ; l'information est portée autrement, par `chain` |
-| **Reporté faute de preuve** | `burner/modulation`, `burner/state`, `bridge/version` | le topic pourrait revenir ; rien n'est décide contre lui |
+| **Rupture de la surface de lecture** | `vcontrold_status`, `optolink_status` | le topic disparaît ; l'information est portée autrement, par `chain` |
+| **Reporté faute de preuve** | `burner/modulation`, `burner/state`, `bridge/version` | le topic pourrait revenir ; rien n'est décidé contre lui |
 | **Hors périmètre de la surface de lecture** | `error/last`, `guard/*` | jamais du ressort de ce contrat |
 
 `bridge/version` figure parmi les reports et non parmi les ruptures : rien ne
