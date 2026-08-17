@@ -1,11 +1,11 @@
-# C11 — Reprise de presence apres reconnexion MQTT
+# C11 — Reprise de présence après reconnexion MQTT
 
-Document normatif. Il etend `c7-mqtt-read-contract.md` (C7-B) §5 au cas des
-connexions reussies **posterieures** au demarrage initial.
+Document normatif. Il étend `c7-mqtt-read-contract.md` (C7-B) §5 au cas des
+connexions réussies **postérieures** au démarrage initial.
 
-C11 ne cree aucune doctrine parallele. Il ne modifie aucune valeur, aucun topic,
-aucun QoS, aucune retention, aucune periode. Il rend executoire une obligation
-deja ecrite que l'implementation n'honore qu'une seule fois.
+C11 ne crée aucune doctrine parallèle. Il ne modifie aucune valeur, aucun topic,
+aucun QoS, aucune rétention, aucune période. Il rend exécutoire une obligation
+déjà écrite que l'implémentation n'honore qu'une seule fois.
 
 ---
 
@@ -18,24 +18,24 @@ C7-B §5 pose, pour le suffixe `bridge/online` :
 | QoS | 1 |
 | Retain | true |
 | Payload | strictement `online` ou `offline` |
-| **A la connexion** | **`online`** |
+| **À la connexion** | **`online`** |
 | Testament MQTT | `offline`, QoS 1, retain |
-| A l'arret propre | `offline` avant deconnexion |
+| À l'arrêt propre | `offline` avant déconnexion |
 
-et pour semantique : « **le processus bridge est connecte au broker MQTT** ».
+et pour sémantique : « **le processus bridge est connecté au broker MQTT** ».
 
-L'implementation actuelle ne publie `online` qu'a `start()`. Apres une
-reconnexion, le processus est connecte et le retenu affirme le contraire. C11
-comble exactement cet ecart, et rien d'autre.
+L'implémentation actuelle ne publie `online` qu'à `start()`. Après une
+reconnexion, le processus est connecté et le retenu affirme le contraire. C11
+comble exactement cet écart, et rien d'autre.
 
 ---
 
-## 2. Le defaut, etabli
+## 2. Le défaut, établi
 
-### 2.1 Chaine en cause
+### 2.1 Chaîne en cause
 
-Les etapes marquees `[Boilerack]` sont observees ; celle marquee `[attendu]`
-depend d'un broker et n'a pas ete observee (§2.2).
+Les étapes marquées `[Boilerack]` sont observées ; celle marquée `[attendu]`
+dépend d'un broker et n'a pas été observée (§2.2).
 
 ```text
 start()                                                          [Boilerack]
@@ -57,208 +57,208 @@ les lectures et les publications reprennent normalement
 
 ### 2.2 Reproduction
 
-La chaine a ete reproduite **hors ligne**, en n'employant que les coutures
-existantes du depot : `PahoMqttClient` reel, faux client Paho des tests C4
-(`fire_on_connect` / `fire_on_disconnect`), `ReadSurfacePublisher` reel,
-`VirtualClock`. Apres l'etape de reconnexion : **zero** publication emise par
-Boilerack, trois scalaires frais publies au cycle suivant, retenu de presence
+La chaîne a été reproduite **hors ligne**, en n'employant que les coutures
+existantes du dépôt : `PahoMqttClient` réel, faux client Paho des tests C4
+(`fire_on_connect` / `fire_on_disconnect`), `ReadSurfacePublisher` réel,
+`VirtualClock`. Après l'étape de reconnexion : **zéro** publication émise par
+Boilerack, trois scalaires frais publiés au cycle suivant, retenu de présence
 toujours `offline`.
 
-> **Portee de cette preuve.** Elle etablit ce que **Boilerack** fait et ne fait
-> pas. Elle n'etablit rien du comportement d'un broker reel : l'application du
-> testament y est **simulee**, non observee. Voir §13.
+> **Portée de cette preuve.** Elle établit ce que **Boilerack** fait et ne fait
+> pas. Elle n'établit rien du comportement d'un broker réel : l'application du
+> testament y est **simulée**, non observée. Voir §13.
 
 ### 2.3 Cause structurelle
 
-- `bridge/online` n'est publie qu'a un seul endroit du code, dans `start()` ;
-  `offline` a un seul autre, dans `stop()`. `run_due()` ne touche jamais la
-  presence.
-- La frontiere `boilerack.transport.mqtt.MqttClient` expose cinq methodes —
+- `bridge/online` n'est publié qu'à un seul endroit du code, dans `start()` ;
+  `offline` à un seul autre, dans `stop()`. `run_due()` ne touche jamais la
+  présence.
+- La frontière `boilerack.transport.mqtt.MqttClient` expose cinq méthodes —
   `connect`, `disconnect`, `subscribe`, `publish`, `set_message_handler` — et
   **aucune notification de cycle de connexion**. Le publieur est donc
-  structurellement aveugle a une reconnexion, quand bien meme l'adaptateur la
-  connait.
+  structurellement aveugle à une reconnexion, quand bien même l'adaptateur la
+  connaît.
 
 C'est une lacune de **couture**, pas de logique : il n'existe aujourd'hui aucun
-chemin par lequel l'information pourrait parvenir a qui doit agir.
+chemin par lequel l'information pourrait parvenir à qui doit agir.
 
 ---
 
-## 3. Statut de C11 vis-a-vis de C7-B
+## 3. Statut de C11 vis-à-vis de C7-B
 
 C11 est une **extension normative de C7-B §5 pour le cycle de reconnexion**.
 
-Ce qui est deja dans C7-B et n'est pas cree ici : l'obligation de publier
-`online` a la connexion · le topic · le QoS 1 · la retention · les deux payloads
-admis · la semantique du topic · la separation entre presence MQTT (§5) et sante
-de la chaine de lecture (§8).
+Ce qui est déjà dans C7-B et n'est pas créé ici : l'obligation de publier
+`online` à la connexion · le topic · le QoS 1 · la rétention · les deux payloads
+admis · la sémantique du topic · la séparation entre présence MQTT (§5) et santé
+de la chaîne de lecture (§8).
 
-Ce que C11 ajoute : **quelles connexions** declenchent cette obligation apres la
-premiere, **par quel chemin** l'information circule, **quand** la publication a
+Ce que C11 ajoute : **quelles connexions** déclenchent cette obligation après la
+première, **par quel chemin** l'information circule, **quand** la publication a
 lieu, et **ce qui l'annule**.
 
-C7-B n'est pas modifie. Une seule reserve, traitee sans detour en §9 : C7-B ne
-fixe aucun delai, ni pour §5 ni pour aucune autre publication, et son §15 #9
+C7-B n'est pas modifié. Une seule réserve, traitée sans détour en §9 : C7-B ne
+fixe aucun délai, ni pour §5 ni pour aucune autre publication, et son §15 #9
 qualifie les cadences de « objectifs, non des garanties ». La borne temporelle
-posee par C11 est donc une **precision** de §5, pas une derogation — mais elle
-doit etre ecrite, et elle l'est.
+posée par C11 est donc une **précision** de §5, pas une dérogation — mais elle
+doit être écrite, et elle l'est.
 
-L'inconnue C7-B §15.5 — politique de retention et d'expiration de session du
-broker — **reste ouverte**. C11 ne la resout pas et ne s'appuie sur aucune
-hypothese a son sujet.
+L'inconnue C7-B §15.5 — politique de rétention et d'expiration de session du
+broker — **reste ouverte**. C11 ne la résout pas et ne s'appuie sur aucune
+hypothèse à son sujet.
 
 ---
 
-## 4. Perimetre
+## 4. Périmètre
 
-### 4.1 Inclus — liste fermee
+### 4.1 Inclus — liste fermée
 
-Detection des transitions pertinentes de connexion MQTT · transmission de cette
-information de l'adaptateur jusqu'au fil metier · republication de
+Détection des transitions pertinentes de connexion MQTT · transmission de cette
+information de l'adaptateur jusqu'au fil métier · republication de
 `bridge/online` · idempotence et coalescence · annulation d'une reprise en
-attente · ordre vis-a-vis de l'arret · discipline de fil · temporalite et borne
-de latence · invariance des echeances et de la fraicheur · obligations des
-doubles · inconnues a lever contre un broker reel.
+attente · ordre vis-à-vis de l'arrêt · discipline de fil · temporalité et borne
+de latence · invariance des échéances et de la fraîcheur · obligations des
+doubles · inconnues à lever contre un broker réel.
 
-### 4.2 Exclus — liste fermee
+### 4.2 Exclus — liste fermée
 
 Politique de reconnexion de Paho · modification du backoff · sortie du processus
-sur deconnexion durable · suspension des lectures · nouvelle tentative
+sur déconnexion durable · suspension des lectures · nouvelle tentative
 `vclient` · systemd · installation · Docker · Home Assistant · MQTT Discovery ·
-topic de commande · ACK · ecriture chaudiere · nouveaux datapoints ·
-modification des periodes de lecture · reinitialisation de la fraicheur ·
-reinitialisation des echeances · second `will_set()` · champs morts
+topic de commande · ACK · écriture chaudière · nouveaux datapoints ·
+modification des périodes de lecture · réinitialisation de la fraîcheur ·
+réinitialisation des échéances · second `will_set()` · champs morts
 (`command_topic`, `ack_topic_prefix`, `write_timeout_s`) · `_legacy` · README ·
 version ou release · CI, lint, typage, couverture · avertissement C9
 `signal wakeup fd`.
 
 ---
 
-## 5. Caracterisation Paho — constats, non obligations
+## 5. Caractérisation Paho — constats, non obligations
 
-Les faits ci-dessous decrivent la bibliotheque **reellement contrainte** par le
-projet (`paho-mqtt>=2.1,<3`, version installee 2.1.0, Callback API `VERSION2`).
+Les faits ci-dessous décrivent la bibliothèque **réellement contrainte** par le
+projet (`paho-mqtt>=2.1,<3`, version installée 2.1.0, Callback API `VERSION2`).
 Ils justifient les clauses de C11 ; ils n'en sont pas.
 
 | # | Constat |
 |---|---|
-| P1 | `on_connect` est appele pour **chaque** CONNACK : connexion initiale **et** reconnexion, sans aucune difference observable dans ses arguments |
-| P2 | Signature `VERSION2` : `(client, userdata, connect_flags, reason_code, properties)`. `properties` n'est jamais `None` : un `Properties(CONNACK)` vide est substitue |
-| P3 | Un succes se reconnait a `reason_code.is_failure == False`. `Success` vaut `0` ; `Not authorized` vaut `135` ; `Server unavailable` vaut `136`, tous deux en echec |
-| P4 | `int(reason_code)` **leve** `TypeError` en 2.1.0. Seul le chemin `is_failure` est praticable pour un vrai `ReasonCode` |
-| P5 | `connect_flags.session_present` est fourni en MQTT 3.1.1 comme en 5, mais vaut **toujours `False`** tant que `clean_session` reste a son defaut `True` — ce qui est le cas. **Inutilisable** pour distinguer une reprise |
-| P6 | `on_disconnect` `VERSION2` : `(client, userdata, disconnect_flags, reason_code, properties)`. Arret volontaire -> `ReasonCode(0)`, `is_failure False`. Perte -> `ReasonCode(128)`, `is_failure True`. Keepalive expire -> `ReasonCode(141)`, `is_failure True` |
-| P7 | `disconnect_flags.is_disconnect_packet_from_server` vaut **toujours `False`** en MQTT 3.1.1, protocole retenu par l'adaptateur : le broker n'y emet pas de DISCONNECT. **Inutilisable** |
-| P8 | Les callbacks sont invoques depuis le **fil reseau de Paho**, cree par `loop_start()` et nomme `paho-mqtt-client-<client_id>`, jamais depuis le fil principal. Chaine : `_thread_main` -> `loop_forever` -> `_loop` -> `_packet_handle` -> `_handle_connack` -> `on_connect` |
-| P9 | `suppress_exceptions` vaut `False` par defaut : une exception levee dans un callback est journalisee **puis relancee** dans la boucle reseau. Un callback qui bloque retarde keepalive, PUBACK et reception |
-| P10 | La reconnexion automatique existe deja : `reconnect_on_failure` vaut `True`, backoff exponentiel de 1 s a 120 s. Un `disconnect()` volontaire met fin a la boucle — aucune reconnexion n'y succede |
-| P11 | Le testament est **conserve par le client Paho** (`_will_topic`, `_will_payload`, `_will_qos`, `_will_retain`) et reempaquete par `_send_connect`, appele par `reconnect()`. Il est donc reemis dans chaque CONNECT ulterieur |
-| P12 | `connect()` **n'attend aucun CONNACK** : son corps se reduit a `connect_async(...)` puis `reconnect()`, qui se termine par l'envoi du CONNECT. Le CONNACK est lu par le fil reseau, et **aucun backoff ne le retarde** — l'etat etant deja `CONNECTING`, la boucle d'amorcage sort immediatement et lit la socket. Un rappel peut donc survenir des que `loop_start()` a arme le fil, y compris **pendant** la suite du demarrage de l'appelant |
-| P13 | `loop_stop()` **joint** le fil reseau avant de rendre la main. Apres un `disconnect()`, plus aucun rappel de la session close ne peut survenir |
+| P1 | `on_connect` est appelé pour **chaque** CONNACK : connexion initiale **et** reconnexion, sans aucune différence observable dans ses arguments |
+| P2 | Signature `VERSION2` : `(client, userdata, connect_flags, reason_code, properties)`. `properties` n'est jamais `None` : un `Properties(CONNACK)` vide est substitué |
+| P3 | Un succès se reconnaît à `reason_code.is_failure == False`. `Success` vaut `0` ; `Not authorized` vaut `135` ; `Server unavailable` vaut `136`, tous deux en échec |
+| P4 | `int(reason_code)` **lève** `TypeError` en 2.1.0. Seul le chemin `is_failure` est praticable pour un vrai `ReasonCode` |
+| P5 | `connect_flags.session_present` est fourni en MQTT 3.1.1 comme en 5, mais vaut **toujours `False`** tant que `clean_session` reste à son défaut `True` — ce qui est le cas. **Inutilisable** pour distinguer une reprise |
+| P6 | `on_disconnect` `VERSION2` : `(client, userdata, disconnect_flags, reason_code, properties)`. Arrêt volontaire -> `ReasonCode(0)`, `is_failure False`. Perte -> `ReasonCode(128)`, `is_failure True`. Keepalive expiré -> `ReasonCode(141)`, `is_failure True` |
+| P7 | `disconnect_flags.is_disconnect_packet_from_server` vaut **toujours `False`** en MQTT 3.1.1, protocole retenu par l'adaptateur : le broker n'y émet pas de DISCONNECT. **Inutilisable** |
+| P8 | Les callbacks sont invoqués depuis le **fil réseau de Paho**, créé par `loop_start()` et nommé `paho-mqtt-client-<client_id>`, jamais depuis le fil principal. Chaîne : `_thread_main` -> `loop_forever` -> `_loop` -> `_packet_handle` -> `_handle_connack` -> `on_connect` |
+| P9 | `suppress_exceptions` vaut `False` par défaut : une exception levée dans un callback est journalisée **puis relancée** dans la boucle réseau. Un callback qui bloque retarde keepalive, PUBACK et réception |
+| P10 | La reconnexion automatique existe déjà : `reconnect_on_failure` vaut `True`, backoff exponentiel de 1 s à 120 s. Un `disconnect()` volontaire met fin à la boucle — aucune reconnexion n'y succède |
+| P11 | Le testament est **conservé par le client Paho** (`_will_topic`, `_will_payload`, `_will_qos`, `_will_retain`) et réempaqueté par `_send_connect`, appelé par `reconnect()`. Il est donc réémis dans chaque CONNECT ultérieur |
+| P12 | `connect()` **n'attend aucun CONNACK** : son corps se réduit à `connect_async(...)` puis `reconnect()`, qui se termine par l'envoi du CONNECT. Le CONNACK est lu par le fil réseau, et **aucun backoff ne le retarde** — l'état étant déjà `CONNECTING`, la boucle d'amorçage sort immédiatement et lit la socket. Un rappel peut donc survenir dès que `loop_start()` a armé le fil, y compris **pendant** la suite du démarrage de l'appelant |
+| P13 | `loop_stop()` **joint** le fil réseau avant de rendre la main. Après un `disconnect()`, plus aucun rappel de la session close ne peut survenir |
 
-### 5.1 Interdictions derivees
+### 5.1 Interdictions dérivées
 
-La norme Boilerack **MUST NOT** dependre de `session_present` (P5), de
-`is_disconnect_packet_from_server` (P7), ni d'aucune propriete propre a MQTT 5.
+La norme Boilerack **MUST NOT** dépendre de `session_present` (P5), de
+`is_disconnect_packet_from_server` (P7), ni d'aucune propriété propre à MQTT 5.
 
-La norme Boilerack **MUST NOT** ajouter, modifier ou desactiver la politique de
-reconnexion native (P10) : elle en depend, elle ne la pilote pas.
+La norme Boilerack **MUST NOT** ajouter, modifier ou désactiver la politique de
+reconnexion native (P10) : elle en dépend, elle ne la pilote pas.
 
 ---
 
-## 6. Frontiere — capacite de cycle de connexion
+## 6. Frontière — capacité de cycle de connexion
 
-### 6.1 Deux modeles compares
+### 6.1 Deux modèles comparés
 
-**Modele A — enrichir `MqttClient`.** Ajouter la notification au port MQTT
-generique. Tout implementeur du port doit alors la fournir, y compris ceux qui
+**Modèle A — enrichir `MqttClient`.** Ajouter la notification au port MQTT
+générique. Tout implémenteur du port doit alors la fournir, y compris ceux qui
 ne servent qu'au chemin transactionnel : `TransactionalCore` consomme
-`MqttClient` pour publier des ACK et n'a aucun besoin de presence. Le port se
-decrit lui-meme comme « frontiere MQTT minimale, sans politique » ; y loger une
-capacite dont un consommateur sur deux n'a que faire l'elargit au-dela de son
+`MqttClient` pour publier des ACK et n'a aucun besoin de présence. Le port se
+décrit lui-même comme « frontière MQTT minimale, sans politique » ; y loger une
+capacité dont un consommateur sur deux n'a que faire l'élargit au-delà de son
 objet.
 
-**Modele B — capacite distincte, requise par la composition C11.** Le port MQTT
-generique reste inchange. Une capacite separee porte la notification de cycle de
+**Modèle B — capacité distincte, requise par la composition C11.** Le port MQTT
+générique reste inchangé. Une capacité séparée porte la notification de cycle de
 connexion. La surface de lecture, qui doit honorer §5, **exige les deux** ; le
 coeur transactionnel n'exige que le port.
 
-### 6.2 Modele retenu — B
+### 6.2 Modèle retenu — B
 
-Motif : segregation d'interface. La capacite est requise **la ou l'obligation
-existe**, et nulle part ailleurs. Le port generique conserve la portee que son
+Motif : ségrégation d'interface. La capacité est requise **là où l'obligation
+existe**, et nulle part ailleurs. Le port générique conserve la portée que son
 propre texte lui donne.
 
-Ce choix n'est **pas** motive par le nombre de doubles a mettre a jour. Il se
+Ce choix n'est **pas** motivé par le nombre de doubles à mettre à jour. Il se
 trouve qu'il en touche moins, mais ce n'est pas l'argument.
 
 ### 6.3 Rien d'optionnel
 
-Une precedente analyse avait envisage une methode « optionnelle » sur
-`MqttClient`. **Cette formule est rejetee.**
+Une précédente analyse avait envisagé une méthode « optionnelle » sur
+`MqttClient`. **Cette formule est rejetée.**
 
-Un membre declare dans un `Protocol` Python n'est pas optionnel au sens
-structurel : un implementeur qui l'omet ne satisfait plus le protocole, et
-`runtime_checkable` ne verifie de toute facon que la presence des noms, jamais
-les signatures. Surtout, la consequence serait fausse : **un client incapable de
-signaler ses reconnexions rend le respect de C7-B §5 impossible**. Le tolerer
-reviendrait a livrer une surface qui pretend honorer §5 sans le pouvoir.
+Un membre déclaré dans un `Protocol` Python n'est pas optionnel au sens
+structurel : un implémenteur qui l'omet ne satisfait plus le protocole, et
+`runtime_checkable` ne vérifie de toute façon que la présence des noms, jamais
+les signatures. Surtout, la conséquence serait fausse : **un client incapable de
+signaler ses reconnexions rend le respect de C7-B §5 impossible**. Le tolérer
+reviendrait à livrer une surface qui prétend honorer §5 sans le pouvoir.
 
 Sont donc **INTERDITS** :
 
-- `hasattr()` ou toute detection de capacite servant de repli silencieux ;
-- l'absence de collaborateur toleree, la reprise etant alors simplement
-  desactivee ;
-- toute construction de la surface de lecture avec un client MQTT depourvu de la
-  capacite.
+- `hasattr()` ou toute détection de capacité servant de repli silencieux ;
+- l'absence de collaborateur tolérée, la reprise étant alors simplement
+  désactivée ;
+- toute construction de la surface de lecture avec un client MQTT dépourvu de la
+  capacité.
 
-La capacite est **REQUISE**. Une composition qui ne peut pas la fournir doit
-echouer, visiblement, a la construction.
+La capacité est **REQUISE**. Une composition qui ne peut pas la fournir doit
+échouer, visiblement, à la construction.
 
 ### 6.4 Forme
 
-Trois elements, et rien de plus.
+Trois éléments, et rien de plus.
 
-**a) Une capacite cote client.** Un protocole distinct portant une seule
-methode, d'enregistrement, symetrique de `set_message_handler` :
+**a) Une capacité côté client.** Un protocole distinct portant une seule
+méthode, d'enregistrement, symétrique de `set_message_handler` :
 
 ```text
 set_connection_handler(handler) -> None
 ```
 
-Le rappel recoit **l'etat resultant**, un booleen : `True` pour « connexion
-etablie », `False` pour « non connectee ». Il ne recoit ni code de raison, ni
-drapeaux, ni proprietes : C11 n'en consomme aucun, et les exposer creerait une
-surface de compatibilite sans consommateur.
+Le rappel reçoit **l'état résultant**, un booléen : `True` pour « connexion
+établie », `False` pour « non connectée ». Il ne reçoit ni code de raison, ni
+drapeaux, ni propriétés : C11 n'en consomme aucun, et les exposer créerait une
+surface de compatibilité sans consommateur.
 
-**b) Une primitive d'etat de connexion.** Un objet dedie qui recoit les
+**b) Une primitive d'état de connexion.** Un objet dédié qui reçoit les
 transitions depuis n'importe quel fil et qu'un seul fil consomme. Sa
-responsabilite est entiere et unique : repondre a « une reprise est-elle due
-maintenant ? ». Elle est le pendant exact de `SignalStop` en C9 — meme role,
-meme discipline, meme injection depuis la racine de composition.
+responsabilité est entière et unique : répondre à « une reprise est-elle due
+maintenant ? ». Elle est le pendant exact de `SignalStop` en C9 — même rôle,
+même discipline, même injection depuis la racine de composition.
 
-**c) Un collaborateur requis de la surface de lecture.** Le publieur recoit
-cette primitive a la construction. Elle **n'est pas optionnelle**.
+**c) Un collaborateur requis de la surface de lecture.** Le publieur reçoit
+cette primitive à la construction. Elle **n'est pas optionnelle**.
 
-La racine de composition cree la primitive, l'enregistre aupres du client et la
+La racine de composition crée la primitive, l'enregistre auprès du client et la
 remet au publieur. Aucune autre partie du programme ne les relie.
 
-### 6.5 Obligations de l'emetteur
+### 6.5 Obligations de l'émetteur
 
-Un implementeur de la capacite **MUST** :
+Un implémenteur de la capacité **MUST** :
 
-- appeler le rappel avec `True` a **chaque** CONNACK de succes (`is_failure`
+- appeler le rappel avec `True` à **chaque** CONNACK de succès (`is_failure`
   faux) ;
-- appeler le rappel avec `False` a **chaque** `on_disconnect`, quelle qu'en soit
+- appeler le rappel avec `False` à **chaque** `on_disconnect`, quelle qu'en soit
   la raison ;
-- appeler le rappel avec `False` a **chaque** CONNACK d'echec — la connexion
-  n'est pas etablie, et le dire est le seul moyen de ne pas laisser un etat
-  suppose survivre a un fait contraire ;
+- appeler le rappel avec `False` à **chaque** CONNACK d'échec — la connexion
+  n'est pas établie, et le dire est le seul moyen de ne pas laisser un état
+  supposé survivre à un fait contraire ;
 - ne **jamais** invoquer deux rappels concurremment ;
 - ne **jamais** laisser une exception du rappel remonter vers Paho (P9).
 
-Un implementeur **MUST NOT** interpreter, filtrer ni retarder les transitions :
-la decision appartient au fil metier, jamais a l'adaptateur.
+Un implémenteur **MUST NOT** interpréter, filtrer ni retarder les transitions :
+la décision appartient au fil métier, jamais à l'adaptateur.
 
 ---
 
@@ -266,38 +266,38 @@ la decision appartient au fil metier, jamais a l'adaptateur.
 
 ### 7.1 Invariant central
 
-> **Aucune publication metier, aucune mutation de `ReadSurfacePublisher` ne doit
-> avoir lieu depuis le fil reseau de Paho.**
+> **Aucune publication métier, aucune mutation de `ReadSurfacePublisher` ne doit
+> avoir lieu depuis le fil réseau de Paho.**
 
-Motif, etabli et non suppose : le publieur ne detient aucun verrou, mute
+Motif, établi et non supposé : le publieur ne détient aucun verrou, mute
 `_next_due`, `_state` et `_started` sans protection, et C7-C3B verrouille par
-test qu'il n'importe ni `threading` ni `asyncio`. Publier depuis le fil reseau
-introduirait des courses sur l'etat, un entrelacement de publications d'ordre
-indefini, et exposerait la boucle reseau a une exception relancee (P9).
+test qu'il n'importe ni `threading` ni `asyncio`. Publier depuis le fil réseau
+introduirait des courses sur l'état, un entrelacement de publications d'ordre
+indéfini, et exposerait la boucle réseau à une exception relancée (P9).
 
-### 7.2 Ce que le rappel a le droit de faire
+### 7.2 Ce que le rappel à le droit de faire
 
-Le rappel **MUST** etre non bloquant, sur de l'acces concurrent, et ne **MUST
+Le rappel **MUST** être non bloquant, sur de l'accès concurrent, et ne **MUST
 NOT** jamais lever. Il ne fait qu'enregistrer une transition dans la primitive
-d'etat. Rien d'autre.
+d'état. Rien d'autre.
 
 ### 7.3 Ce que le publieur reste
 
 Le module du publieur **MUST NOT** importer `paho`, `threading`, `asyncio`, ni
-lire une horloge non injectee. C'est precisement pourquoi la primitive d'etat
-est un **collaborateur injecte** et non un attribut interne : elle peut, elle,
+lire une horloge non injectée. C'est précisément pourquoi la primitive d'état
+est un **collaborateur injecté** et non un attribut interne : elle peut, elle,
 employer un verrou.
 
-Le traitement metier — decider, puis publier — reste integralement sur le fil du
+Le traitement métier — décider, puis publier — reste intégralement sur le fil du
 runner.
 
 ---
 
-## 8. Semantique des transitions
+## 8. Sémantique des transitions
 
-### 8.1 Le probleme d'un drapeau monotone
+### 8.1 Le problème d'un drapeau monotone
 
-Un simple marqueur « une connexion est survenue », arme et jamais desarme avant
+Un simple marqueur « une connexion est survenue », armé et jamais désarmé avant
 consommation, est **INTERDIT**. Il produirait ceci :
 
 ```text
@@ -306,123 +306,123 @@ deconnexion inattendue   -> le marqueur reste arme
 consommation par le runner -> `online` publie alors que le pont est deconnecte
 ```
 
-soit exactement le mensonge que C11 vient corriger, retourne.
+soit exactement le mensonge que C11 vient corriger, retourné.
 
-### 8.2 Regle
+### 8.2 Règle
 
-La primitive conserve **l'etat courant** — connecte ou non — et un **marqueur de
+La primitive conserve **l'état courant** — connecté ou non — et un **marqueur de
 transition**. Elle applique :
 
-| Evenement | Effet sur l'etat | Effet sur le marqueur |
+| Événement | Effet sur l'état | Effet sur le marqueur |
 |---|---|---|
-| Notification `True`, etat courant **non connecte** | devient connecte | **arme** |
-| Notification `True`, etat courant **deja connecte** | inchange | inchange |
-| Notification `False` | devient non connecte | **desarme** |
-| Consommation, marqueur arme **et** etat connecte | inchange | desarme, la reprise est due |
-| Consommation, tout autre cas | inchange | inchange, aucune reprise |
+| Notification `True`, état courant **non connecté** | devient connecté | **armé** |
+| Notification `True`, état courant **déjà connecté** | inchangé | inchangé |
+| Notification `False` | devient non connecté | **désarmé** |
+| Consommation, marqueur armé **et** état connecté | inchangé | désarmé, la reprise est due |
+| Consommation, tout autre cas | inchangé | inchangé, aucune reprise |
 
-Invariant qui en decoule, et qui est la clause normative :
+Invariant qui en découle, et qui est la clause normative :
 
-> **Au moment ou le fil metier consomme une reprise, la derniere transition MQTT
-> observee doit encore etre une connexion reussie. Toute deconnexion posterieure
-> a l'armement annule la reprise en attente.**
+> **Au moment où le fil métier consomme une reprise, la dernière transition MQTT
+> observée doit encore être une connexion réussie. Toute déconnexion postérieure
+> à l'armement annule la reprise en attente.**
 
-Une seule valeur booleenne suffit a porter le marqueur ; aucune file n'est
-requise, et aucune ne doit etre introduite : la seule information utile est
+Une seule valeur booléenne suffit à porter le marqueur ; aucune file n'est
+requise, et aucune ne doit être introduite : la seule information utile est
 « une reprise est-elle due », qui est idempotente et sans historique.
 
-### 8.3 Etat initial et demarrage
+### 8.3 État initial et démarrage
 
-`start()` ouvre la connexion, puis publie `online` — comportement etabli par
-C7-C3A, inchange. La primitive doit donc partir d'une base coherente avec cette
+`start()` ouvre la connexion, puis publie `online` — comportement établi par
+C7-C3A, inchangé. La primitive doit donc partir d'une base cohérente avec cette
 annonce, faute de quoi le CONNACK initial armerait une reprise et ferait
 republier `online` au premier cycle, pour rien.
 
-**Aucun ordre entre le CONNACK et la suite de `start()` ne peut etre suppose.**
-P12 l'etablit : l'ouverture n'attend pas le CONNACK, le fil reseau le lit des
-son arrivee et aucun backoff ne le retarde. Un rappel peut donc survenir
-**pendant** `start()`. Une redaction anterieure de cette clause posait la base
-*apres* la publication de `online` et raisonnait sur « le CONNACK qui suit » :
-cette relation d'ordre n'existe pas, et le raisonnement qu'elle portait etait
+**Aucun ordre entre le CONNACK et la suite de `start()` ne peut être supposé.**
+P12 l'établit : l'ouverture n'attend pas le CONNACK, le fil réseau le lit des
+son arrivée et aucun backoff ne le retarde. Un rappel peut donc survenir
+**pendant** `start()`. Une rédaction antérieure de cette clause posait la base
+*après* la publication de `online` et raisonnait sur « le CONNACK qui suit » :
+cette relation d'ordre n'existe pas, et le raisonnement qu'elle portait était
 faux.
 
-**Le danger n'est pas la republication redondante.** Un succes recu tot serait
-de toute facon desarme par la pose de la base. Le danger est l'inverse, et il
-est plus grave : **une base posee tard ecrase un echec reellement observe**.
-L'etat redeviendrait « connecte » alors que la connexion a echoue ; la reussite
-suivante ne serait plus une transition ; aucune reprise ne serait armee — et le
-defaut que C11 corrige reapparaitrait entier, sur le chemin meme que cette
-clause etait censee couvrir.
+**Le danger n'est pas la republication redondante.** Un succès reçu tôt serait
+de toute façon désarmé par la pose de la base. Le danger est l'inverse, et il
+est plus grave : **une base posée tard écrase un échec réellement observé**.
+L'état redeviendrait « connecté » alors que la connexion a échoué ; la réussite
+suivante ne serait plus une transition ; aucune reprise ne serait armée — et le
+défaut que C11 corrige réapparaîtrait entier, sur le chemin même que cette
+clause était censée couvrir.
 
-Clause : **`start()` place la primitive dans l'etat connecte et desarme tout
-marqueur AVANT d'ouvrir la connexion**, c'est-a-dire avant l'appel qui rend un
+Clause : **`start()` place la primitive dans l'état connecté et désarme tout
+marqueur AVANT d'ouvrir la connexion**, c'est-à-dire avant l'appel qui rend un
 rappel possible.
 
-Cette place est sure **par construction, non par chronometrie** : les rappels ne
-sont emis que par le fil reseau, ce fil n'existe pas avant `loop_start()` (P8),
-et `loop_start()` est interne a l'ouverture de la connexion. Aucun rappel ne
-peut donc preceder la base.
+Cette place est sûre **par construction, non par chronométrie** : les rappels ne
+sont émis que par le fil réseau, ce fil n'existe pas avant `loop_start()` (P8),
+et `loop_start()` est interne à l'ouverture de la connexion. Aucun rappel ne
+peut donc précéder la base.
 
-Il en decoule, sans qu'aucun ordre temporel ne soit suppose :
+Il en découle, sans qu'aucun ordre temporel ne soit supposé :
 
-| Evenement | Etat | Reprise |
+| Événement | État | Reprise |
 |---|---|---|
-| Base posee par `start()` | connecte | desarmee |
-| Premier CONNACK **reussi** | reste connecte — aucune transition | aucune |
-| Premier CONNACK **en echec** (§6.5) | passe non connecte — **le fait observe a autorite sur la base** | aucune |
-| Reussite **ulterieure**, apres un echec | transition non connecte -> connecte | **exactement une** |
+| Base posée par `start()` | connecté | désarmée |
+| Premier CONNACK **réussi** | reste connecté — aucune transition | aucune |
+| Premier CONNACK **en échec** (§6.5) | passe non connecté — **le fait observé a autorité sur la base** | aucune |
+| Réussite **ultérieure**, après un échec | transition non connecté -> connecté | **exactement une** |
 
-La base reste optimiste : au moment ou elle est posee, aucun CONNACK n'a ete
-recu. Elle l'est **exactement autant** que la publication de `online` qui la
-suit, deja contractee ainsi. La difference tient a ceci : toute notification
-reelle a desormais **autorite** sur elle, quel que soit l'instant ou elle
+La base reste optimiste : au moment où elle est posée, aucun CONNACK n'a été
+reçu. Elle l'est **exactement autant** que la publication de `online` qui la
+suit, déjà contractée ainsi. La différence tient à ceci : toute notification
+réelle a désormais **autorité** sur elle, quel que soit l'instant où elle
 survient.
 
-**Redemarrage.** `stop()` desarme le marqueur, et la deconnexion met fin a la
-boucle reseau en joignant le fil (P13) : aucun rappel de la session close ne
-peut survivre. Un `start()` ulterieur repose donc la base dans les memes
-conditions de surete.
+**Redémarrage.** `stop()` désarme le marqueur, et la déconnexion met fin à la
+boucle réseau en joignant le fil (P13) : aucun rappel de la session close ne
+peut survivre. Un `start()` ultérieur repose donc la base dans les mêmes
+conditions de sûreté.
 
-**Echec de l'ouverture.** Si l'ouverture leve, `start()` propage l'exception
-telle quelle : la politique d'erreur existante n'est pas modifiee, et le
-publieur reste non demarre. La primitive conserve alors une base « connecte,
-desarmee » qui ne correspond a rien — mais cet etat est **fonctionnellement
-inobservable** : une reprise n'est consommee qu'apres la verification de
-demarrage, et un `start()` ulterieur repose la base. Aucun `try/except` ne doit
-etre ajoute pour « nettoyer » cet etat : ce serait modifier une politique
-d'erreur pour un etat que personne ne peut lire.
+**Échec de l'ouverture.** Si l'ouverture lève, `start()` propage l'exception
+telle quelle : la politique d'erreur existante n'est pas modifiée, et le
+publieur reste non démarré. La primitive conserve alors une base « connecté,
+désarmée » qui ne correspond à rien — mais cet état est **fonctionnellement
+inobservable** : une reprise n'est consommée qu'après la vérification de
+démarrage, et un `start()` ultérieur repose la base. Aucun `try/except` ne doit
+être ajouté pour « nettoyer » cet état : ce serait modifier une politique
+d'erreur pour un état que personne ne peut lire.
 
-### 8.4 Connexions echouees
+### 8.4 Connexions échouées
 
 Un CONNACK dont `reason_code.is_failure` est vrai n'est **jamais** une connexion
-reussie. Il n'arme aucune reprise, ne fait publier aucun `online`, et ne modifie
-aucune echeance. Il fait uniquement passer l'etat a « non connecte » (§6.5).
+réussie. Il n'arme aucune reprise, ne fait publier aucun `online`, et ne modifie
+aucune échéance. Il fait uniquement passer l'état à « non connecté » (§6.5).
 
 ---
 
-## 9. Temporalite
+## 9. Temporalité
 
-### 9.1 Tension a resoudre
+### 9.1 Tension à résoudre
 
-C7-B §5 dit « **a la connexion** : `online` ». Traiter la reprise sur le fil du
-runner introduit un delai. Cette tension doit etre tranchee, pas contournee.
+C7-B §5 dit « **à la connexion** : `online` ». Traiter la reprise sur le fil du
+runner introduit un délai. Cette tension doit être tranchée, pas contournée.
 
 ### 9.2 Options
 
-**T1 — consommation au prochain reveil naturel du runner.** Aucune nouvelle
-couture inter-fil ; modele mono-fil metier de C8/C9 integralement preserve ; la
-reprise devient une tache due parmi les autres. Cout : la presence peut rester
-`offline` jusqu'a la prochaine echeance.
+**T1 — consommation au prochain réveil naturel du runner.** Aucune nouvelle
+couture inter-fil ; modèle mono-fil métier de C8/C9 intégralement préservé ; la
+reprise devient une tâche due parmi les autres. Coût : la présence peut rester
+`offline` jusqu'à la prochaine échéance.
 
-**T2 — reveil immediat dedie.** Rapproche la publication de l'evenement. Cout :
-une couture inter-fil supplementaire, et le risque de la confondre avec le
-mecanisme de signaux de C9.
+**T2 — réveil immédiat dédié.** Rapproche la publication de l'événement. Coût :
+une couture inter-fil supplémentaire, et le risque de la confondre avec le
+mécanisme de signaux de C9.
 
-### 9.3 Decision — T1
+### 9.3 Décision — T1
 
 **T1 est retenu.**
 
-**Borne normative.** La latence de reprise est bornee par la prochaine echeance
+**Borne normative.** La latence de reprise est bornée par la prochaine échéance
 du publieur, soit :
 
 ```text
@@ -431,35 +431,35 @@ latence_max = min(plus petite periode de mesure,
                   heartbeat_period_s si le battement est actif)
 ```
 
-Avec la surface v1 et les valeurs par defaut — periodes 30 s et 60 s,
+Avec la surface v1 et les valeurs par défaut — périodes 30 s et 60 s,
 `snapshot_period_s = 30`, `heartbeat_period_s = 30` — cette borne vaut
 **30 secondes**.
 
-**Pourquoi c'est une lecture honnete de C7-B §5.** §5 prescrit **ce qui** doit
-etre publie a la connexion ; il ne fixe **aucun** delai, et C7-B n'en fixe nulle
+**Pourquoi c'est une lecture honnête de C7-B §5.** §5 prescrit **ce qui** doit
+être publié à la connexion ; il ne fixe **aucun** délai, et C7-B n'en fixe nulle
 part : son §15 #9 range explicitement les cadences parmi les « objectifs, non
-des garanties ». Une reprise bornee et annoncee satisfait donc §5. Ce qui le
-violerait serait de ne jamais republier — le defaut d'aujourd'hui — ou de
+des garanties ». Une reprise bornée et annoncée satisfait donc §5. Ce qui le
+violerait serait de ne jamais republier — le défaut d'aujourd'hui — ou de
 republier sans borne connue.
 
-**Ce qui ne doit pas etre ecrit.** Il est **INTERDIT** de presenter la reprise
-comme immediate, instantanee ou synchrone de l'evenement de connexion. Elle ne
+**Ce qui ne doit pas être écrit.** Il est **INTERDIT** de présenter la reprise
+comme immédiate, instantanée ou synchrone de l'événement de connexion. Elle ne
 l'est pas, et la documentation utilisateur ne doit pas le laisser croire.
 
 ### 9.4 Interdiction explicite
 
-Le socket de reveil de C9 **MUST NOT** servir de canal a C11.
+Le socket de réveil de C9 **MUST NOT** servir de canal à C11.
 
-Il a ete caracterise qu'un octet ne correspondant a aucun signal surveille
-reveille `WakeupClock` sans armer l'arret, et se retrouve dans
-`signaux_ignores`. **C'est une caracterisation, pas une interface.** Ce
-descripteur est celui de `signal.set_wakeup_fd`, il appartient a la gestion des
-signaux, et y faire transiter un evenement metier melangerait deux natures
-d'evenements et polluerait un journal d'observabilite dedie aux signaux
-etrangers.
+Il a été caractérisé qu'un octet ne correspondant à aucun signal surveillé
+réveille `WakeupClock` sans armer l'arrêt, et se retrouve dans
+`signaux_ignores`. **C'est une caractérisation, pas une interface.** Ce
+descripteur est celui de `signal.set_wakeup_fd`, il appartient à la gestion des
+signaux, et y faire transiter un événement métier mélangerait deux natures
+d'événements et polluerait un journal d'observabilité dédié aux signaux
+étrangers.
 
-Si un besoin de reprise plus rapide etait un jour demontre, T2 devrait etre
-instruit comme une frontiere propre, avec sa propre couture. C11 ne l'ouvre pas.
+Si un besoin de reprise plus rapide était un jour démontré, T2 devrait être
+instruit comme une frontière propre, avec sa propre couture. C11 ne l'ouvre pas.
 
 ---
 
@@ -467,32 +467,32 @@ instruit comme une frontiere propre, avec sa propre couture. C11 ne l'ouvre pas.
 
 ### 10.1 Contenu
 
-Apres une reprise due, le publieur publie **exactement un message** :
+Après une reprise due, le publieur publie **exactement un message** :
 
 | | |
 |---|---|
-| Topic | `<prefix>/bridge/online`, derive par l'autorite existante `build_topic` |
+| Topic | `<prefix>/bridge/online`, dérivé par l'autorité existante `build_topic` |
 | Payload | `online` |
 | QoS | **1** |
 | Retain | **true** |
 
-Aucun autre topic n'est publie : ni scalaire, ni `bridge/telemetry_status`, ni
-`bridge/heartbeat`, ni instantane.
+Aucun autre topic n'est publié : ni scalaire, ni `bridge/telemetry_status`, ni
+`bridge/heartbeat`, ni instantané.
 
 ### 10.2 Motifs
 
-- Seul le retenu de presence a ete altere : le testament ne porte que sur
+- Seul le retenu de présence a été altéré : le testament ne porte que sur
   `bridge/online`.
-- Les scalaires sont publies **retenus**. Un message retenu appartient au broker
-  et survit a la deconnexion du client qui l'a publie : il n'y a rien a
+- Les scalaires sont publiés **retenus**. Un message retenu appartient au broker
+  et survit à la déconnexion du client qui l'a publié : il n'y a rien à
   restaurer.
-- Boilerack **ne conserve aucune valeur scalaire en memoire**. `MeasurementState`
+- Boilerack **ne conserve aucune valeur scalaire en mémoire**. `MeasurementState`
   porte trois champs — `last_success_wall`, `last_success_monotonic`,
   `last_result` — et aucune valeur. Republier des scalaires exigerait de stocker
-  les valeurs, decision metier nouvelle, hors de cette frontiere.
-- Aucun besoin de rafraichissement metier n'est demontre. Republier
-  `telemetry_status` serait une redite : le testament ne l'a pas ecrase, et son
-  contenu se recalculerait a l'identique.
+  les valeurs, décision métier nouvelle, hors de cette frontière.
+- Aucun besoin de rafraîchissement métier n'est démontré. Republier
+  `telemetry_status` serait une redite : le testament ne l'a pas écrasé, et son
+  contenu se recalculerait à l'identique.
 
 ### 10.3 Ordre dans la boucle
 
@@ -504,269 +504,269 @@ Le fil du runner consulte dans cet ordre :
 3. travail periodique du.
 ```
 
-Invariant : **l'arret prime toujours sur une reprise.** Il en decoule qu'aucun
-`online` n'est publie apres le debut d'un arret, ni apres un `offline`.
+Invariant : **l'arrêt prime toujours sur une reprise.** Il en découle qu'aucun
+`online` n'est publié après le début d'un arrêt, ni après un `offline`.
 
-L'obligation porte sur **l'ordre**, non sur son lieu d'ecriture. La realisation
-la plus econome place l'etape 2 en tete de `run_due()`, ou la verification de
-demarrage existe deja et ou l'etape 1 a necessairement precede : le runner reste
-alors inchange. Une realisation dans la boucle du runner est admissible si elle
-respecte le meme ordre.
+L'obligation porte sur **l'ordre**, non sur son lieu d'écriture. La réalisation
+la plus économe place l'étape 2 en tête de `run_due()`, où la vérification de
+démarrage existe déjà et où l'étape 1 a nécessairement précédé : le runner reste
+alors inchangé. Une réalisation dans la boucle du runner est admissible si elle
+respecte le même ordre.
 
 ---
 
-## 11. Arret
+## 11. Arrêt
 
-L'autorite d'etat existante — le booleen `_started`, expose par la propriete
-`started` — **suffit**. Aucune machine d'etat n'est creee : les etats « jamais
-demarre » et « arrete » sont indiscernables par ce booleen, et **aucune decision
-de C11 n'en depend** — dans les deux cas, rien n'est republie.
+L'autorité d'état existante — le booléen `_started`, exposé par la propriété
+`started` — **suffit**. Aucune machine d'état n'est créée : les états « jamais
+démarré » et « arrêté » sont indiscernables par ce booléen, et **aucune décision
+de C11 n'en dépend** — dans les deux cas, rien n'est republié.
 
 Clauses :
 
 - `started == False` -> **aucune reprise**, en toute circonstance ;
-- `stop()` rend le publieur non demarre **avant** de publier `offline` : une
-  reprise consommee pendant un arret en cours trouve donc deja `started` faux ;
-- un `disconnect()` volontaire ne genere aucune reprise. Il fait passer l'etat a
-  « non connecte » (§6.5), ce qui desarme, et met fin a la boucle reseau de Paho
+- `stop()` rend le publieur non démarré **avant** de publier `offline` : une
+  reprise consommée pendant un arrêt en cours trouve donc déjà `started` faux ;
+- un `disconnect()` volontaire ne génère aucune reprise. Il fait passer l'état à
+  « non connecté » (§6.5), ce qui désarme, et met fin à la boucle réseau de Paho
   (P10) : aucune notification de connexion ne peut plus survenir.
 
 ---
 
-## 12. Echeances et fraicheur — invariance
+## 12. Échéances et fraîcheur — invariance
 
 Une reconnexion MQTT **MUST NOT** modifier :
 
 `_next_due` de quelque mesure que ce soit · `_next_snapshot_due` ·
 `_next_heartbeat_due` · `last_success_wall` · `last_success_monotonic` ·
-`last_result` · l'etat de fraicheur (`age_s`, `fresh`) · `chain_status` ·
+`last_result` · l'état de fraîcheur (`age_s`, `fresh`) · `chain_status` ·
 `chain_cause`.
 
-Motif : **une reconnexion MQTT n'est pas une lecture de chaudiere.** La cadence
-de lecture ne depend pas du broker ; `vclient` et la chaudiere etaient joignables
-ou non pendant la coupure, independamment de MQTT. La fraicheur mesure l'age
+Motif : **une reconnexion MQTT n'est pas une lecture de chaudière.** La cadence
+de lecture ne dépend pas du broker ; `vclient` et la chaudière étaient joignables
+ou non pendant la coupure, indépendamment de MQTT. La fraîcheur mesure l'âge
 d'une **lecture**, jamais celui d'une publication. Et C7-B §5 pose explicitement
-qu'un consommateur **MUST NOT** deduire de la presence la disponibilite de la
-chaine de lecture, portee par §8 : lier l'une a l'autre confondrait deux santes
-que le contrat separe.
+qu'un consommateur **MUST NOT** déduire de la présence la disponibilité de la
+chaîne de lecture, portée par §8 : lier l'une à l'autre confondrait deux santés
+que le contrat sépare.
 
-Toute autre option — forcer une lecture, forcer un instantane, reinitialiser —
-serait une decision metier nouvelle, non derivable des invariants existants.
+Toute autre option — forcer une lecture, forcer un instantané, réinitialiser —
+serait une décision métier nouvelle, non dérivable des invariants existants.
 Aucune n'est prise.
 
 ---
 
 ## 13. Testament
 
-**Contracte** :
+**Contracté** :
 
-- le testament est configure **une seule fois, avant la connexion initiale**,
+- le testament est configuré **une seule fois, avant la connexion initiale**,
   par `connect(will=...)` ;
-- **aucun second `will_set()`** n'est emis, ni apres connexion, ni apres
+- **aucun second `will_set()`** n'est émis, ni après connexion, ni après
   reconnexion. Il serait sans effet sur la session en cours et redondant pour
   les suivantes ;
-- Paho transporte le testament dans ses CONNECT ulterieurs (P11) : la
+- Paho transporte le testament dans ses CONNECT ultérieurs (P11) : la
   reconnexion le conserve sans qu'aucune action ne soit requise.
 
-**NON DEMONTRE hors ligne** — a ne jamais presenter autrement :
+**NON DÉMONTRÉ hors ligne** — à ne jamais présenter autrement :
 
 - que le broker applique effectivement le testament sur coupure brutale ;
 - qu'il conserve le retenu, et selon quelle politique ;
-- le comportement reel de session (`clean_session` vaut `True`, donc une session
-  neuve est attendue a chaque reconnexion — non verifie en conditions reelles) ;
-- le replay a un abonne tardif ;
-- le delai entre la coupure et l'emission du testament, lie au keepalive du
+- le comportement réel de session (`clean_session` vaut `True`, donc une session
+  neuve est attendue à chaque reconnexion — non vérifié en conditions réelles) ;
+- le replay à un abonné tardif ;
+- le délai entre la coupure et l'émission du testament, lié au keepalive du
   broker ;
-- **l'ordre reel entre le `offline` du testament et le `online` de reprise.**
+- **l'ordre réel entre le `offline` du testament et le `online` de reprise.**
 
-Ce dernier point est le risque residuel principal du lot. Si un broker emettait
-le testament tardivement, il pourrait ecraser un `online` deja republie. C11
-**n'affirme pas** qu'un `online` de reprise l'emporte necessairement sur un
-testament tardif. Aucune clause ne repose sur cette hypothese, et aucune ne doit
-en reposer avant une validation contre un broker reel.
+Ce dernier point est le risque résiduel principal du lot. Si un broker émettait
+le testament tardivement, il pourrait écraser un `online` déjà republié. C11
+**n'affirme pas** qu'un `online` de reprise l'emporte nécessairement sur un
+testament tardif. Aucune clause ne repose sur cette hypothèse, et aucune ne doit
+en reposer avant une validation contre un broker réel.
 
 ---
 
-## 14. Deconnexion durable
+## 14. Déconnexion durable
 
 C11 **conserve le comportement existant** et ne contracte aucune politique
-definitive :
+définitive :
 
 - le runtime peut rester vivant pendant une perte MQTT ;
 - Paho conserve sa politique native de reconnexion, backoff compris (P10) ;
-- C11 n'ajoute **aucun** delai maximal, aucun compteur d'echecs, aucune horloge ;
+- C11 n'ajoute **aucun** délai maximal, aucun compteur d'échecs, aucune horloge ;
 - C11 ne suspend **aucune** lecture ;
 - C11 ne provoque **aucune** sortie de processus.
 
-> **Comportement existant conserve, susceptible d'etre reconsidere lors du futur
-> chantier d'exploitation et de service**, ou la question du redemarrage se
-> posera reellement.
+> **Comportement existant conservé, susceptible d'être reconsidéré lors du futur
+> chantier d'exploitation et de service**, où la question du redémarrage se
+> posera réellement.
 
 Ce statu quo ne contredit pas la reprise : celle-ci n'a de sens que parce que le
-pont survit a la coupure.
+pont survit à la coupure.
 
 ---
 
-## 15. Compatibilite protocolaire
+## 15. Compatibilité protocolaire
 
-L'adaptateur emploie **MQTT 3.1.1**, valeur par defaut de Paho, avec
-`clean_session = True`. Aucun reglage MQTT 5 n'est pose.
+L'adaptateur emploie **MQTT 3.1.1**, valeur par défaut de Paho, avec
+`clean_session = True`. Aucun réglage MQTT 5 n'est posé.
 
 Paho v2 normalise la surface des rappels entre les deux protocoles : le code de
-raison est un `ReasonCode` dans les deux cas, les proprietes sont un objet vide
-plutot que `None`, et les drapeaux existent dans les deux cas.
+raison est un `ReasonCode` dans les deux cas, les propriétés sont un objet vide
+plutôt que `None`, et les drapeaux existent dans les deux cas.
 
-La couture definie ici ne depend d'aucune propriete propre a MQTT 5, ni de
+La couture définie ici ne dépend d'aucune propriété propre à MQTT 5, ni de
 `session_present` (P5), ni de `is_disconnect_packet_from_server` (P7). **Aucune
-nouvelle promesse de compatibilite n'est formulee.**
+nouvelle promesse de compatibilité n'est formulée.**
 
 ---
 
-## 16. Proprietes a verrouiller
+## 16. Propriétés à verrouiller
 
-Le lot d'implementation devra prouver, au minimum, les proprietes suivantes. Les
-noms de tests ne sont pas fixes ici ; les proprietes le sont. Toutes sont
-etablissables hors ligne, sur doubles deterministes et horloge injectee.
+Le lot d'implémentation devra prouver, au minimum, les propriétés suivantes. Les
+noms de tests ne sont pas fixés ici ; les propriétés le sont. Toutes sont
+établissables hors ligne, sur doubles déterministes et horloge injectée.
 
-### Defaut corrige
+### Défaut corrigé
 
-1. `start()` puis deconnexion inattendue puis reconnexion reussie : le retenu
-   `bridge/online` vaut `online`. **Ce test doit echouer sur le code
-   d'aujourd'hui** — c'est la seule preuve que le lot corrige un fait reel.
+1. `start()` puis déconnexion inattendue puis reconnexion réussie : le retenu
+   `bridge/online` vaut `online`. **Ce test doit échouer sur le code
+   d'aujourd'hui** — c'est la seule preuve que le lot corrige un fait réel.
 
 ### Transitions
 
-2. CONNACK d'echec : aucune reprise, aucun `online`, aucune echeance modifiee.
-3. Deux notifications de connexion successives sans deconnexion intermediaire :
+2. CONNACK d'échec : aucune reprise, aucun `online`, aucune échéance modifiée.
+3. Deux notifications de connexion successives sans déconnexion intermédiaire :
    **une seule** reprise au plus.
-4. Connexion puis deconnexion **avant** consommation : **aucun** `online`.
-5. Connexion, deconnexion, connexion : une reprise, l'etat final etant connecte.
-6. Connexion, deconnexion, connexion, deconnexion : **aucune** reprise.
-7. Apres `start()`, la notification du CONNACK initial ne provoque **aucune**
+4. Connexion puis déconnexion **avant** consommation : **aucun** `online`.
+5. Connexion, déconnexion, connexion : une reprise, l'état final étant connecté.
+6. Connexion, déconnexion, connexion, déconnexion : **aucune** reprise.
+7. Après `start()`, la notification du CONNACK initial ne provoque **aucune**
    republication.
 
-### Arret
+### Arrêt
 
 8. Aucune reprise lorsque `started` est faux.
-9. L'arret prime : une reprise en attente au moment ou l'arret est demande ne
+9. L'arrêt prime : une reprise en attente au moment où l'arrêt est demandé ne
    produit aucun `online`.
 
 ### Forme de la publication
 
 10. QoS **1**.
 11. Retain **true**.
-12. Topic exactement `<prefix>/bridge/online`, derive par l'autorite existante.
-13. **Aucun** autre topic republie a l'occasion d'une reprise.
+12. Topic exactement `<prefix>/bridge/online`, dérivé par l'autorité existante.
+13. **Aucun** autre topic republié à l'occasion d'une reprise.
 
 ### Invariance
 
-14. Echeances (`_next_due`, snapshot, battement) inchangees par une reconnexion.
-15. Fraicheur, `last_result` et statut de chaine inchanges par une reconnexion.
+14. Échéances (`_next_due`, snapshot, battement) inchangées par une reconnexion.
+15. Fraîcheur, `last_result` et statut de chaîne inchangés par une reconnexion.
 
 ### Fil
 
-16. Le rappel de connexion est exercable depuis un fil distinct du fil
+16. Le rappel de connexion est exerçable depuis un fil distinct du fil
     principal, et le test doit le **prouver**, non le supposer.
-17. Le rappel ne bloque pas et ne laisse echapper aucune exception.
+17. Le rappel ne bloque pas et ne laisse échapper aucune exception.
 18. Aucune publication ni mutation du publieur n'a lieu depuis le fil du rappel.
 19. Le module du publieur n'importe ni `paho`, ni `threading`, ni `asyncio`, et
-    ne lit aucune horloge non injectee — verification par inspection, comme les
-    lots precedents.
+    ne lit aucune horloge non injectée — vérification par inspection, comme les
+    lots précédents.
 
 ### Doubles
 
-20. Le double MQTT de `boilerack.testing` reproduit fidelement la capacite : il
-    permet de declencher connexion et deconnexion, faute de quoi les tests du
-    publieur resteraient aveugles a l'evenement.
-21. Une composition de la surface de lecture avec un client depourvu de la
-    capacite **echoue visiblement**.
+20. Le double MQTT de `boilerack.testing` reproduit fidèlement la capacité : il
+    permet de déclencher connexion et déconnexion, faute de quoi les tests du
+    publieur resteraient aveugles à l'événement.
+21. Une composition de la surface de lecture avec un client dépourvu de la
+    capacité **échoue visiblement**.
 
 ### Course du premier CONNACK
 
-Ces proprietes verrouillent §8.3. Les proprietes 24 et 26 portent sur une
-**emission**, jamais sur une valeur retenue finale : c'est la seule facon de
-distinguer « republie » de « n'a jamais eu besoin de l'etre ».
+Ces propriétés verrouillent §8.3. Les propriétés 24 et 26 portent sur une
+**émission**, jamais sur une valeur retenue finale : c'est la seule façon de
+distinguer « republié » de « n'a jamais eu besoin de l'être ».
 
-22. Premier CONNACK **reussi** recu **pendant** `start()`, avant sa fin : aucune
-    reprise, et aucune emission de `bridge/online` au-dela de celle de `start()`.
-23. Premier CONNACK **en echec** recu pendant `start()` : l'etat final de la
-    primitive est **non connecte** — la base ne l'a pas ecrase.
-24. Premier CONNACK en echec pendant `start()`, **puis** reussite : **exactement
-    une** nouvelle emission `bridge/online` = `online`.
-25. Premier CONNACK reussi : **aucune** republication redondante au premier
+22. Premier CONNACK **réussi** reçu **pendant** `start()`, avant sa fin : aucune
+    reprise, et aucune émission de `bridge/online` au-delà de celle de `start()`.
+23. Premier CONNACK **en échec** reçu pendant `start()` : l'état final de la
+    primitive est **non connecté** — la base ne l'a pas écrasé.
+24. Premier CONNACK en échec pendant `start()`, **puis** réussite : **exactement
+    une** nouvelle émission `bridge/online` = `online`.
+25. Premier CONNACK réussi : **aucune** republication redondante au premier
     cycle.
-26. Premier CONNACK en echec : la premiere reprise legitime **n'est pas perdue**.
-27. L'ouverture de connexion qui leve : exception propagee inchangee, publieur
-    non demarre, aucune reprise consommable ensuite.
+26. Premier CONNACK en échec : la première reprise légitime **n'est pas perdue**.
+27. L'ouverture de connexion qui lève : exception propagée inchangée, publieur
+    non démarré, aucune reprise consommable ensuite.
 
 ---
 
 ## 17. Mutations discriminantes
 
-Aucun test n'est ecrit a ce stade. **Aucune mutation n'est declaree tuee.**
+Aucun test n'est écrit à ce stade. **Aucune mutation n'est déclarée tuée.**
 
-| # | Mutation | Propriete visee |
+| # | Mutation | Propriété visée |
 |---|---|---|
 | 1 | Supprimer toute reprise | 1 |
-| 2 | Reprendre sur deconnexion au lieu de connexion | 1, 4 |
-| 3 | Reprendre apres un CONNACK d'echec | 2 |
+| 2 | Reprendre sur déconnexion au lieu de connexion | 1, 4 |
+| 3 | Reprendre après un CONNACK d'échec | 2 |
 | 4 | Publier deux `online` pour une seule transition | 3 |
-| 5 | Ne pas desarmer le marqueur sur deconnexion posterieure | 4, 6 |
-| 6 | Ne pas desarmer a `start()` | 7 |
+| 5 | Ne pas désarmer le marqueur sur déconnexion postérieure | 4, 6 |
+| 6 | Ne pas désarmer à `start()` | 7 |
 | 7 | Reprendre alors que `started` est faux | 8 |
-| 8 | Inverser l'ordre arret / reprise dans la boucle | 9 |
+| 8 | Inverser l'ordre arrêt / reprise dans la boucle | 9 |
 | 9 | Publier avec `retain=False` | 11 |
 | 10 | Publier en QoS 0 | 10 |
 | 11 | Publier sur un topic voisin | 12, 13 |
-| 12 | Reinitialiser une echeance a la reprise | 14 |
+| 12 | Réinitialiser une échéance à la reprise | 14 |
 | 13 | Publier directement depuis le rappel Paho | 18 |
-| 14 | Rendre le double incapable de declencher l'evenement | 20 |
-| 15 | Emettre un second `will_set()` apres reconnexion | §13 |
-| 16 | Poser la base **apres** l'ouverture de la connexion, ou apres les publications | 23, 24, 26 |
-| 17 | Faire que la base ecrase une notification reelle deja recue | 23 |
+| 14 | Rendre le double incapable de déclencher l'événement | 20 |
+| 15 | Émettre un second `will_set()` après reconnexion | §13 |
+| 16 | Poser la base **après** l'ouverture de la connexion, ou après les publications | 23, 24, 26 |
+| 17 | Faire que la base écrase une notification réelle déjà reçue | 23 |
 
 ---
 
 ## 18. Inconnues
 
-Elles sont enumerees pour rester **des inconnues**. Aucune ne doit etre
-transformee en hypothese normative, ni ici, ni dans l'implementation.
+Elles sont énumérées pour rester **des inconnues**. Aucune ne doit être
+transformée en hypothèse normative, ni ici, ni dans l'implémentation.
 
-| # | Inconnue | Consequence |
+| # | Inconnue | Conséquence |
 |---|---|---|
-| I1 | Comportement d'un broker reel : application du testament, conservation du retenu, politique de session | Toute la §13 reste non validee ; prolonge C7-B §15.5 |
-| I2 | **Ordre reel entre un testament tardif `offline` et le `online` de reprise** | Un testament arrivant apres la reprise pourrait l'ecraser. Aucune clause ne suppose le contraire |
-| I3 | Comportement de session reel avec `clean_session = True` | Non verifie hors laboratoire |
-| I4 | Validation contre un broker : rien de C11 n'a ete eprouve en ligne | Chantier separe, sur autorisation explicite |
-| I5 | Tolerance reelle des consommateurs a la latence de reprise retenue (§9.3) | Si elle s'averait insuffisante, T2 devrait etre instruit comme frontiere propre |
-| I6 | Politique future en deconnexion durable | Volontairement non tranchee (§14) |
-| I7 | Comportement de Paho apres un CONNACK refuse — la boucle retente-t-elle, et selon quel rythme | Non exerce hors ligne ; sans effet sur les clauses de C11, qui ne dependent que de la notification recue |
+| I1 | Comportement d'un broker réel : application du testament, conservation du retenu, politique de session | Toute la §13 reste non validée ; prolonge C7-B §15.5 |
+| I2 | **Ordre réel entre un testament tardif `offline` et le `online` de reprise** | Un testament arrivant après la reprise pourrait l'écraser. Aucune clause ne suppose le contraire |
+| I3 | Comportement de session réel avec `clean_session = True` | Non vérifié hors laboratoire |
+| I4 | Validation contre un broker : rien de C11 n'a été éprouvé en ligne | Chantier séparé, sur autorisation explicite |
+| I5 | Tolérance réelle des consommateurs à la latence de reprise retenue (§9.3) | Si elle s'avérait insuffisante, T2 devrait être instruit comme frontière propre |
+| I6 | Politique future en déconnexion durable | Volontairement non tranchée (§14) |
+| I7 | Comportement de Paho après un CONNACK refusé — la boucle retente-t-elle, et selon quel rythme | Non exercé hors ligne ; sans effet sur les clauses de C11, qui ne dépendent que de la notification reçue |
 
 ---
 
 ## 19. Ce que C11 ne fait pas
 
 Aucune politique de reconnexion, de nouvelle tentative ou de reprise autre que
-la presence · aucune modification du testament · aucun changement de topic, de
-QoS, de retention, de payload ou de periode · aucun stockage de valeur scalaire ·
-aucune reinitialisation d'echeance ou de fraicheur · aucune sortie de processus ·
-aucune suspension de lecture · aucune machine d'etat · aucune file · aucun
-reveil immediat · aucun acces au chemin d'ecriture.
+la présence · aucune modification du testament · aucun changement de topic, de
+QoS, de rétention, de payload ou de période · aucun stockage de valeur scalaire ·
+aucune réinitialisation d'échéance ou de fraîcheur · aucune sortie de processus ·
+aucune suspension de lecture · aucune machine d'état · aucune file · aucun
+réveil immédiat · aucun accès au chemin d'écriture.
 
-**AUCUNE CONFORMITE PRODUCTION N'EST REVENDIQUEE.** Rien n'a ete eprouve contre
-un broker, un demon `vcontrold` ou une chaudiere reels. Toutes les preuves
-prevues sont hors ligne, sur doubles deterministes.
+**AUCUNE CONFORMITÉ PRODUCTION N'EST REVENDIQUÉE.** Rien n'a été éprouvé contre
+un broker, un démon `vcontrold` ou une chaudière réels. Toutes les preuves
+prévues sont hors ligne, sur doubles déterministes.
 
 ---
 
 ## 20. Renvois
 
-`c7-mqtt-read-contract.md` — §5 presence, §8 sante de la chaine, §11 surface des
+`c7-mqtt-read-contract.md` — §5 présence, §8 santé de la chaîne, §11 surface des
 suffixes, §15.5 et §15 #9 inconnues · `c7c3a-mqtt-presence.md` — pose du
-testament, publication de presence, limitation de reconnexion nommee ·
-`c7c3b-read-publisher.md` — cadences, echeances, absence de rattrapage,
-limitation reportee · `c4-real-adapters.md` — doctrine A4 : aucune politique
-metier de reconnexion, deconnexion exposee honnetement · `c8-composition-root.md`
-— racine de composition, boucle exterieure, injection des collaborateurs ·
-`c9-process-lifecycle.md` — `SignalStop` et son descripteur de reveil, dont C11
+testament, publication de présence, limitation de reconnexion nommée ·
+`c7c3b-read-publisher.md` — cadences, échéances, absence de rattrapage,
+limitation reportée · `c4-real-adapters.md` — doctrine A4 : aucune politique
+métier de reconnexion, déconnexion exposée honnêtement · `c8-composition-root.md`
+— racine de composition, boucle extérieure, injection des collaborateurs ·
+`c9-process-lifecycle.md` — `SignalStop` et son descripteur de réveil, dont C11
 n'use pas (§9.4).
