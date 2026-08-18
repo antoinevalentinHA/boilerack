@@ -36,6 +36,14 @@ QoS (A3) : `boilerack` publie ses ACK en QoS 1, ou `on_publish` vaut PUBACK et
 donc confirmation reelle. En QoS 0, `on_publish` ne prouve que la remise LOCALE a
 Paho, pas la reception par le broker : ne pas confondre les deux semantiques.
 
+Souscriptions (W0) : un registre INTERNE conserve les souscriptions logiques
+demandees — `topic -> qos` — et l'adaptateur les reemet apres chaque CONNACK
+reussi. Sans cela, une session neuve les perdrait SILENCIEUSEMENT et le pont
+cesserait de recevoir sans que rien ne le signale. Le registre n'est ni une
+politique de reconnexion, ni une session persistante : W0 garantit la REEMISSION
+d'un SUBSCRIBE, jamais son acceptation par le broker. Voir
+`docs/design/w0-mqtt-subscription-recovery.md`.
+
 Reconnexion (A4) : C4 n'ajoute AUCUNE politique metier de reconnexion. Seul le
 comportement natif de Paho est utilise (boucle reseau via `loop_start`). Une
 deconnexion est exposee honnetement et jamais masquee en connexion saine.
@@ -133,6 +141,12 @@ class PahoMqttClient:
         # silencieux : c'est l'absence d'un destinataire.
         self._connection_handler: ConnectionHandler | None = None
         self._connected = False
+        # W0 : souscriptions LOGIQUES demandees par l'appelant, `topic -> qos`.
+        # Un `dict` suffit et porte exactement la semantique contractee : une
+        # entree par topic, ordre d'INSERTION preserve, et une redeclaration de
+        # QoS met la valeur a jour SANS deplacer la cle. Aucune structure
+        # dediee, aucun registre public.
+        self._souscriptions: dict[str, int] = {}
 
         self._client: PahoLike = client if client is not None else self._build_client(config)
         # Cablage des callbacks Paho v2.
@@ -191,7 +205,50 @@ class PahoMqttClient:
             self._connected = False
 
     def subscribe(self, topic: str, qos: int = 0) -> None:
+        """Enregistre l'intention PUIS la transmet au client (W0 §7).
+
+        L'enregistrement precede la transmission et a lieu INCONDITIONNELLEMENT :
+        il ne depend ni de l'etat de la connexion, ni de l'issue de la
+        transmission. Si `client.subscribe` leve, l'intention reste enregistree
+        et sera reemise au prochain CONNACK reussi.
+
+        CONSEQUENCE A CONNAITRE (W0 §7.1) : il n'existe aucun retrait. Une
+        souscription demandee une fois engage cet objet jusqu'a sa fin de vie.
+
+        Un second appel identique est TRANSMIS comme le premier — l'appelant a
+        demande deux fois — mais ne cree pas de seconde entree.
+        """
+        with self._lock:
+            self._souscriptions[topic] = qos
+        # Hors verrou : W0 §14 interdit toute emission vers Paho sous verrou.
         self._client.subscribe(topic, qos)
+
+    def _restaurer_souscriptions(self) -> None:
+        """Reemet toutes les souscriptions enregistrees (W0 §8).
+
+        Opere sur un INSTANTANE pris sous verrou, jamais sur la structure
+        vivante : un `subscribe()` concurrent — possible, C11 P12 etablissant
+        qu'un rappel peut survenir pendant le demarrage de l'appelant — ne doit
+        pas modifier la collection en cours de parcours.
+
+        Un echec est journalise avec son topic, N'EST PAS propage dans la boucle
+        Paho, NE RETIRE PAS l'intention, et n'interrompt pas les suivantes.
+        Aucun indicateur de sante n'est cree : `online` ne signifie pas
+        « souscriptions restaurees » (W0 §11.2).
+        """
+        with self._lock:
+            instantane = tuple(self._souscriptions.items())
+        for topic, qos in instantane:
+            try:
+                self._client.subscribe(topic, qos)
+            except Exception as exc:
+                logger.warning(
+                    "restauration de souscription en echec, intention conservee "
+                    "topic=%s qos=%s exc=%s",
+                    topic,
+                    qos,
+                    type(exc).__name__,
+                )
 
     # -- publication ---------------------------------------------------------
 
@@ -325,6 +382,12 @@ class PahoMqttClient:
         # Notification HORS VERROU : aucun rappel externe n'est appele sous
         # verrou, invariant deja pose par ce module.
         self._notifier(etabli)
+        if etabli:
+            # W0 §9 : la restauration vient APRES la notification de presence.
+            # Cet ordre est normatif — la notification n'echoue pas, la
+            # restauration le peut : C11 ne doit jamais dependre de W0. Un
+            # CONNACK en echec ne restaure rien (W0 §8).
+            self._restaurer_souscriptions()
 
     def _on_disconnect(
         self,

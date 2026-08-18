@@ -5,6 +5,7 @@ course PUBACK, entree des messages bruts. Aucun reseau, aucun broker.
 from __future__ import annotations
 
 import logging
+import threading
 
 import pytest
 
@@ -538,3 +539,428 @@ def test_aucun_second_will_set_hors_connexion() -> None:
     fake.fire_on_disconnect(reason=7)
     fake.fire_on_connect(success=True)
     assert len(fake.will_sets) == 1
+
+
+# ---------------------------------------------------------------------------
+# W0 — Persistance fonctionnelle des souscriptions
+# ---------------------------------------------------------------------------
+#
+# Autorite : docs/design/w0-mqtt-subscription-recovery.md
+#
+# Tous ces tests sont HORS LIGNE et DETERMINISTES : faux client Paho, callbacks
+# declenches explicitement, aucune concurrence reelle, aucun `sleep`. Les deux
+# preuves d'ordonnancement — enregistrement avant transmission, notification
+# avant restauration — reposent sur une OBSERVATION prise par le faux client au
+# moment precis de son appel, jamais sur un ordonnancement suppose.
+#
+# Ces tests inspectent `_souscriptions` et `_lock`, membres internes de
+# l'adaptateur. C'est voulu : le contrat W0 §6 fait du registre un mecanisme
+# INTERNE, et lui ajouter une surface publique pour le seul confort des tests
+# serait une dette gratuite.
+
+
+def _adaptateur_observe(**kwargs):
+    """Adaptateur cable a un faux client qui l'observe. Non connecte."""
+    fake = FakePahoClient(**kwargs)
+    adapter = PahoMqttClient(MqttConfig(host="h"), client=fake)
+    fake.adaptateur = adapter
+    return adapter, fake
+
+
+def _registre(adapter) -> dict:
+    return dict(adapter._souscriptions)
+
+
+# -- enregistrement ---------------------------------------------------------
+
+
+def test_subscribe_enregistre_l_intention() -> None:
+    """W-P1 : un registre local existe, indexe par topic."""
+    adapter, _ = _adaptateur_observe()
+    adapter.subscribe("a/b", qos=1)
+    assert _registre(adapter) == {"a/b": 1}
+
+
+def test_subscribe_transmet_au_client() -> None:
+    """La transmission directe a bien lieu : W0 n'en supprime aucune."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a/b", qos=1)
+    assert fake.subscriptions == [("a/b", 1)]
+
+
+def test_l_enregistrement_precede_la_transmission() -> None:
+    """W-P2, observe AU MOMENT de l'appel, non deduit de l'ordre du code."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a/b", qos=2)
+    assert fake.observations[0]["deja_enregistre"] is True
+    assert fake.observations[0]["registre"] == {"a/b": 2}
+
+
+def test_l_intention_survit_a_un_echec_de_transmission() -> None:
+    """W-P3 et W0 §7.1 : l'irretractabilite vaut aussi apres un echec."""
+    adapter, fake = _adaptateur_observe(echec_subscribe={"a/b"})
+    with pytest.raises(RuntimeError):
+        adapter.subscribe("a/b", qos=1)
+    assert _registre(adapter) == {"a/b": 1}
+
+
+def test_l_intention_echouee_est_reemise_au_connack() -> None:
+    """La contrepartie de W0 §7.1 : ce qui reste declare est bien rejoue."""
+    adapter, fake = _adaptateur_observe(echec_subscribe={"a/b"})
+    with pytest.raises(RuntimeError):
+        adapter.subscribe("a/b", qos=1)
+    fake.echec_subscribe.clear()
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=True)
+    assert fake.subscriptions == [("a/b", 1)]
+
+
+def test_subscribe_hors_connexion_enregistre_et_transmet() -> None:
+    """R2 : le comportement de PahoMqttClient hors connexion, eprouve.
+
+    Aucune harmonisation avec `FakeMqttClient`, qui leve `NotConnectedError` :
+    W0 §2 limite sa portee a l'adaptateur Paho, et les deux semantiques
+    coexistent volontairement.
+    """
+    adapter, fake = _adaptateur_observe()
+    assert adapter.connected is False
+    adapter.subscribe("a/b", qos=1)
+    assert _registre(adapter) == {"a/b": 1}
+    assert fake.subscriptions == [("a/b", 1)]
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=True)
+    assert fake.subscriptions == [("a/b", 1)]
+
+
+# -- doublons, QoS, ordre ---------------------------------------------------
+
+
+def test_doublon_identique_une_entree_deux_transmissions() -> None:
+    """R1 : l'appelant a demande deux fois ; l'adaptateur n'a pas a le taire."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a/b", qos=1)
+    adapter.subscribe("a/b", qos=1)
+    assert _registre(adapter) == {"a/b": 1}
+    assert fake.subscriptions == [("a/b", 1), ("a/b", 1)]
+
+
+def test_qos_redeclare_le_dernier_gagne() -> None:
+    """W-P9 : restaurer un QoS remplace retablirait une intention perimee."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a/b", qos=0)
+    adapter.subscribe("a/b", qos=2)
+    assert _registre(adapter) == {"a/b": 2}
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=True)
+    assert fake.subscriptions == [("a/b", 2)]
+
+
+def test_qos_redeclare_ne_deplace_pas_l_ordre() -> None:
+    """W-P7 : la redeclaration met a jour la valeur, jamais la position."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("un", qos=0)
+    adapter.subscribe("deux", qos=0)
+    adapter.subscribe("un", qos=2)
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=True)
+    assert fake.subscriptions == [("un", 2), ("deux", 0)]
+
+
+def test_ordre_du_premier_enregistrement() -> None:
+    """W-P7 : ni tri lexical, ni ordre de derniere declaration."""
+    adapter, fake = _adaptateur_observe()
+    for topic in ("zeta", "alpha", "mu"):
+        adapter.subscribe(topic, qos=1)
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=True)
+    assert [t for t, _q in fake.subscriptions] == ["zeta", "alpha", "mu"]
+
+
+# -- restauration -----------------------------------------------------------
+
+
+def test_connack_reussi_restaure_toutes_les_souscriptions() -> None:
+    """W-P4 : toutes, jamais un sous-ensemble."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a", qos=0)
+    adapter.subscribe("b", qos=1)
+    adapter.subscribe("c", qos=2)
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=True)
+    assert fake.subscriptions == [("a", 0), ("b", 1), ("c", 2)]
+
+
+def test_le_qos_exact_est_reemis() -> None:
+    """W-P6 : aucun defaut ne se substitue au QoS enregistre."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a", qos=2)
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=True)
+    assert fake.subscriptions == [("a", 2)]
+
+
+def test_connack_refuse_ne_restaure_rien() -> None:
+    """W-P5 : une connexion non etablie n'a rien a restaurer."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a", qos=1)
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=False)
+    assert fake.subscriptions == []
+
+
+def test_aucun_topic_jamais_declare_n_est_reemis() -> None:
+    """W-P18 : l'ensemble emis est exactement celui declare."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("declare", qos=1)
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=True)
+    assert {t for t, _q in fake.subscriptions} == {"declare"}
+
+
+def test_registre_vide_restauration_sans_effet() -> None:
+    """La regle est uniforme : la connexion initiale n'est pas un cas special."""
+    adapter, fake = _adaptateur_observe()
+    fake.fire_on_connect(success=True)
+    assert fake.subscriptions == []
+
+
+def test_reconnexions_repetees_restaurent_sans_croissance() -> None:
+    """W-P10 : le registre est un etat, pas un journal."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a", qos=1)
+    adapter.subscribe("b", qos=0)
+    for _ in range(3):
+        fake.subscriptions.clear()
+        fake.fire_on_disconnect(reason=7)
+        fake.fire_on_connect(success=True)
+        assert fake.subscriptions == [("a", 1), ("b", 0)]
+        assert _registre(adapter) == {"a": 1, "b": 0}
+
+
+def test_disconnect_propre_conserve_le_registre() -> None:
+    """W-P11 : une deconnexion ne retire aucune declaration."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a", qos=1)
+    adapter.disconnect()
+    assert _registre(adapter) == {"a": 1}
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=True)
+    assert fake.subscriptions == [("a", 1)]
+
+
+# -- ordre vis-a-vis de C11 -------------------------------------------------
+
+
+def test_la_notification_de_presence_precede_la_restauration() -> None:
+    """W-P12, observe par un journal ORDONNE commun, sur le chemin nominal."""
+    adapter, fake = _adaptateur_observe()
+    adapter.set_connection_handler(
+        lambda connecte: fake.journal.append(("notification", connecte))
+    )
+    adapter.subscribe("a", qos=1)
+    fake.journal.clear()
+    fake.fire_on_connect(success=True)
+    assert fake.journal[0] == ("notification", True)
+    assert ("subscribe", "a", 1) in fake.journal[1:]
+
+
+def test_la_notification_n_est_pas_conditionnee_a_la_restauration() -> None:
+    """W-P13 : un echec de restauration ne prive pas C11 de sa notification."""
+    adapter, fake = _adaptateur_observe()
+    vues: list = []
+    adapter.set_connection_handler(vues.append)
+    adapter.subscribe("a", qos=1)
+    fake.echec_subscribe.add("a")  # l'echec vise la RESTAURATION, pas l'appel direct
+    vues.clear()
+    fake.fire_on_connect(success=True)
+    assert vues == [True]
+
+
+# -- echec de restauration ---------------------------------------------------
+
+
+def test_echec_de_restauration_journalise_avec_le_topic(caplog) -> None:
+    """W-P14 et R4 : le defaut est rendu observable, jamais tu."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("perdu", qos=1)
+    fake.echec_subscribe.add("perdu")
+    with caplog.at_level(logging.WARNING, logger="boilerack.adapters.mqtt_paho"):
+        fake.fire_on_connect(success=True)
+    trace = "\n".join(r.getMessage() for r in caplog.records)
+    assert "perdu" in trace
+    assert "echec" in trace
+
+
+def test_echec_de_restauration_non_propage() -> None:
+    """W-P15 : rien ne remonte dans la boucle Paho."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a", qos=1)
+    fake.echec_subscribe.add("a")
+    fake.fire_on_connect(success=True)  # ne doit pas lever
+
+
+def test_echec_de_restauration_conserve_l_intention() -> None:
+    """W-P16 : l'intention reste declaree et sera rejouee."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a", qos=1)
+    fake.echec_subscribe.add("a")
+    fake.fire_on_connect(success=True)
+    assert _registre(adapter) == {"a": 1}
+    fake.echec_subscribe.clear()
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=True)
+    assert fake.subscriptions == [("a", 1)]
+
+
+def test_echec_sur_un_topic_n_interrompt_pas_les_suivants() -> None:
+    """W0 §11 : la restauration continue pour les autres souscriptions."""
+    adapter, fake = _adaptateur_observe()
+    for topic in ("a", "b", "c"):
+        adapter.subscribe(topic, qos=1)
+    fake.echec_subscribe.add("b")
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=True)
+    assert [t for t, _q in fake.subscriptions] == ["a", "b", "c"]
+
+
+def test_echec_de_restauration_ne_produit_aucun_faux_succes() -> None:
+    """R4 : aucun signal ne laisse croire que la restauration a reussi.
+
+    `connected` reste vrai — c'est le fait de la connexion, et W0 §11.2 dit
+    expressement que `online` ne signifie pas « souscriptions restaurees ».
+    Ce que ce test verrouille, c'est qu'aucun ACQUITTEMENT ni indicateur de
+    sante nouveau n'apparait : l'adaptateur expose exactement la meme surface
+    qu'avant l'echec.
+    """
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a", qos=1)
+    fake.echec_subscribe.add("a")
+    surface_avant = set(dir(adapter))
+    fake.fire_on_connect(success=True)
+    assert adapter.connected is True
+    assert set(dir(adapter)) == surface_avant
+    assert fake.published == []
+
+
+# -- verrou ------------------------------------------------------------------
+
+
+def test_aucune_emission_sous_verrou_a_l_appel_direct() -> None:
+    """W-P17, verdict immediat et deterministe, sans concurrence reelle."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a", qos=1)
+    assert all(o["verrou_libre"] for o in fake.observations)
+
+
+def test_aucune_emission_sous_verrou_a_la_restauration() -> None:
+    """W-P17 sur le chemin de restauration, celui que W0 ajoute."""
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a", qos=1)
+    adapter.subscribe("b", qos=0)
+    fake.observations.clear()
+    fake.fire_on_connect(success=True)
+    assert len(fake.observations) == 2
+    assert all(o["verrou_libre"] for o in fake.observations)
+
+
+def test_la_restauration_opere_sur_un_instantane() -> None:
+    """W0 §14 : un `subscribe` concurrent ne modifie pas le parcours en cours.
+
+    Un AUTRE FIL souscrit un topic supplementaire PENDANT la restauration,
+    exactement comme le ferait un appelant reel. Le parcours en cours doit
+    rester celui de l'instantane.
+
+    Le fil est joint avec un DELAI BORNE et son aboutissement est AFFIRME. Si
+    l'adaptateur emettait sous verrou (W0 §14), ce fil resterait bloque sur un
+    `threading.Lock` non reentrant : le test doit alors ECHOUER, jamais geler.
+    Une suite qui pend ne prouve rien et immobiliserait l'integration continue.
+    """
+    adapter, fake = _adaptateur_observe()
+    adapter.subscribe("a", qos=1)
+    adapter.subscribe("b", qos=1)
+
+    injecte = {"fait": False, "abouti": False}
+    souscrire_reel = fake.subscribe
+
+    def souscrire_tardivement() -> None:
+        adapter.subscribe("tardif", qos=2)
+        injecte["abouti"] = True
+
+    def subscribe_avec_injection(topic, qos=0):
+        souscrire_reel(topic, qos)
+        if topic == "a" and not injecte["fait"]:
+            injecte["fait"] = True
+            # `daemon` : sous une implementation fautive ce fil ne se termine
+            # jamais ; il ne doit pas retenir l'interpreteur a la sortie.
+            fil = threading.Thread(target=souscrire_tardivement, daemon=True)
+            fil.start()
+            fil.join(timeout=5.0)
+
+    fake.subscribe = subscribe_avec_injection
+    fake.subscriptions.clear()
+    fake.fire_on_connect(success=True)
+
+    assert injecte["abouti"], "souscription concurrente bloquee : emission sous verrou"
+    restauration = [t for t, _q in fake.subscriptions]
+    # L'instantane portait « a » et « b ». Le « tardif » apparait comme un appel
+    # direct de l'appelant, jamais comme un element du parcours restaure.
+    assert restauration[0] == "a"
+    assert restauration.count("b") == 1
+    assert restauration.count("tardif") == 1
+    assert _registre(adapter) == {"a": 1, "b": 1, "tardif": 2}
+
+
+# -- non-regression et absence de derive -------------------------------------
+
+
+def test_le_fake_mqtt_client_conserve_sa_semantique_hors_connexion() -> None:
+    """W-P22 : W0 ne redefinit pas la frontiere abstraite (W0 §2)."""
+    from boilerack.testing.fake_mqtt import FakeMqttClient
+    from boilerack.transport import NotConnectedError
+
+    double = FakeMqttClient()
+    with pytest.raises(NotConnectedError):
+        double.subscribe("a", qos=1)
+
+
+def test_aucune_correlation_suback_introduite() -> None:
+    """W-P20 : ni `on_subscribe`, ni registre de `mid` de souscription."""
+    import pathlib
+
+    import boilerack.adapters.mqtt_paho as module
+
+    source = pathlib.Path(module.__file__).read_text(encoding="utf-8")
+    assert "on_subscribe" not in source
+    assert "suback" not in source.lower()
+
+
+def test_clean_session_inchange() -> None:
+    """W-P21 : aucune session persistante n'est introduite."""
+    import pathlib
+
+    import boilerack.adapters.mqtt_paho as module
+
+    source = pathlib.Path(module.__file__).read_text(encoding="utf-8")
+    assert "clean_session" not in source
+
+
+def test_aucune_voie_de_commande_ouverte() -> None:
+    """W-P19 : W0 reste LATENT — la racine de composition ne souscrit a rien."""
+    import pathlib
+
+    import boilerack.runtime as runtime
+    import boilerack.lifecycle as lifecycle
+    import boilerack.cli as cli
+
+    for module in (runtime, lifecycle, cli):
+        source = pathlib.Path(module.__file__).read_text(encoding="utf-8")
+        assert ".subscribe(" not in source, module.__name__
+        assert "set_message_handler" not in source, module.__name__
+        assert "TransactionalCore" not in source, module.__name__
+        assert "command_topic" not in source, module.__name__
+
+
+def test_aucun_unsubscribe_ajoute() -> None:
+    """W0 §12 : aucune surface de retrait n'est creee."""
+    adapter, _ = _adaptateur_observe()
+    assert not hasattr(adapter, "unsubscribe")
