@@ -74,6 +74,19 @@ class FakePahoClient:
     # publication concurrente enregistre encore) : sert à prouver la purge à la
     # quiescence.
     orphan_ack_during_publish: "int | None" = None
+    # -- W0 : observation des souscriptions ---------------------------------
+    # Reference vers l'adaptateur teste, pour inspecter son etat AU MOMENT
+    # PRECIS d'un `subscribe`. C'est la seule facon deterministe de prouver
+    # « enregistrement avant transmission » et « aucune emission sous verrou »
+    # sans concurrence reelle, sans sleep et sans test probabiliste.
+    adaptateur: object = None
+    #: Topics dont `subscribe` leve, pour eprouver le chemin d'echec.
+    echec_subscribe: set = field(default_factory=set)
+    #: Journal ORDONNE et commun, partage avec le rappel de connexion du test :
+    #: c'est lui qui rend observable l'ordre notification / restauration.
+    journal: list = field(default_factory=list)
+    #: Une observation par appel a `subscribe`.
+    observations: list = field(default_factory=list)
     # journaux d'appels
     connected_args: tuple | None = None
     loop_started: int = 0
@@ -103,6 +116,26 @@ class FakePahoClient:
 
     def subscribe(self, topic, qos=0):
         self.subscriptions.append((topic, qos))
+        self.journal.append(("subscribe", topic, qos))
+        if self.adaptateur is not None:
+            # Le verrou est-il LIBRE a cet instant ? `acquire(blocking=False)`
+            # rend un verdict immediat et deterministe, sans jamais bloquer.
+            libre = self.adaptateur._lock.acquire(blocking=False)
+            if libre:
+                self.adaptateur._lock.release()
+            self.observations.append(
+                {
+                    "topic": topic,
+                    "qos": qos,
+                    "verrou_libre": libre,
+                    # L'intention est-elle DEJA enregistree quand la
+                    # transmission survient ? C'est la preuve de l'ordre.
+                    "deja_enregistre": topic in self.adaptateur._souscriptions,
+                    "registre": dict(self.adaptateur._souscriptions),
+                }
+            )
+        if topic in self.echec_subscribe:
+            raise RuntimeError(f"subscribe en echec (simule) : {topic}")
 
     def publish(self, topic, payload, qos=0, retain=False):
         mid = self.next_mid
