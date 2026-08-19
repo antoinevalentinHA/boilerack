@@ -7,6 +7,13 @@
 > **Version 2**, après audit indépendant de la V1 (verdict *À REVOIR* : 0
 > bloquant, 3 majeurs, 11 mineurs). Le modèle général de la V1 est conservé ;
 > §35 récapitule ce que la V2 corrige.
+>
+> **Erratum, postérieur au merge (PR #36).** §19.3.2 imposait au propriétaire de
+> **consulter l'arrêt** entre l'admission et `process_next()`. Cette obligation
+> était **sans effet observable** — la clause qui l'accompagnait prescrit
+> l'exécution dans les deux cas — et donc invérifiable. Elle est **retirée**. La
+> règle de comportement, elle, est **conservée intégralement** : une commande
+> admise dans l'itération y est exécutée. Aucune autre clause n'est touchée.
 
 ---
 
@@ -482,8 +489,11 @@ présence C11, qui est l'étape 0 de `run_due()`. **Écartée.**
 > Cet ordre est **normatif et testable**. Les trois premières lignes sont celles
 > de C8, inchangées.
 
-**Ce que W2 ne décide pas ici :** si le propriétaire doit consulter l'arrêt une
-quatrième fois entre l'admission et `process_next()`. §19.3 le tranche.
+**Ce que §13.3 fixe entièrement.** L'itération ne comporte que les **deux**
+consultations d'arrêt héritées de C8. Aucune consultation supplémentaire n'est requise
+entre l'admission et `process_next()` : §19.3.2 prescrit le **comportement** — la
+commande admise est exécutée dans l'itération — sans exiger d'observation
+supplémentaire.
 
 ---
 
@@ -760,12 +770,20 @@ trois moments et ne tronque jamais un `run_due()` engagé.
 
 1. Dès que l'arrêt est demandé, le propriétaire **MUST NOT** admettre de nouveau
    message (états A, B).
-2. Le propriétaire **MUST** consulter l'arrêt **entre l'admission et
-   `process_next()`** — c'est le quatrième point de contrôle laissé ouvert par
-   §13.3 — et, s'il est demandé, **MUST** néanmoins exécuter la transaction qu'il
-   vient d'admettre. Admettre puis abandonner dans la même itération produirait
-   un `accepted` immédiatement orphelin, alors que la transaction est déjà
-   payée : ce serait l'exposition maximale pour un gain nul.
+2. Une commande **admise dans l'itération courante** **MUST** être exécutée par
+   `process_next()` dans **cette même itération**, y compris si une demande
+   d'arrêt survient entre l'admission et l'exécution. Admettre puis abandonner
+   dans la même itération produirait un `accepted` immédiatement orphelin, alors
+   que la transaction est déjà payée : ce serait l'exposition maximale pour un
+   gain nul.
+
+   > **Erratum.** La V2 exigeait ici, en outre, que le propriétaire **consulte**
+   > l'arrêt entre les deux opérations. Cette obligation est **retirée**. Elle ne
+   > pouvait avoir aucune conséquence, la phrase ci-dessus prescrivant
+   > l'exécution dans les deux cas ; or une obligation normative sans effet
+   > observable est **invérifiable** — aucun test ne peut distinguer la présence
+   > de l'absence d'un tel appel, et l'exiger reviendrait à imposer du code mort.
+   > Le contrat prescrit désormais le comportement, et lui seul.
 3. Une transaction **déjà en exécution** **MUST NOT** être tronquée (états D, E).
    Transposition exacte de la règle C8 sur `run_due()`, pour la même raison : une
    écriture interrompue en cours de confirmation laisserait un fait physique sans
