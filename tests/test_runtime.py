@@ -160,7 +160,7 @@ def test_aucun_effet_de_bord_a_l_import() -> None:
     arbre = ast.parse(pathlib.Path(runtime_module.__file__).read_text(encoding="utf-8"))
     autorises = (
         ast.Import, ast.ImportFrom, ast.ClassDef, ast.FunctionDef,
-        ast.AnnAssign, ast.Assign, ast.Expr,
+        ast.AnnAssign, ast.Assign, ast.Expr, ast.If,
     )
     for noeud in arbre.body:
         assert isinstance(noeud, autorises), ast.dump(noeud)
@@ -168,6 +168,17 @@ def test_aucun_effet_de_bord_a_l_import() -> None:
             assert isinstance(noeud.value, (ast.Constant, ast.List, ast.Tuple)), ast.dump(noeud)
         if isinstance(noeud, ast.Expr):  # seule une docstring est toleree
             assert isinstance(noeud.value, ast.Constant)
+        if isinstance(noeud, ast.If):
+            # SEULE forme de `if` toleree : la garde `TYPE_CHECKING`, dont le
+            # corps n'est JAMAIS execute a l'import et ne peut donc rien
+            # construire. Elle est admise strictement : test litteral, corps
+            # d'imports uniquement, aucun `else`. Toute autre condition, ou un
+            # corps portant autre chose que des imports, reste refusee.
+            assert isinstance(noeud.test, ast.Name), ast.dump(noeud)
+            assert noeud.test.id == "TYPE_CHECKING", ast.dump(noeud)
+            assert noeud.orelse == [], ast.dump(noeud)
+            for interne in noeud.body:
+                assert isinstance(interne, (ast.Import, ast.ImportFrom)), ast.dump(interne)
 
 
 def test_le_publieur_ne_construit_aucun_adaptateur() -> None:

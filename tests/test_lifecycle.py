@@ -669,13 +669,33 @@ def test_le_runner_c8_sort_immediatement_si_l_arret_est_deja_arme() -> None:
 def test_build_runtime_reste_appelable_avec_deux_arguments_positionnels() -> None:
     """Compatibilite : tous les sites d'appel anterieurs passent `(config, stop)`.
 
-    Le parametre d'horloge est **optionnel et reserve aux mots-cles**, donc
-    aucun appel existant n'est casse et aucun ne peut le fournir par accident.
+    REVISE PAR W3. L'assertion d'origine figeait la LISTE exacte des parametres,
+    ce qui interdisait toute couture ulterieure. Ce qu'elle protegeait vraiment
+    est plus precis, et c'est cela qui est desormais affirme :
+
+    1. `config` et `stop` restent les DEUX seuls parametres positionnels, tous
+       deux obligatoires — aucun site d'appel anterieur n'est casse ;
+    2. TOUT autre parametre est reserve aux mots-cles ET optionnel, donc aucun
+       ne peut etre fourni par accident ni omis par erreur.
+
+    Formule ainsi, l'invariant tient quel que soit le nombre de coutures
+    ajoutees, et il en dit davantage que l'egalite de liste qu'il remplace.
     """
     parametres = inspect.signature(build_runtime).parameters
-    assert list(parametres) == ["config", "stop", "clock"]
+    positionnels = [
+        nom
+        for nom, p in parametres.items()
+        if p.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    ]
+    assert positionnels == ["config", "stop"]
     assert parametres["config"].default is inspect.Parameter.empty
     assert parametres["stop"].default is inspect.Parameter.empty
+    for nom, p in parametres.items():
+        if nom in ("config", "stop"):
+            continue
+        assert p.kind is inspect.Parameter.KEYWORD_ONLY, nom
+        assert p.default is None, nom
+    # La couture d'horloge de C9 est toujours la, inchangee.
     assert parametres["clock"].default is None
     assert parametres["clock"].kind is inspect.Parameter.KEYWORD_ONLY
 
@@ -719,13 +739,26 @@ def test_build_runtime_conserve_son_defaut_historique(monkeypatch) -> None:
 
 @pytest.mark.reference
 def test_le_runner_accepte_deja_n_importe_quelle_horloge() -> None:
-    """Rien n'a change dans `ReadSurfaceRunner` : il prenait deja une `Clock`.
+    """`ReadSurfaceRunner` prenait deja une `Clock`, et cela n'a pas change.
 
-    La couture ouverte par C9 est donc bien limitee a `build_runtime`.
+    REVISE PAR W3. L'assertion d'origine figeait la liste exacte des parametres
+    pour montrer que la couture C9 se limitait a `build_runtime`. W3 ajoute au
+    runner une voie transactionnelle OPTIONNELLE, ce que W2 §13.3 exige.
+
+    Ce qui doit rester vrai, et qui est desormais affirme explicitement :
+
+    1. les trois premiers parametres sont inchanges, dans le meme ordre ;
+    2. `clock` porte toujours l'annotation `Clock` — la couture C9 est intacte ;
+    3. tout parametre AJOUTE est **reserve aux mots-cles** et vaut `None` par
+       defaut, donc un runner construit comme avant se comporte exactement comme
+       avant, et aucune dependance ajoutee ne peut etre fournie par position.
     """
     parametres = inspect.signature(ReadSurfaceRunner.__init__).parameters
-    assert list(parametres) == ["self", "publisher", "clock", "stop"]
+    assert list(parametres)[:4] == ["self", "publisher", "clock", "stop"]
     assert parametres["clock"].annotation == "Clock"
+    for nom in list(parametres)[4:]:
+        assert parametres[nom].kind is inspect.Parameter.KEYWORD_ONLY, nom
+        assert parametres[nom].default is None, nom
 
 
 # ---------------------------------------------------------------------------
