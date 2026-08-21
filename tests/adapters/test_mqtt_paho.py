@@ -944,20 +944,50 @@ def test_clean_session_inchange() -> None:
     assert "clean_session" not in source
 
 
-def test_aucune_voie_de_commande_ouverte() -> None:
-    """W-P19 : W0 reste LATENT — la racine de composition ne souscrit a rien."""
+def test_la_voie_de_commande_n_est_pas_activee_par_la_racine() -> None:
+    """REMPLACE `test_aucune_voie_de_commande_ouverte`, comme W1 §21.10 l'exigeait.
+
+    L'ancienne assertion cherchait quatre chaines dans `runtime.py`,
+    `lifecycle.py` et `cli.py`. W3 ayant livre le cablage, elle est devenue un
+    FAUX NEGATIF : la couture transactionnelle existe desormais dans le runner,
+    et l'ancien test passait pourtant encore, parce que le cablage passe par
+    `TransactionSurface` et non par les quatre noms surveilles.
+
+    Le nouvel oracle est plus PRECIS, pas plus faible. Il porte sur ce qui
+    compte reellement : la racine de composition **compose** la voie, mais ne
+    l'**active** pas. La preuve tient en deux faits verifiables :
+
+    1. `boilerack.runtime` n'appelle jamais `build_transaction_surface` — la
+       seule fonction capable de construire la voie ;
+    2. `build_runtime` expose la voie en parametre OPTIONNEL valant `None`, et
+       ne peut pas la fabriquer : elle exigerait un `VClient` ecrivain et un
+       `Profile` reels, dont ce depot ne possede aucun.
+
+    La preuve complete de la frontiere W4 — absence de `write` reel, absence de
+    profil reel, absence de double de test en production — vit dans
+    `tests/test_transaction_wiring.py`, avec le cablage qu'elle gouverne.
+    """
+    import ast
+    import inspect
     import pathlib
 
     import boilerack.runtime as runtime
-    import boilerack.lifecycle as lifecycle
-    import boilerack.cli as cli
 
-    for module in (runtime, lifecycle, cli):
-        source = pathlib.Path(module.__file__).read_text(encoding="utf-8")
-        assert ".subscribe(" not in source, module.__name__
-        assert "set_message_handler" not in source, module.__name__
-        assert "TransactionalCore" not in source, module.__name__
-        assert "command_topic" not in source, module.__name__
+    # La preuve porte sur les APPELS, releves par AST : `build_runtime` cite la
+    # fonction dans sa docstring pour expliquer pourquoi elle ne l'appelle pas,
+    # et cette mention est une information, pas une activation.
+    source = pathlib.Path(runtime.__file__).read_text(encoding="utf-8")
+    appeles = {
+        n.func.id
+        for n in ast.walk(ast.parse(source))
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+    }
+    assert "build_transaction_surface" not in appeles
+    assert "TransactionalCore" not in appeles
+
+    parametres = inspect.signature(runtime.build_runtime).parameters
+    assert parametres["transaction"].default is None
+    assert parametres["transaction"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
 def test_aucun_unsubscribe_ajoute() -> None:

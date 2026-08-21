@@ -36,7 +36,7 @@ docs/design/c8-composition-root.md.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Final, Protocol, Sequence
+from typing import TYPE_CHECKING, Final, Protocol, Sequence
 
 from boilerack.adapters.config import MqttConfig, VclientConfig
 from boilerack.adapters.mqtt_paho import PahoMqttClient
@@ -48,6 +48,15 @@ from boilerack.read_surface.config import ReadSurfaceConfig
 from boilerack.read_surface.measurements import V1_MEASUREMENTS, MeasurementSpec
 from boilerack.read_surface.publisher import MeasurementReader, ReadSurfacePublisher
 from boilerack.transport.mqtt import PresenceMqttClient
+
+if TYPE_CHECKING:  # pragma: no cover - reserve a la verification de types
+    # W3 : `TransactionSurface` n'apparait QUE dans des annotations. Sous
+    # `from __future__ import annotations`, celles-ci ne sont jamais
+    # evaluees a l'execution, donc importer ce module au niveau global
+    # chargerait le coeur transactionnel et son transport pour un runtime
+    # de production qui reste en LECTURE SEULE. L'import est donc reserve
+    # aux verificateurs de types.
+    from boilerack.transaction_wiring import TransactionSurface
 
 __all__ = [
     "StopSignal",
@@ -145,14 +154,26 @@ class ReadSurfaceRunner:
         publisher: ReadSurfacePublisher,
         clock: Clock,
         stop: StopSignal,
+        *,
+        transaction: TransactionSurface | None = None,
     ) -> None:
         self._publisher = publisher
         self._clock = clock
         self._stop = stop
+        # W3 : voie transactionnelle OPTIONNELLE. `None` est le cas nominal
+        # d'aujourd'hui — aucune commande n'est recue, la boucle est exactement
+        # celle de C8. Une surface fournie ne peut venir que d'un appelant
+        # capable de produire un `VClient` ecrivain et un `Profile` reels, ce
+        # qu'aucun code de production ne sait faire avant W4.
+        self._transaction = transaction
 
     @property
     def publisher(self) -> ReadSurfacePublisher:
         return self._publisher
+
+    @property
+    def transaction(self) -> TransactionSurface | None:
+        return self._transaction
 
     # -- boucle --------------------------------------------------------------
 
@@ -161,10 +182,12 @@ class ReadSurfaceRunner:
 
         Sequence :
 
-            start()
+            start()                       <- installation W3 d'abord, si voie
             tant que l'arret n'est pas demande :
                 attendre jusqu'a due_at()
                 run_due()
+                admettre AU PLUS UN message   <- W2 §13.3, si voie
+                process_next() AU PLUS UNE FOIS
             stop()
 
         POLITIQUE D'ERREUR — rien n'est masque, rien n'est traduit, aucune
@@ -212,6 +235,12 @@ class ReadSurfaceRunner:
     # -- interne -------------------------------------------------------------
 
     def _demarrer(self) -> None:
+        if self._transaction is not None:
+            # W2 §18.3 : gestionnaire enregistre et souscription demandee AVANT
+            # `connect()`, que `publisher.start()` declenche. Aucun rappel ne
+            # peut donc preceder l'ecriture de `_handler`, et l'absence de
+            # verrou sur ce champ devient sure PAR CONSTRUCTION.
+            self._transaction.install()
         try:
             self._publisher.start()
         except Exception as exc:
@@ -232,6 +261,28 @@ class ReadSurfaceRunner:
                 # travailler : aucun cycle superflu.
                 return
             self._publisher.run_due()
+            self._pomper()
+
+    def _pomper(self) -> None:
+        """Admet au plus un message, puis execute au plus une transaction.
+
+        Position et cadence fixees par W2 §13.3 : APRES `run_due()`, dont
+        l'etape 0 est la reprise de presence C11, et jamais avant.
+
+        "Au plus une" n'est jamais transforme en "exactement une" : un depot
+        vide n'admet rien, et `process_next()` sur file vide ne fait rien.
+        """
+        if self._transaction is None:
+            return
+        # W2 §19.3.1 : des que l'arret est demande, plus AUCUNE admission.
+        if not self._stop.is_set():
+            self._transaction.admettre_un()
+        # W2 §19.3.2 : une commande admise dans cette iteration MUST etre
+        # executee dans cette MEME iteration, que l'arret ait ete demande
+        # entre-temps ou non. W2 §13.3 enonce par ailleurs qu'aucune
+        # consultation d'arret supplementaire n'est requise entre l'admission et
+        # `process_next()` : le contrat prescrit le comportement, et lui seul.
+        self._transaction.executer_un()
 
     def _attendre(self, echeance_monotone: float) -> None:
         """Dort jusqu'a l'echeance, sur le temps monotone.
@@ -249,15 +300,21 @@ class Runtime:
     """Assemblage pret a tourner.
 
     Deux membres, chacun avec un usage distinct : `runner` pour executer,
-    `publisher` pour inspecter l'etat sans passer par la boucle.
+    `publisher` pour inspecter l'etat sans passer par la boucle. Un troisieme,
+    optionnel, expose la voie transactionnelle quand elle a ete composee.
     """
 
     publisher: ReadSurfacePublisher
     runner: ReadSurfaceRunner
+    transaction: TransactionSurface | None = None
 
 
 def build_runtime(
-    config: RuntimeConfig, stop: StopSignal, *, clock: Clock | None = None
+    config: RuntimeConfig,
+    stop: StopSignal,
+    *,
+    clock: Clock | None = None,
+    transaction: TransactionSurface | None = None,
 ) -> Runtime:
     """Construit les adaptateurs concrets et les cable. **Seul endroit** ou ils le sont.
 
@@ -280,6 +337,16 @@ def build_runtime(
     l'attente est interrompue par un signal. Dans les deux cas, le publieur et
     le runner recoivent **exactement la meme instance** : sans quoi le temps du
     runner et celui du publieur pourraient diverger.
+
+    VOIE TRANSACTIONNELLE — `transaction` est optionnel et vaut `None` par
+    defaut : la racine de composition n'en construit AUCUNE, et ne le peut pas.
+    `build_transaction_surface` exige un `VClient` — donc `read` ET `write` — et
+    un `Profile` ; or `VClientCliReader` n'implemente que `read`, et aucun
+    `Profile` reel n'existe dans ce depot. La voie reste donc fermee en
+    production tant que W4 n'a pas livre ces deux dependances. Fournir une
+    surface deja construite est le point d'entree prevu pour W4 et pour les
+    preuves hors terrain ; ce n'est pas un interrupteur qu'on pourrait laisser
+    ouvert par megarde, mais l'absence de deux dependances obligatoires.
     """
     clock = clock if clock is not None else SystemClock()
     # L'annotation dit ce que la surface de lecture EXIGE : le port MQTT et la
@@ -299,5 +366,8 @@ def build_runtime(
     )
     return Runtime(
         publisher=publisher,
-        runner=ReadSurfaceRunner(publisher=publisher, clock=clock, stop=stop),
+        runner=ReadSurfaceRunner(
+            publisher=publisher, clock=clock, stop=stop, transaction=transaction
+        ),
+        transaction=transaction,
     )
