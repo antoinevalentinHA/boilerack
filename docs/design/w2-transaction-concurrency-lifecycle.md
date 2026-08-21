@@ -753,7 +753,7 @@ non nul, donc un handle **`failed`**, que `_admit` traite en *fail-closed*
 
 C9 traduit `SIGINT`/`SIGTERM` en demande d'arrêt via un descripteur de réveil, et
 **ne promet aucune borne** sur la durée totale de sortie. C8 consulte l'arrêt à
-trois moments et ne tronque jamais un `run_due()` engagé.
+deux moments et ne tronque jamais un `run_due()` engagé.
 
 ### 19.2 Les six états
 
