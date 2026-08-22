@@ -27,6 +27,10 @@ from boilerack.core.ack import (
 from boilerack.core.command import Command, CommandFormError
 from boilerack.core.dedup import InFlightRegistry, TerminalCache
 from boilerack.core.engine import TransactionalCore
+from boilerack.core.production_profile import (
+    PRODUCTION_PROFILE_NAME,
+    build_production_profile,
+)
 from boilerack.core.profile import CommandSpec, Profile, ProfileError, ValueType
 from boilerack.core.validation import Rejection, ValidatedCommand, validate
 
@@ -45,6 +49,8 @@ __all__ = [
     "Profile",
     "ProfileError",
     "ValueType",
+    "PRODUCTION_PROFILE_NAME",
+    "build_production_profile",
     "Rejection",
     "ValidatedCommand",
     "validate",

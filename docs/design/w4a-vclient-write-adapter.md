@@ -660,6 +660,74 @@ sens structurel** — un adaptateur existera.
 >
 > L'activation elle-même relève de **W4-E**, et n'est pas traitée ici.
 
+### 18.3 Après W4-D — une dépendance sur deux
+
+*Note ajoutée après la livraison de W4-D. Elle ne réécrit ni §5, ni §18.2 :
+elle constate lesquels de leurs énoncés ont cessé d'être vrais.*
+
+W4-D a livré un **profil de production réel** — `core.production_profile`, un
+seul rôle, celui que W4-C a caractérisé. Deux faits d'entrée de §5 en sont
+**périmés**, et il faut le dire plutôt que de laisser un lecteur s'y fier :
+
+| Fait | Énoncé en §5 | Depuis W4-D |
+|---|---|---|
+| **F6** | « aucune commande d'écriture réelle dans le code de production » | **faux** — `setNiveauM1` figure dans le profil |
+| **F7** | « aucun `Profile` de production » | **faux** — une fabrique de production existe |
+
+Les dix autres faits de §5 sont **intacts**. En particulier **F5** — aucun
+adaptateur d'écriture de production — qui est désormais la **seule** des deux
+dépendances de §18.2 à manquer encore.
+
+> **Ce que cela ne rouvre pas.** Un profil n'écrit rien. La voie
+> transactionnelle exige **aussi** un `VClient` écrivain, et il n'en existe
+> aucun : la fermeture tient toujours, par cette seule dépendance au lieu de
+> deux. Aucun module de production n'appelle la fabrique, ce qu'une preuve
+> dédiée vérifie.
+>
+> Restent en vigueur, sans changement : **§9.3** borne la levée de `OK` à la
+> signature littérale de la commande caractérisée · **§11.6**
+> (`DAEMON_UNREACHABLE`) et **§12.3** (`UNKNOWN_COMMAND`) demeurent interdits ·
+> succès local ≠ écriture appliquée (§6) · la confirmation reste une relecture
+> du cœur.
+
+**Ce que W4-D n'a pas fait, et pourquoi.** Trois autres rôles inscriptibles sont
+éprouvés par la production du pont historique, et A5 §5 en documente les bornes.
+Aucun n'entre dans le profil : W4-C §15 énonce qu'« elle ne prouve rien au-delà
+de `setNiveauM1` », et déclarer une surface d'écriture sur la foi d'une
+extrapolation serait exactement ce que ce contrat refuse depuis §11 de C5. Les
+ajouter demandera la même preuve, pas une décision d'ergonomie.
+
+#### Comment relire l'obligation 12 de §18
+
+L'obligation 12 demande à W4-B de « laisser la production **fermée** : aucun
+appel à `build_transaction_surface`, aucun `Profile` réel, aucun nom de commande
+en dur ». Ses deux dernières propositions sont devenues **littéralement
+fausses** — non par un manquement de W4-B, qui n'est pas ouvert, mais parce que
+W4-D a livré ce qu'on lui demandait. Le texte de §18 n'est pas réécrit : il
+énonçait un état vrai à sa rédaction, et le corriger après coup effacerait la
+raison pour laquelle il a été écrit.
+
+> **Lecture normative post-W4-D.** L'obligation 12 se lit désormais comme une
+> interdiction faite à W4-B de **construire, composer ou activer** le profil
+> réel dans la voie de production — non comme la négation de son existence.
+> Livrer une donnée et la brancher sont deux actes distincts ; seul le second
+> est interdit.
+
+La fermeture repose donc sur quatre conditions, toutes vérifiables :
+
+| # | Condition | Aujourd'hui |
+|---|---|---|
+| 1 | aucun appel de production à `build_transaction_surface` | tenue |
+| 2 | aucune **composition** du profil réel — sa fabrique n'est appelée nulle part en production | tenue |
+| 3 | aucun adaptateur d'écriture réel | tenue — **F5** |
+| 4 | aucune ouverture runtime | tenue — l'activation relève de W4-E |
+
+Faire tomber une seule d'entre elles suffirait à rouvrir la voie ; W4-D n'en a
+fait tomber aucune. Le nom de commande en dur, lui, **est** désormais présent :
+c'est le contenu même du profil, et c'est ce que W4-D avait à livrer.
+
+**W4-B reste à ouvrir. W4-E n'est pas ouvert. W4-F reste terrain.**
+
 ---
 
 ## 19. Ce que W4-C devra rapporter
