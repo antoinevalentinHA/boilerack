@@ -379,3 +379,31 @@ séparé, avec plan d'action préalable et autorisation explicite.
    au prix d'un travail de simulation qui n'existe pas aujourd'hui.
 
 Aucun de ces éléments ne constitue une demande.
+
+### 12.9 Disposition du n° 8 — alternative étudiée, puis écartée
+
+*Note ajoutée après coup. Elle ne modifie aucun des huit éléments ci-dessus :
+elle consigne l'issue de l'étude que le n° 8 réclamait.*
+
+L'alternative a été étudiée par le lot **W4-C**, qui instancie ce protocole.
+Verdict : **écartée**.
+
+Un démon dédié adossé à un simulateur de liaison ne dispose ni d'une vraie
+liaison Optolink, ni d'une vraie chaudière. Il ne peut donc **pas** produire les
+signatures réelles d'une écriture acceptée — code retour, forme de `stdout`,
+forme de `stderr`, durée — qui sont exactement ce que la caractérisation doit
+mesurer. Le simulateur **fabriquerait les faits recherchés** : il rendrait ce
+qu'on lui aurait fait rendre, et l'on prendrait pour une observation ce qui
+serait une hypothèse écrite deux fois.
+
+La proposition n'était pas absurde, et elle devait être étudiée : elle supprime
+effectivement le risque opératoire. Mais elle le supprime **en supprimant aussi
+l'objet de la mesure**, ce qui la rend inapte à cette fin précise.
+
+Par ailleurs, le besoin auquel un tel banc répondrait par ailleurs — éprouver la
+mécanique hors terrain — est **déjà couvert** : le dépôt dispose de doubles et de
+fixtures de caractérisation, et c'est sur eux que reposent les lots hors terrain.
+
+> **Conséquence.** L'alternative est écartée pour cette fin. Une caractérisation
+> **terrain** reste donc nécessaire, et c'est le rôle de W4-C. Rien d'autre dans
+> §12 n'est modifié.
