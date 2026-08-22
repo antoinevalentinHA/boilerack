@@ -1,10 +1,11 @@
 # W4-C — Protocole de capture de l'écriture `vclient`
 
-> **Lot W4-C — opératoire. Version 2**, après audit indépendant de la V1
-> (verdict *À REVOIR* : 0 bloquant, 2 majeurs, 5 mineurs, 3 informations). Les
-> deux majeurs portaient sur la **complétude de listes fermées** — le champ 11 de
-> W4-A §19 et l'inconnue I-14 — et non sur la méthode, qui est conservée telle
-> quelle. Ce document ne livre aucune ligne de code et ne
+> **Lot W4-C — opératoire. Version 3.** La V2 avait fermé les sept défauts de la
+> V1 (2 majeurs de **complétude de listes fermées** — le champ 11 de W4-A §19 et
+> l'inconnue I-14 — et 5 mineurs). La V3 ferme le seul majeur restant : la
+> restauration par écriture est désormais **conditionnée à l'exécution effective
+> de l'étape 03** (§12.1), une campagne interrompue avant d'avoir écrit n'ayant
+> rien à restaurer. La méthode est conservée telle quelle depuis la V1. Ce document ne livre aucune ligne de code et ne
 > modifie aucun test. Il décrit une campagne de mesure à exécuter **une fois**,
 > sur l'installation de référence, par l'exploitant. Tant qu'elle n'a pas été
 > exécutée et rapportée, W4-D reste fermé et aucune ligne d'arguments d'écriture
@@ -380,6 +381,11 @@ incrémenté. Si la valeur relue diffère de `V`, la campagne s'arrête (AB-8) :
 valeur qui bouge toute seule signale un autre écrivain, et cette question relève
 de W4-F, pas d'ici.
 
+> **Et l'arrêt est sec.** L'étape 03 n'ayant pas eu lieu, §12.1 **interdit** toute
+> écriture — y compris celle de `V`. Réécrire `V` ici effacerait le changement
+> qu'on vient précisément de constater, et détruirait la seule preuve qu'un autre
+> écrivain existe.
+
 Cette garde est **une lecture**. Elle n'ajoute aucune écriture, et ne peut en
 aucun cas être satisfaite en écrivant.
 
@@ -394,24 +400,78 @@ rapporter tel quel.
 
 L'écriture de restauration éventuelle du §12 **n'entre pas dans ce compte** : ce
 n'est pas une seconde tentative de caractérisation, c'est un retour à l'état
-initial. Elle est comptée séparément, et son existence est elle-même un fait à
-consigner.
+initial. Elle est comptée séparément, son existence est elle-même un fait à
+consigner, et elle est **subordonnée à §12.1** : sans étape 03 exécutée, elle est
+impossible — `ecritures_nominales == 0` implique `ecritures_restauration == 0`.
 
 ---
 
 ## 12. Retour arrière et critères d'abandon
 
-**Retour arrière.** L'écriture étant à l'identique, la restauration consiste à
-réécrire `V` — la même commande que l'étape 03. La valeur `V` **MUST** être
-relevée et notée par écrit **avant** l'étape 03, et la commande de restauration
-écrite en toutes lettres avant d'être éventuellement nécessaire.
+**Retour arrière.** Armer le retour arrière, c'est relever `V` et **écrire à
+l'avance** la commande qui la restaurerait — la même que l'étape 03. La valeur
+`V` **MUST** être relevée et notée par écrit **avant** l'étape 03.
+
+**Armer n'est pas exécuter.** Cette commande n'est tirée que si §12.1 l'autorise,
+et §12.1 l'interdit dans le cas le plus fréquent d'abandon : celui où l'étape 03
+n'a pas eu lieu. Un abandon ne déclenche donc **pas** une écriture par défaut.
 
 > **Nature de cette écriture.** Prescrite par C5 §12.5, elle est **conditionnelle
-> et non nominale** : elle n'a lieu que si l'état constaté n'est plus `V`, et
-> elle ne caractérise rien. Elle est donc hors du `WRITE NOMINAL COUNT` (§11.2),
-> et la confondre avec un réessai serait une faute — le réessai est interdit, la
-> restauration est due. Le rapport les distingue explicitement :
-> `ecritures_nominales=1`, `ecritures_restauration=0 ou 1`.
+> et non nominale** : elle ne caractérise rien. Elle est donc hors du
+> `WRITE NOMINAL COUNT` (§11.2), et la confondre avec un réessai serait une
+> faute — le réessai est interdit, la restauration est due **lorsqu'elle est
+> autorisée**. Le rapport les distingue explicitement : `ecritures_nominales`,
+> `ecritures_restauration`.
+
+### 12.1 La restauration est conditionnée à l'exécution de l'étape 03
+
+Une campagne interrompue **avant** d'avoir écrit n'a rien à restaurer par
+écriture. Prescrire « restaurer `V` » sans condition serait pire qu'inutile :
+face à une valeur qui a bougé toute seule, cela ferait **écraser un changement
+que la campagne n'a pas causé** — exactement ce que §11.1 identifie comme le
+signe d'un autre écrivain, et que W4-F seul a autorité pour traiter.
+
+> **Règle.** Une écriture de restauration n'est autorisée **que si l'étape 03 a
+> effectivement été exécutée**. Le critère est ce **fait objectif**, jamais le
+> critère d'abandon qui a été déclenché.
+
+| Étape 03 exécutée | Ce qui est autorisé |
+|---|---|
+| **non** | **aucune écriture, d'aucune sorte.** Ne pas écrire `V`, ne pas « remettre » quoi que ce soit. Rétablir les services (§13), conserver les captures, rapporter |
+| **oui** | la logique C5 §12.5 s'applique : constater l'état courant, puis **0** écriture s'il vaut `V`, **au plus 1** sinon |
+
+Cette règle couvre tous les chemins d'interruption sans qu'il soit besoin de les
+énumérer : valeur devenue différente (AB-8), formes discordantes (AB-2), démon
+injoignable (AB-3), redémarrage de service ou de machine (AB-5), doute de
+l'exploitant (AB-6), et tout autre arrêt survenu avant l'étape 03. Une liste
+fermée de cas serait fragile ; le fait objectif ne l'est pas.
+
+> **Corollaire de compteurs.** `ecritures_nominales == 0` **implique**
+> `ecritures_restauration == 0`. Un rapport portant `ecritures_nominales=0` et
+> `ecritures_restauration=1` décrit une campagne qui a écrit sans avoir
+> caractérisé : c'est une **violation du protocole**, pas un résultat.
+
+### 12.2 Comment savoir si l'étape 03 a été exécutée
+
+Aucun état nouveau n'est nécessaire : les captures du §10 suffisent, parce que
+le shell crée les fichiers de redirection **au lancement** de l'invocation et
+n'écrit `.meta` **qu'au retour**.
+
+| Artefacts de `03-ecriture-json` | Lecture | Restauration |
+|---|---|---|
+| aucun fichier | l'invocation n'a **jamais** été lancée | **interdite** |
+| `.out` et `.err` présents, `.meta` **absent** | l'invocation a été lancée puis interrompue — son issue est **inconnue**, et une écriture a **pu** partir | **autorisée**, conditionnelle |
+| `.meta` présent | l'invocation est allée à son terme, quel que soit son code retour | **autorisée**, conditionnelle |
+
+Le cas du milieu est tranché dans le sens **prudent** : une invocation lancée
+dont on ignore l'issue est traitée comme une écriture ayant pu avoir lieu. C'est
+précisément la situation que I-13 décrit et que §14.1 demande de rapporter.
+
+> **À consigner.** Une divergence constatée **après** une étape 03 réussie est en
+> soi une anomalie : une écriture à l'identique ne devrait déplacer aucune
+> valeur. La restaurer est prescrit ; l'expliquer ne l'est pas — le rapport
+> énonce le fait sans conclure entre une normalisation par le démon (I-8) et un
+> autre écrivain (W4-F).
 
 **Abandon immédiat**, sans poursuivre la séquence, si :
 
@@ -426,8 +486,9 @@ relevée et notée par écrit **avant** l'étape 03, et la commande de restaurat
 | AB-7 | une durée mesurée négative, nulle ou manifestement absurde — l'horloge a bougé (§10), la mesure et les suivantes ne valent plus rien |
 | AB-8 | la garde de fraîcheur de §11.1 échoue : la valeur courante n'est plus `V` avant l'étape 03 |
 
-Après un abandon : restaurer `V`, rétablir §13, **puis** rapporter. Aucune
-seconde tentative dans la même fenêtre.
+Après un abandon, dans cet ordre : appliquer §12.1 — qui peut ne prescrire
+**aucune** écriture —, rétablir §13, **puis** rapporter. Aucune seconde tentative
+dans la même fenêtre.
 
 > **Interdiction.** Ne **jamais** provoquer délibérément un dépassement de budget
 > ni un démon injoignable pour capturer I-12, I-13 ou I-15. Ces signatures se
@@ -513,7 +574,7 @@ Sobres, et utiles au dépouillement comme à la reproductibilité :
 |---|---|
 | horodatage UTC de fin de chaque invocation | `fin_utc` dans `.meta` (§10) |
 | début et fin de la campagne | relevés par l'exploitant, à l'ouverture et après §13 |
-| `ecritures_nominales` / `ecritures_restauration` | §11.2 et §12 |
+| `ecritures_nominales` / `ecritures_restauration` | §11.2 et §12.1 — la seconde est nulle si la première l'est |
 | anomalies observées, même écartées | journal libre de l'exploitant — une anomalie écartée reste un fait |
 | critère d'abandon déclenché, le cas échéant | `AB-1` … `AB-8` (§12) |
 
