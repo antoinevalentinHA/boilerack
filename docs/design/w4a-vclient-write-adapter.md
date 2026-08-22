@@ -253,6 +253,71 @@ mais sur le champ `error` de la sortie JSON.
 > **Clause.** L'adaptateur **MUST NOT** dériver une issue du seul code retour.
 > En particulier, `returncode == 0` **MUST NOT** produire un statut favorable.
 
+### 9.3 W4-C a livré — ce qui lève, et ce qui ne lève pas
+
+*Note ajoutée après la caractérisation terrain. Elle ne réécrit ni la table du
+§9, ni les clauses de §9.1 : elle constate que la condition posée par l'une
+d'elles est remplie.*
+
+La clause de §9.1 subordonnait la levée à un fait précis : elle lève « dès que
+W4-C aura établi une signature de succès local ». **Ce fait est acquis.** Une
+écriture acceptée a été observée une fois, sur `setNiveauM1`, et sa signature est
+consignée en `w4c-write-capture-protocol.md` §16.3. La signature est **celle-ci,
+littéralement**, et rien d'autre :
+
+| Élément | Valeur observée |
+|---|---|
+| code retour | `0` |
+| `stderr` | vide, 0 octet |
+| `stdout` | JSON valide, un objet |
+| `error` | `""` |
+| **`raw`** | **`"OK"`** — cette chaîne exacte |
+| `value` | `0.000000` — sans signification, voir plus bas |
+
+> **Levée, et strictement bornée.** L'interdiction de rendre
+> `TransportStatus.OK` **tombe** — non par décision de ce document, mais parce
+> que sa propre condition est satisfaite. W4-B **MAY** classer `OK` une
+> invocation qui présente **exactement** la signature ci-dessus, `raw == "OK"`
+> compris, **pour la commande caractérisée**.
+>
+> Rien au-delà. `raw` portant une **autre** chaîne — quelle qu'elle soit, et
+> quelque « positive » qu'elle paraisse — n'est **pas** cette signature :
+> l'adaptateur **MUST NOT** en dériver `OK`. Aucun autre jeton, aucun autre
+> datapoint, aucune autre commande, et **aucune signature de refus** ne sont
+> couverts par cette levée. Ce qui n'a pas été observé reste non observé.
+
+Trois bornes accompagnent cette levée, et elles ne sont pas négociables.
+
+**Précédence sur la ligne 5 de §9.** La table classe « tout le reste, y compris
+code retour nul » en `TRANSPORT_ERROR`. Pour la **seule** signature exacte
+ci-dessus, la présente clause **prime** sur cette ligne : l'invocation n'est plus
+« tout le reste », elle est un cas caractérisé. La ligne 5 conserve toute son
+autorité partout ailleurs, et reste le repli par défaut. Le reste de la table est
+inchangé.
+
+**Un `OK` de transport ne dit rien de plus qu'avant.** §6 n'est pas touché :
+succès local ≠ écriture appliquée. Le cœur continue de trancher par relecture, et
+rendre `OK` au lieu de `TRANSPORT_ERROR` ne raccourcit aucun chemin de décision —
+cela nomme seulement plus honnêtement ce qui a été observé.
+
+**Le champ `value` reste inutilisable.** W4-C §16.4 et §16.5 établissent que, sur
+une écriture acceptée, il vaut `0.000000` alors que le datapoint vaut autre chose
+— et qu'en **lecture**, cette même valeur accompagne une **erreur** (C7 §1.1,
+fixture `unknown_command_json`). L'adaptateur **MUST NOT** en dériver quoi que ce
+soit. §9.2 s'étend donc d'un cran : ni le code retour, ni `value` ne produisent un
+statut.
+
+**Les deux autres interdictions tiennent.** §11.6 (`DAEMON_UNREACHABLE`) exigeait
+« la même signature observée sur une invocation d'écriture » : aucune défaillance
+n'a été observée, aucune n'a été provoquée, et W4-C §12 interdisait de le faire.
+§12.3 (`UNKNOWN_COMMAND`) est dans le même cas. **Les deux restent en vigueur**,
+et W4-B doit le constater plutôt que l'inférer — une absence d'échec n'est pas la
+connaissance d'une signature d'échec.
+
+**Portée.** Cette levée vaut pour la commande caractérisée. Elle ne se généralise
+ni aux trois autres rôles inscriptibles, ni à d'autres versions du client.
+**W4-C §16** n'ouvre aucun lot : W4-B reste à ouvrir, W4-D reste à ouvrir.
+
 ---
 
 ## 10. Délai d'écriture
@@ -486,6 +551,11 @@ concrète n'est arrêtée aujourd'hui.
 Chacune est **INCONNUE**, et aucune ne doit être comblée par intuition. Toutes
 relèvent de **W4-C**, dont le protocole est déjà écrit en **C5 §12** — W4-A ne le
 répète pas.
+
+> **Après la campagne terrain.** Cette liste reste celle des inconnues **telles
+> que W4-A les a posées** ; elle n'est pas réécrite après coup. Le statut réel de
+> chacune, après exécution, est porté par **`w4c-write-capture-protocol.md`
+> §16.8**, qui fait autorité sur ce point. Plusieurs restent intactes.
 
 | # | Inconnue | Conséquence si devinée |
 | --- | --- | --- |
@@ -755,6 +825,12 @@ Trois statuts sont **temporairement interdits** — `OK`, `DAEMON_UNREACHABLE`,
 `UNKNOWN_COMMAND` — parce que chacun repose sur une signature observée en lecture
 seulement, et que deux d'entre eux court-circuitent la relecture. Les lever est
 précisément l'objet de W4-C.
+
+> **Après W4-C — un sur trois.** La caractérisation terrain a été exécutée. Elle
+> a établi une signature de succès local, donc **`OK` lève** (§9.3). Elle n'a
+> observé **aucune** défaillance d'écriture — et n'avait pas le droit d'en
+> provoquer —, donc `DAEMON_UNREACHABLE` et `UNKNOWN_COMMAND` **restent
+> interdits**. Le reste de ce document est inchangé.
 
 Ce que W4-A refuse de faire compte autant que ce qu'il décide : aucun nom de
 commande, aucune borne, aucune valeur de délai qualifiée, aucune syntaxe

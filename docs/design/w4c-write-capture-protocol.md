@@ -17,9 +17,12 @@
 > nouveau (§13.1). La méthode, la séquence et la cardinalité sont
 > **inchangées** depuis la V1. Ce document ne livre aucune ligne de code et ne
 > modifie aucun test. Il décrit une campagne de mesure à exécuter **une fois**,
-> sur l'installation de référence, par l'exploitant. Tant qu'elle n'a pas été
-> exécutée et rapportée, W4-D reste fermé et aucune ligne d'arguments d'écriture
-> réelle n'entre dans le produit.
+> sur l'installation de référence, par l'exploitant.
+>
+> **La campagne a été exécutée le 22 août 2026.** Ses résultats sont au **§16**,
+> qui clôt le lot. Les sections 1 à 15 restent le protocole tel qu'il a été écrit
+> avant, et ne sont pas réécrites après coup. W4-C est clos ; **W4-D peut être
+> ouvert, et ne l'est pas par ce document**.
 
 ---
 
@@ -853,3 +856,258 @@ s'y trompe :
 Elle établit une chose, et une seule : **ce que `vclient -J` répond quand une
 écriture aboutit.** C'est exactement ce qui manque à W4-B pour cesser d'être « non
 résolu pour l'invocation réelle ».
+
+---
+
+## 16. Résultats — la campagne a été exécutée
+
+**Le 22 août 2026, de 22:50:30 à 23:05:29 CEST**, sur l'installation de
+référence, exploitant physiquement présent du début à la fin. Les sections 1 à 15
+sont le protocole tel qu'il a été écrit **avant** ; celle-ci rapporte ce qui a été
+**observé**. Aucune des deux ne réécrit l'autre : la prédiction du §6 et le
+résultat du §16 se lisent ensemble.
+
+Une seule campagne. Aucune n'est autorisée à la suivre.
+
+### 16.1 Conditions réunies, et comment elles ont été établies
+
+| Condition | Établie par |
+|---|---|
+| M1 au repos | extérieur 22,8 °C, consigne ambiante M1 15,0 °C, **brûleur 0,0 %**, consigne ECS 10,0 °C |
+| présence physique | déclarée par l'exploitant, tenue sur toute la fenêtre |
+| **PR-1** — superviseur neutralisé | timer `inactive`/`dead` avec prochain tir **vide** ; unité d'exécution `inactive`/`dead`, **sortie constatée** ; **aucun processus du superviseur vivant**. Aucun raisonnement par absence de trace (§9.1) |
+| **PR-2** — pont arrêté | unité `inactive`/`dead`, `Result=success`, aucun redémarrage automatique ; **cadence de connexions au démon interrompue — zéro nouvelle connexion en 25 s** |
+| démon actif | `active`/`running`, jamais touché, lecture nue de code retour `0` |
+| one-writer | trois unités inscriptibles inactives, une seule session ouverte, **zéro connexion tierce au démon en 12 s** |
+| atelier | `<atelier>` sur stockage persistant, hors dépôt versionné ; helper du §10 **repris verbatim**, empreinte vérifiée |
+
+La neutralisation a été engagée juste après un cycle nominal, comme le §8.1 le
+recommande — mais la preuve reste celle des unités, pas celle du moment choisi.
+
+### 16.2 Valeur de campagne
+
+| Objet | Observé |
+|---|---|
+| `V_brut` — texte utile | `'2.000000 '`, espace terminale comprise |
+| `V_brut` — `raw` JSON | `'2.000000 '` |
+| `V_brut` — champ numérique | `2.0` |
+| valeur interprétée | `2.000000` en décimal exact |
+| **`V_canon`** | **`2`** |
+
+Concordance §12.3.1 vérifiée sur les deux niveaux. Dérivation §11.3 passée sous
+sept contrôles — partie fractionnaire nulle, entier exact, dans les bornes, sur
+le pas, représentation non ambiguë, reconversion sans perte, observations
+concordantes. La garde de fraîcheur du §11.1 a été **effectivement exercée** :
+une étape intermédiaire s'étant intercalée, la lecture a été refaite sous un nom
+incrémenté avant d'écrire, et elle concordait.
+
+**AB-2, AB-8 et AB-9 n'ont pas déclenché.** Aucun critère d'abandon, d'ailleurs,
+n'a déclenché de toute la campagne.
+
+### 16.3 Le fait central — signature d'une écriture acceptée
+
+Une invocation, une seule :
+
+```
+vclient -J -h <hôte> -p <port> -c "setNiveauM1 2"
+```
+
+| Sortie | Observé |
+|---|---|
+| `stdout` | `[{"command":"setNiveauM1 2","value":0.000000,"raw":"OK","error":""}]` |
+| `stderr` | **vide — 0 octet** |
+| code retour | **0** |
+| durée | **1,045 s** — valeur indicative, réserve d'horloge du §10 maintenue |
+
+C'est ce qui manquait au dépôt depuis le premier jour : **la forme que prend une
+écriture qui aboutit**, capturée une fois, sur un datapoint, dans des conditions
+maîtrisées.
+
+### 16.4 Ce que cette signature ne dit pas — `value` n'est pas une valeur
+
+> **Interdiction.** Le champ `value` d'une réponse d'**écriture** **MUST NOT**
+> être interprété comme la valeur du datapoint, ni comme une confirmation que
+> quoi que ce soit a été appliqué. Sur l'écriture acceptée observée ici, il vaut
+> `0.000000` alors que le datapoint valait, vaut et est resté à `2`.
+
+`0.000000` est ici un **remplissage**, pas une mesure. Aucune conclusion sur une
+normalisation par le démon ou par la chaudière n'en découle : I-8 reste entière,
+et la campagne l'a délibérément écartée en n'émettant qu'un entier exact (§11.3).
+
+La confirmation métier reste ce qu'elle a toujours été : **une relecture séparée
+du datapoint**. Cette campagne ne déplace pas cette frontière — elle la confirme.
+
+### 16.5 I-14 — étayée par comparaison directe, non close
+
+L'inconnue demandait quelles signatures de lecture sont **réellement**
+transposables à l'écriture. La réponse est maintenant adossée à des observations,
+et elle est contre-intuitive. Confrontation avec les fixtures C5 :
+
+| Champ | Lecture réussie (`read_ok_json`) | Lecture **en erreur** (`unknown_command_json`) | **Écriture acceptée (terrain)** | Transposable ? |
+|---|---|---|---|---|
+| code retour | `0` | `0` | `0` | **non discriminant** — confirmé une troisième fois |
+| `command` | `"getTempKist"` — nom seul | le nom inconnu | **`"setNiveauM1 2"` — nom ET argument** | **non** — la forme change |
+| `value` | `28.000000` — la valeur | **`0.000000`** | **`0.000000`** | **NON — et c'est le piège** |
+| `raw` | `"28.000000 Grad Celsius"` | `"ERR: command unknown"` | **`"OK"`** | **non** — jeton d'état, pas une représentation |
+| `error` | `""` | `"ERR: command unknown"` | `""` | **oui** — discriminant, comme C7 §1.1 l'établissait |
+| `stderr` | vide | non vide | **vide** | **oui, sur le succès** |
+
+> **Le piège, nommé.** En lecture, `value == 0.000000` **accompagne une erreur** —
+> C7 §1.1 le tient de la fixture `unknown_command_json`. En écriture, la même
+> valeur **accompagne un succès**. Les mêmes octets signifient l'inverse selon le
+> contexte. Un adaptateur qui transposerait l'heuristique de lecture vers
+> l'écriture classerait une écriture réussie en échec.
+>
+> Ce que la campagne établit, c'est donc moins une ressemblance qu'une
+> **dissemblance mesurée**, et c'est la partie utile.
+
+Ce qui reste **non observé**, et ne le sera pas ici : la signature d'un démon
+injoignable en écriture (I-15) et celle d'une commande inconnue ou refusée en
+écriture. **Aucun échec n'a été provoqué**, et une absence d'échec n'est pas la
+connaissance d'une signature d'échec. I-14 demeure donc **partiellement levée** —
+mais étayée, là où elle n'était qu'annoncée.
+
+### 16.6 Invariance, et un écart de cadence à consigner
+
+| Étape | Écart réel après l'écriture | Valeur relue |
+|---|---|---|
+| 04, forme `-J` | **+39 s** — cible ≈ 1 s | `2.000000` |
+| 05, forme `-J` | **+77 s** — cible +10 s | `2.000000` |
+| 06, forme texte | +92 s | `2.000000 ` |
+
+Preuve la plus forte de l'invariance : les quatre lectures en forme `-J`, avant
+comme après l'écriture, sont **byte-identiques** — même empreinte — et les deux
+lectures en forme texte également. Rien n'a bougé, et cela se démontre par
+comparaison d'octets plutôt que de valeurs affichées.
+
+> **Écart au protocole, assumé.** Les étapes 04 et 05 n'ont pas respecté les
+> cadences prévues : l'aller-retour de l'opérateur les rend inatteignables en
+> pratique. L'écart ne remet pas en cause l'invariance, mais il **interdit toute
+> conclusion sur un délai minimal de propagation**. I-7 n'est pas levée — elle ne
+> l'aurait de toute façon pas été, une écriture à l'identique ne propageant rien
+> (§6). Une campagne future qui voudrait mesurer un délai devrait automatiser la
+> relecture, ce que ce protocole interdit ailleurs pour d'autres raisons.
+
+### 16.7 Cardinalité et retour arrière
+
+> **`WRITE NOMINAL COUNT = 1`** · **`WRITE RESTAURATION COUNT = 0`**
+
+Preuve mécanique : une seule occurrence d'une commande d'écriture dans l'ensemble
+des métadonnées de l'atelier. L'étape 03 ayant été exécutée — ses trois fichiers
+sont présents, `.meta` compris (§12.2) —, la restauration était **autorisée et
+conditionnelle**. L'état courant a été constaté **avant** toute écriture : il
+concordait avec `V_brut` sur les trois relectures, donc **zéro écriture de
+restauration**. La commande armée avant l'étape 03 n'a jamais été tirée.
+
+### 16.8 Matrice des inconnues après terrain
+
+| Réf | Statut | Fondement |
+|---|---|---|
+| I-1 | **LEVÉE** | `-J` produit une sortie JSON valide et exploitable en écriture |
+| I-2 | levée avant campagne | E2 |
+| I-3 | **LEVÉE** | forme de `stdout` sur écriture acceptée, capturée (§16.3) |
+| I-4 | **LEVÉE** | `stderr` **vide, 0 octet** — premier flux jamais observé isolément |
+| I-5 | **LEVÉE** | code retour `0` sur écriture acceptée |
+| I-6 | **LEVÉE** | **1,045 s**, sous la réserve d'horloge du §10 |
+| I-7 | **non levée** | rien ne se propage ; l'écart de cadence du §16.6 l'interdit doublement |
+| I-8 | **non levée** | délibérément écartée par la règle canonique du §11.3 |
+| I-9 | contournée par construction | inchangé |
+| I-10 | **non levée** | non sollicitée par une écriture identique |
+| I-11 | **non levée** | indécidable sans changement de valeur |
+| I-12 | **non levée** | aucun délai épuisé n'est survenu |
+| I-13 | **non levée** | **aucun dépassement de budget n'est survenu, aucun n'a été provoqué** |
+| I-14 | **partiellement levée, étayée** | §16.5 |
+| I-15 | **non levée** | exigerait d'arrêter le démon — hors périmètre |
+
+**Attribution exacte du rendement.** La campagne terrain a levé **cinq**
+inconnues — I-1, I-3, I-4, I-5, I-6. **I-2 était déjà levée avant elle**, par
+l'expérience de production du pont (E2, §5) : la campagne ne la lève pas, elle en
+hérite. **I-14 reste partielle**, étayée mais non close. I-9 demeure contournée
+par construction, et **sept restent intactes** — I-7, I-8, I-10, I-11, I-12,
+I-13, I-15.
+
+C'est exactement le rendement annoncé au §6, ni plus, ni moins.
+
+### 16.9 W4-A §19 — onze champs renseignés
+
+| §19 | Renseigné par |
+|---|---|
+| 1 | `setNiveauM1` |
+| 2 | ligne réellement exécutée, portant `V_canon`, consignée sous forme reproductible |
+| 3 | `stdout` et `stderr` en fichiers distincts, jamais fusionnés |
+| 4 | `0` |
+| 5 | `1,045 s`, indicative |
+| 6 | `V_brut` intégrale **et** `V_canon`, côte à côte |
+| 7 | oui — `V_canon` désigne la même valeur que `V_brut` |
+| 8 | valeur après : `2.000000` ; **délai de stabilité non déterminé** (§16.6) |
+| 9 | armé et consigné **avant** l'étape 03 |
+| 10 | pont arrêté, PR-2 ; superviseur neutralisé timer **et** unité, PR-1 |
+| 11 | **`INCONNU NON LEVÉ — INTERDICTION CONSERVÉE`** |
+
+> **Onze champs renseignés n'est pas onze inconnues levées.** Les champs 8 et 11
+> portent une réponse négative, et c'est une réponse complète — W4-A §19 l'écrit :
+> un lot terrain a le droit de rapporter qu'il n'a pas pu établir un fait.
+
+### 16.10 Ce que W4-B reçoit, et ce qu'il ne doit pas en faire
+
+Pour **la commande caractérisée**, et pour elle seule, une écriture locale
+acceptée présente conjointement : processus terminé · code retour `0` · `stderr`
+vide · `stdout` en JSON valide · un objet · `command` portant la commande **et**
+son argument · `raw == "OK"` · `error == ""` · `value == 0.000000`.
+
+> **Trois bornes.** Cette signature vient d'**une** observation, sur **un**
+> datapoint, dans **un** succès : elle ne se généralise ni aux trois autres rôles
+> inscriptibles, ni aux échecs, ni à d'autres versions du client. · Le champ
+> `value` **MUST NOT** devenir un résultat métier. · Le verdict d'application
+> reste au cœur, par relecture, conformément à l'architecture existante.
+
+Aucune ligne de code n'est écrite ici. W4-B reste à ouvrir.
+
+### 16.11 Retour à l'état nominal
+
+Le pont a été repris et sa reprise établie sur les **trois** faits du §13.1 :
+unité active · cadence de connexions au démon repartie · **télémétrie
+effectivement publiée**, observée depuis un consommateur aval avec les messages
+retenus exclus, portant le datapoint de la campagne à sa valeur. Le superviseur a
+ensuite été rétabli et a repassé un cycle **nominal sans action corrective**, son
+timer ré-armé.
+
+État final : aucun redémarrage machine · démon jamais touché · pont redémarré une
+seule fois, par l'exploitant · datapoint à `2.000000`, pente inchangée, brûleur à
+l'arrêt.
+
+### 16.12 Artefacts — écart au §14.2, assumé
+
+Les captures — trois fichiers par invocation, plus les journaux de preuve —
+résident dans `<atelier>`, sur la machine de référence. **Elles ne sont pas
+versionnées dans ce dépôt.**
+
+> **ÉCART AU §14.2, ASSUMÉ.** Le §14.2 prescrit que « les captures sont
+> versionnées dans `tests/fixtures/vclient/`, selon la convention établie par
+> C5 ». **Cette campagne ne l'a pas fait**, et le présent paragraphe le déclare
+> plutôt que de le laisser passer sous silence. Le §14.2 n'est pas réécrit
+> rétroactivement : il a été prescrit avant, il reste au dossier tel quel.
+
+Ce que cet écart recouvre, précisément :
+
+- les captures **existent** et sont **conservées hors dépôt**, intactes ;
+- aucune n'a été copiée, transformée, encodée ni tronquée par cette clôture ;
+- leur **sélection** éventuelle — toutes, certaines, aucune — et leur
+  transformation en fixtures versionnées relèvent d'une **décision explicite
+  ultérieure**, avec les mêmes exigences que C5 : encodage base64, flux séparés,
+  couverture par un test de caractérisation ;
+- **cette décision n'est pas prise ici**, et ne conditionne pas la clôture de
+  W4-C.
+
+Un relevé terrain n'entre pas dans le dépôt au seul motif qu'il existe. Le
+reporter n'ouvre aucun chantier bloquant : W4-B et W4-D peuvent être ouverts sans
+lui, la signature dont ils ont besoin étant consignée au §16.3.
+
+### 16.13 Ce que cette campagne n'a toujours pas prouvé
+
+Le §15 reste vrai, mot pour mot, et il faut le relire après coup autant qu'avant.
+En particulier : rien sur une écriture **qui change** une valeur, rien sur un
+refus, un démon injoignable ou un délai épuisé, rien au-delà de `setNiveauM1`, et
+aucune autorisation d'activer la voie transactionnelle — qui relève de W4-E.
+
+**W4-C est clos. W4-D peut être ouvert. Il ne l'est pas par ce document.**
