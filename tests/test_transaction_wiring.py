@@ -6,9 +6,14 @@ PRODUCTION partout ou W4 n'est pas necessaire :
     PahoMqttClient (reel)  -> CommandIntake (reel)  -> TransactionalCore (reel)
     -> TransactionSurface (reel) -> ReadSurfaceRunner (reel)
 
-Les seuls doubles se tiennent aux DEUX frontieres que W4 n'a pas encore
-franchies — le transport `vclient` et le profil — plus le client Paho lui-meme,
-frontiere de test deja prevue par C4 (`PahoLike` est injectable).
+Les seuls doubles se tiennent aux deux frontieres de W4 — le transport
+`vclient` et le profil — plus le client Paho lui-meme, frontiere de test deja
+prevue par C4 (`PahoLike` est injectable).
+
+Depuis W4-D, un profil de PRODUCTION existe ; ces tests continuent d'employer le
+DOUBLE, et c'est deliberé : ils eprouvent le cablage W3, pas le contenu du
+profil reel, et le double porte les roles varies dont ils ont besoin. Le profil
+de production a ses propres tests.
 
 Aucun broker, aucun Pi, aucun `vcontrold`, aucune chaudiere, aucun reseau,
 aucune attente reelle, aucun `sleep` de test.
@@ -918,8 +923,21 @@ def test_l_adaptateur_vclient_reel_ne_sait_pas_ecrire() -> None:
     assert not hasattr(VClientCliReader, "write")
 
 
-def test_aucun_profil_reel_dans_le_code_de_production() -> None:
-    """Barriere W4 n° 2 : le seul constructeur de `Profile` est un double."""
+def test_les_constructeurs_de_profil_sont_une_liste_fermee() -> None:
+    """Barriere W4 n° 2 — LEVEE par W4-D, remplacee par une liste fermee.
+
+    Jusqu'a W4-D, aucun `Profile` reel n'existait, et c'etait la seconde des deux
+    dependances qui fermaient la production. W4-D en livre un : la barriere n° 2
+    ne tient donc plus, et le pretendre serait faux.
+
+    Ce qui reste verifiable, et le reste ici : les constructeurs de `Profile`
+    forment une liste FERMEE. Un troisieme apparaissant sans lot dedie fait
+    echouer ce test.
+
+    La fermeture de la production repose desormais sur la SEULE barriere n° 1 —
+    aucun adaptateur d'ecriture reel — et sur le fait qu'aucun module de
+    production n'appelle la fabrique (`tests/core/test_production_profile.py`).
+    """
     racine = pathlib.Path(__file__).resolve().parents[1] / "src" / "boilerack"
     constructeurs = []
     for fichier in racine.rglob("*.py"):
@@ -932,7 +950,10 @@ def test_aucun_profil_reel_dans_le_code_de_production() -> None:
                 and noeud.func.id == "Profile"
             ):
                 constructeurs.append(fichier.relative_to(racine).as_posix())
-    assert constructeurs == ["testing/fake_profile.py"]
+    assert sorted(constructeurs) == [
+        "core/production_profile.py",
+        "testing/fake_profile.py",
+    ]
 
 
 def test_aucun_double_de_test_importe_par_le_code_de_production() -> None:
@@ -964,7 +985,12 @@ def test_aucune_ecriture_vclient_reelle_dans_le_code_de_production() -> None:
 
     `vcontrold` est cite ailleurs — aide de la ligne de commande, docstrings —
     et le citer n'ecrit rien : la preuve porte sur les DEFINITIONS de `write`
-    dans la couche adaptateurs, et sur l'absence de nom de commande d'ecriture.
+    dans la couche adaptateurs.
+
+    Depuis W4-D, un nom de commande d'ecriture REEL existe en production —
+    `setNiveauM1`, dans le profil. La preuve ne porte donc plus sur l'absence de
+    tout nom d'ecriture, mais sur celle des noms FICTIFS du double, qui n'ont
+    rien a faire hors de `testing/`.
     """
     racine = pathlib.Path(__file__).resolve().parents[1] / "src" / "boilerack"
     definitions = []

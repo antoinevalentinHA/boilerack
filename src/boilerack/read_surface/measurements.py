@@ -6,11 +6,19 @@ Implemente la table normative §4.2 et la politique de fraicheur §7.2 du contra
 POURQUOI PAS `CommandSpec`
     `boilerack.core.profile.CommandSpec` exige `min`, `max`, `step`,
     `confirm_tolerance` et surtout `bounds_source` — « provenance des bornes et
-    du pas ». Aucune de ces informations n'existe pour les huit mesures de
-    lecture : le contrat n'en fixe ni plage ni tolerance, et aucun profil de
-    production n'existe dans le depot. Les remplir reviendrait a inventer une
-    provenance. `MeasurementSpec` est donc une structure distincte, strictement
-    limitee a ce que la surface de lecture consomme.
+    du pas ». Le contrat de lecture n'en fixe AUCUNE pour ses huit mesures : les
+    remplir reviendrait a inventer une provenance.
+
+    Un profil de production EXISTE depuis W4-D, mais il ne change rien ici. Il
+    ne declare que les roles INSCRIPTIBLES effectivement caracterises — un seul
+    aujourd'hui — et ses metadonnees sont transactionnelles : bornes, pas et
+    tolerance servent a valider une commande puis a confirmer une relecture. La
+    surface de lecture n'en consomme aucune, et sept de ses huit mesures n'y
+    figurent d'ailleurs pas.
+
+    `MeasurementSpec` reste donc la structure juste : distincte, strictement
+    limitee a ce que la surface de lecture consomme, et sans dependance envers
+    `Profile`.
 
 CHAMPS DELIBEREMENT ABSENTS
     Ni unite, ni type metier, ni forme scalaire, ni valeur, ni bornes, ni

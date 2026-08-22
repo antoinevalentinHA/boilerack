@@ -13,12 +13,15 @@ FRONTIERE W4 — LA BARRIERE EST UN TYPE, PAS UNE POLITIQUE
 
     - le seul adaptateur `vclient` reel, `VClientCliReader`, n'implemente que
       `read` : il ne satisfait PAS `VClient` ;
-    - aucun `Profile` reel n'existe — le seul constructeur est
-      `boilerack.testing.fake_profile`, declare infrastructure de test.
+    - un `Profile` reel EXISTE depuis W4-D — `core.production_profile` —, mais
+      aucun module de production ne l'appelle.
 
-    Aucun appelant de production ne peut donc construire cette surface. Ce n'est
-    pas un interrupteur qu'on pourrait oublier ouvert : c'est l'absence des deux
-    dependances obligatoires. Ouvrir la voie exige W4, et W4 seul.
+    La seconde dependance n'est donc plus absente : elle est simplement non
+    composee. Aucun appelant de production ne peut construire cette surface,
+    faute d'un `VClient` ecrivain. Ce n'est pas un interrupteur qu'on pourrait
+    oublier ouvert : c'est un TYPE que rien ne peut satisfaire aujourd'hui.
+    Ouvrir la voie exige l'adaptateur d'ecriture (W4-B) puis la composition
+    (W4-E).
 
 CE QUE CE MODULE NE FAIT PAS
     Aucun decodage JSON, aucune validation, aucune deduplication : W1 §11.3 remet

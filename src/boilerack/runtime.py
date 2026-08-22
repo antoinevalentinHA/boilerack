@@ -341,9 +341,10 @@ def build_runtime(
     VOIE TRANSACTIONNELLE — `transaction` est optionnel et vaut `None` par
     defaut : la racine de composition n'en construit AUCUNE, et ne le peut pas.
     `build_transaction_surface` exige un `VClient` — donc `read` ET `write` — et
-    un `Profile` ; or `VClientCliReader` n'implemente que `read`, et aucun
-    `Profile` reel n'existe dans ce depot. La voie reste donc fermee en
-    production tant que W4 n'a pas livre ces deux dependances. Fournir une
+    un `Profile`. Le second existe depuis W4-D (`core.production_profile`) et
+    n'est appele par aucun module de production ; le premier n'existe pas du
+    tout, `VClientCliReader` n'implementant que `read`. La voie reste donc
+    fermee en production, desormais par cette seule dependance manquante. Fournir une
     surface deja construite est le point d'entree prevu pour W4 et pour les
     preuves hors terrain ; ce n'est pas un interrupteur qu'on pourrait laisser
     ouvert par megarde, mais l'absence de deux dependances obligatoires.
