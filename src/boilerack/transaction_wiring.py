@@ -7,21 +7,24 @@ runner pilote. Ce module ne decide RIEN : il applique.
     W2 -> quel fil, quelle cadence, quel ordre, quel demarrage, quel arret
     W0 -> la souscription survit a une reconnexion, sans que ce module s'en mele
 
-FRONTIERE W4 — LA BARRIERE EST UN TYPE, PAS UNE POLITIQUE
+FRONTIERE W4 — UNE ABSTENTION FALSIFIABLE, PLUS UNE IMPOSSIBILITE
     `build_transaction_surface` exige un `VClient` (donc `read` ET `write`) et un
     `Profile`. Or, dans ce depot :
 
-    - le seul adaptateur `vclient` reel, `VClientCliReader`, n'implemente que
-      `read` : il ne satisfait PAS `VClient` ;
+    - un `VClient` ecrivain EXISTE depuis W4-B — `adapters.vclient_write` —,
+      mais aucun module de production ne le construit ;
     - un `Profile` reel EXISTE depuis W4-D — `core.production_profile` —, mais
       aucun module de production ne l'appelle.
 
-    La seconde dependance n'est donc plus absente : elle est simplement non
-    composee. Aucun appelant de production ne peut construire cette surface,
-    faute d'un `VClient` ecrivain. Ce n'est pas un interrupteur qu'on pourrait
-    oublier ouvert : c'est un TYPE que rien ne peut satisfaire aujourd'hui.
-    Ouvrir la voie exige l'adaptateur d'ecriture (W4-B) puis la composition
-    (W4-E).
+    LA BARRIERE A CHANGE DE NATURE, ET IL FAUT LE DIRE
+        Ce n'est plus un TYPE que rien ne peut satisfaire : les deux
+        dependances existent desormais, et un appelant qui les assemblerait
+        obtiendrait une surface fonctionnelle. La fermeture ne tient donc plus
+        a une impossibilite, mais au fait que RIEN NE LES COMPOSE.
+
+        C'est une garantie plus faible, et des tests dedies la rendent
+        falsifiable plutot que declarative. Ouvrir la voie relève de W4-E, et de
+        lui seul.
 
 CE QUE CE MODULE NE FAIT PAS
     Aucun decodage JSON, aucune validation, aucune deduplication : W1 §11.3 remet

@@ -24,7 +24,12 @@ ABSENCE VOLONTAIRE D'ECRITURE
     qui serait un mensonge typé.
 
     Une methode absente est honnete ; une methode bouchon serait dangereuse.
-    La conformite `VClient` attend la caracterisation reelle de l'ecriture.
+    La conformite `VClient` attendait la caracterisation reelle de l'ecriture.
+
+    ELLE A EU LIEU. La campagne W4-C a observe une ecriture acceptee, et W4-B en
+    a tire `adapters.vclient_write.VClientCli`, qui ETEND cette classe et ajoute
+    `write`. Ce lecteur-ci reste volontairement en lecture seule : le
+    raisonnement ci-dessus vaut toujours pour lui, et l'ecriture est ailleurs.
 
 Ce module ne contacte aucun systeme reel par lui-meme : il delegue au
 `ProcessRunner` qu'on lui injecte.
