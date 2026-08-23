@@ -728,6 +728,112 @@ c'est le contenu même du profil, et c'est ce que W4-D avait à livrer.
 
 **W4-B reste à ouvrir. W4-E n'est pas ouvert. W4-F reste terrain.**
 
+### 18.4 Après W4-B — l'adaptateur existe, et la fermeture change de nature
+
+*Note ajoutée après la livraison de W4-B. Elle ne réécrit ni §5, ni §9, ni §18 :
+elle constate ce que la livraison rend faux, et ce qu'elle laisse intact.*
+
+W4-B a livré `adapters/vclient_write.py` : un `WriteInvocation` injecté, sa
+résolution de production, et `VClientCli` — qui étend le lecteur, ajoute `write`
+et devient **le premier type du dépôt à satisfaire `VClient`**.
+
+**Deux faits d'entrée de §5 sont périmés.**
+
+| Fait | Énoncé en §5 | Depuis W4-B |
+|---|---|---|
+| **F3** | `write_timeout_s` est « déclaré et validé, **jamais consommé** » | **faux** — `write()` le consomme comme budget d'invocation, ce que §10 exigeait |
+| **F5** | « aucun adaptateur d'écriture de production » | **faux** — il en existe un |
+
+F5 était, depuis W4-D (§18.3), la dernière des deux dépendances absentes de
+§18.2. **Les deux sont désormais présentes.** §5 n'est pas réécrit : il énonçait
+des faits mesurés à sa rédaction, et les corriger après coup effacerait la
+mesure.
+
+> **Ce que cela change, et qu'il faut dire sans l'adoucir.** La production
+> n'est plus fermée par une **impossibilité** — un type que rien ne pouvait
+> satisfaire — mais par une **abstention** : rien ne compose les deux pièces.
+> C'est une garantie plus faible que celle des lots précédents.
+>
+> Elle est en revanche **falsifiable**, et des preuves dédiées la portent :
+> aucun module de production ne construit l'adaptateur, n'appelle
+> `build_production_profile`, ni n'appelle `build_transaction_surface`. Faire
+> tomber l'une d'elles rouvrirait la voie, et chacune fait échouer un test.
+>
+> **W4-E est le seul lot autorisé à composer.** W4-B ne l'a pas fait.
+
+#### Comment relire l'obligation 13 de §18
+
+L'obligation 13 interdit à W4-B de « rendre `OK`, `DAEMON_UNREACHABLE` ou
+`UNKNOWN_COMMAND` », en renvoyant à « §9.1, §11.6, §12.3 ». Le renvoi est la clé,
+et il reste exact : chacune de ces trois clauses gouverne son statut, et
+l'obligation 13 ne fait que les rassembler.
+
+> **Lecture normative.** Deux des trois interdictions sont inchangées. La
+> troisième a été **levée par sa propre clause**, dont §9.3 constate que la
+> condition est remplie. L'obligation 13 se lit donc comme le renvoi qu'elle est,
+> et non comme une quatrième interdiction autonome qui survivrait à la clause
+> qu'elle cite.
+
+| Statut | Clause | État |
+|---|---|---|
+| `OK` | §9.1, levée constatée en §9.3 | **autorisé**, et uniquement pour la signature littérale de §9.3 |
+| `DAEMON_UNREACHABLE` | §11.6 | **interdit** — aucune défaillance d'écriture observée |
+| `UNKNOWN_COMMAND` | §12.3 | **interdit** — idem |
+
+Partout ailleurs, la fermeture conservatrice de §9 subsiste : la ligne 5 reste le
+repli par défaut, et une signature non caractérisée n'obtient rien de mieux que
+`TRANSPORT_ERROR`. §18 n'est pas réécrit.
+
+#### Obligation 11 — l'arbitrage de §7.3 est rendu
+
+§7.3 demandait à W4-B de trancher : `WriteResult` ne porte pas de `raw`, alors
+que `ReadResult` en porte un.
+
+> **Tranché : `detail` suffit, aucun champ n'est ajouté.** Le seul besoin qui
+> exigeait la sortie **intégrale** d'une écriture était la capture de W4-C — or
+> W4-C a eu lieu, et l'a capturée hors du code, dans des fichiers dédiés. Ce qui
+> reste utile à l'exécution est un diagnostic, et un diagnostic se borne.
+> Ajouter un champ à la taxonomie de transport pour un besoin désormais
+> satisfait ailleurs serait un élargissement sans consommateur — que
+> l'obligation 21 interdit par ailleurs.
+
+#### Obligations 10 et 20 — une échéance portée par deux textes sur trois
+
+§8.1 exige que la partie B soit « un collaborateur **injecté ou paramétré**,
+substituable par un double en test, et **MUST NOT** être résolue en production
+**avant W4-C** ». L'obligation 20 interdit de livrer une fabrique résolue
+« **avant W4-C** ». **W4-C a eu lieu** : dans ces deux textes, l'échéance est
+écrite, et elle est atteinte.
+
+> **Une tension textuelle, qu'il faut nommer plutôt que gommer.**
+> L'obligation 10 reprend la même exigence en trois membres — « injectée ou
+> paramétrée, substituable par un double, et **non résolue en production** » —
+> mais **sans le qualificatif temporel**. Prise à la lettre et isolément, elle
+> interdirait pour toujours ce que §8.1 n'interdisait que jusqu'à W4-C.
+>
+> Ce n'est pas ce qu'elle dit : l'obligation 10 est la reformulation abrégée
+> d'une clause dont §8.1 est le texte normatif, comme les obligations 12 et 13
+> l'étaient de §18.2 et de §9.1/§11.6/§12.3. §18 est une **checklist**, et une
+> checklist résume.
+>
+> **Lecture post-W4-C du troisième membre.** « Non résolue en production » se lit
+> « **non composée, non activée dans la voie de production** ». C'est la seule
+> lecture qui laisse les trois textes cohérents entre eux, et elle est
+> vérifiable : aucun module de production ne construit la fabrique.
+
+Les deux premiers membres, eux, n'ont jamais eu d'échéance et sont tenus sans
+réserve : la fabrique est **injectée**, sans valeur par défaut, keyword-only, et
+un double la remplace intégralement dans les tests.
+
+Ce que W4-C n'a pas caractérisé n'est pas résolu pour autant : la représentation
+textuelle d'une valeur **non entière** relève de **I-8**, qui n'est pas levée, et
+la fabrique **refuse** de la produire plutôt que d'en inventer une. De même, un
+nom de commande porteur d'espacement interne est refusé **avant émission** : sur
+le chemin d'écriture, l'argument de `-c` porte la commande *et* sa valeur, si
+bien qu'un espace y insérerait un mot supplémentaire.
+
+**W4-E n'est pas ouvert. W4-F reste terrain.**
+
 ---
 
 ## 19. Ce que W4-C devra rapporter

@@ -341,13 +341,15 @@ def build_runtime(
     VOIE TRANSACTIONNELLE — `transaction` est optionnel et vaut `None` par
     defaut : la racine de composition n'en construit AUCUNE, et ne le peut pas.
     `build_transaction_surface` exige un `VClient` — donc `read` ET `write` — et
-    un `Profile`. Le second existe depuis W4-D (`core.production_profile`) et
-    n'est appele par aucun module de production ; le premier n'existe pas du
-    tout, `VClientCliReader` n'implementant que `read`. La voie reste donc
-    fermee en production, desormais par cette seule dependance manquante. Fournir une
+    un `Profile`. Les DEUX existent desormais : `adapters.vclient_write` depuis
+    W4-B, `core.production_profile` depuis W4-D. Aucun module de production n'en
+    construit ni n'en appelle aucun. La voie reste donc fermee non par une
+    dependance manquante, mais parce que rien ne la compose — ce que W4-E aura
+    seul autorite pour changer. Fournir une
     surface deja construite est le point d'entree prevu pour W4 et pour les
-    preuves hors terrain ; ce n'est pas un interrupteur qu'on pourrait laisser
-    ouvert par megarde, mais l'absence de deux dependances obligatoires.
+    preuves hors terrain. Ce n'est plus l'absence de dependances qui ferme la
+    voie — elles existent — mais le fait que rien ne les assemble : une
+    abstention, verifiee par des preuves dediees plutot que declaree ici.
     """
     clock = clock if clock is not None else SystemClock()
     # L'annotation dit ce que la surface de lecture EXIGE : le port MQTT et la

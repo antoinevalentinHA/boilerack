@@ -916,11 +916,53 @@ def test_la_racine_de_composition_ne_construit_aucune_voie(monkeypatch) -> None:
 
 
 def test_l_adaptateur_vclient_reel_ne_sait_pas_ecrire() -> None:
-    """Barriere W4 n° 1 : `VClientCliReader` ne satisfait pas `VClient`."""
+    """Barriere W4 n° 1 — LEVEE par W4-B, et remplacee par une liste fermee.
+
+    Jusqu'a W4-B, aucun adaptateur ne savait ecrire, et c'etait la derniere des
+    deux dependances qui fermaient la production. W4-B en livre un : la barriere
+    n° 1 ne tient plus, et le pretendre serait faux.
+
+    Deux choses restent verifiables, et le restent ici.
+
+    D'abord, le LECTEUR n'a pas change : il n'ecrit toujours pas, et ne satisfait
+    toujours pas `VClient` a lui seul. W4-B l'a etendu par heritage sans le
+    toucher.
+
+    Ensuite, les types qui satisfont `VClient` forment une liste FERMEE. Un
+    troisieme apparaissant sans lot dedie fait echouer ce test.
+
+    La fermeture de la production ne repose donc PLUS sur une dependance
+    absente : les deux existent. Elle repose entierement sur le fait que RIEN ne
+    les compose — ce que prouvent
+    `test_la_surface_n_est_construite_nulle_part_en_production`,
+    `test_la_racine_de_composition_ne_construit_aucune_voie` et les barrieres de
+    `tests/adapters/test_vclient_write.py`.
+    """
     from boilerack.adapters.vclient_cli import VClientCliReader
+    from boilerack.adapters.vclient_write import VClientCli
+    from boilerack.transport.vclient import VClient
 
     assert hasattr(VClientCliReader, "read")
     assert not hasattr(VClientCliReader, "write")
+
+    # Implementations de `write` dans la couche ADAPTATEURS. Le scan reste borne
+    # a `adapters/` comme avant W4-B : `transport/vclient.py` y DECLARE `write`
+    # dans le Protocol, et une declaration n'est pas une implementation.
+    racine = pathlib.Path(__file__).resolve().parents[1] / "src" / "boilerack"
+    ecrivains = []
+    for fichier in (racine / "adapters").rglob("*.py"):
+        if "__pycache__" in fichier.parts:
+            continue
+        for noeud in ast.walk(ast.parse(fichier.read_text(encoding="utf-8"))):
+            if isinstance(noeud, ast.FunctionDef) and noeud.name == "write":
+                ecrivains.append(fichier.name)
+    assert sorted(ecrivains) == ["vclient_write.py"]
+
+    # L'unique ecrivain etend le lecteur au lieu de le dupliquer, et satisfait
+    # enfin `VClient` — ce que le lecteur seul ne fait toujours pas.
+    assert issubclass(VClientCli, VClientCliReader)
+    assert issubclass(VClientCli, VClient) is True
+    assert issubclass(VClientCliReader, VClient) is False
 
 
 def test_les_constructeurs_de_profil_sont_une_liste_fermee() -> None:
@@ -980,28 +1022,19 @@ def test_aucun_double_de_test_importe_par_le_code_de_production() -> None:
 
 
 def test_aucune_ecriture_vclient_reelle_dans_le_code_de_production() -> None:
-    """Aucun adaptateur de production n'implemente `write`, et aucune commande
-    d'ecriture de chaudiere n'est ecrite en dur.
+    """Aucun nom de commande d'ecriture FICTIF ne sort de `testing/`.
 
-    `vcontrold` est cite ailleurs — aide de la ligne de commande, docstrings —
-    et le citer n'ecrit rien : la preuve porte sur les DEFINITIONS de `write`
-    dans la couche adaptateurs.
+    Ce test portait aussi, jusqu'a W4-B, sur l'absence de toute definition de
+    `write` dans la couche adaptateurs. W4-B en livre une : ce volet a donc
+    migre vers `test_l_adaptateur_vclient_reel_ne_sait_pas_ecrire`, ou il est
+    devenu une liste fermee au lieu d'une absence.
 
-    Depuis W4-D, un nom de commande d'ecriture REEL existe en production —
-    `setNiveauM1`, dans le profil. La preuve ne porte donc plus sur l'absence de
-    tout nom d'ecriture, mais sur celle des noms FICTIFS du double, qui n'ont
-    rien a faire hors de `testing/`.
+    Depuis W4-D, un nom de commande d'ecriture REEL existe egalement en
+    production — `setNiveauM1`, dans le profil. Ce qui reste interdit hors de
+    `testing/`, ce sont les noms FICTIFS du double : les y trouver signalerait
+    qu'un test a fui dans le produit.
     """
     racine = pathlib.Path(__file__).resolve().parents[1] / "src" / "boilerack"
-    definitions = []
-    for fichier in (racine / "adapters").rglob("*.py"):
-        if "__pycache__" in fichier.parts:
-            continue
-        for noeud in ast.walk(ast.parse(fichier.read_text(encoding="utf-8"))):
-            if isinstance(noeud, ast.FunctionDef) and noeud.name == "write":
-                definitions.append(fichier.name)
-    assert definitions == [], "un adaptateur de production implemente write"
-
     for fichier in racine.rglob("*.py"):
         if "__pycache__" in fichier.parts or "testing" in fichier.parts:
             continue
