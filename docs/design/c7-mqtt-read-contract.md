@@ -690,6 +690,41 @@ de lecture, qui porterait alors sur l'écriture.
 > arbitrer la convergence des namespaces transactionnel et de lecture. C7-B
 > **n'autorise pas** une coexistence permanente sans décision.
 
+### 14.1 Dette levée par W4-E1 — note de clôture
+
+*Note ajoutée après coup. Elle ne réécrit rien de §14 : la dette a été
+enregistrée ici, elle est levée ailleurs, et les deux doivent rester lisibles.*
+
+La composition root publique dont §14 faisait la condition est celle du lot
+**W4-E**. Son contrat, `w4e-composition-activation.md` §8, a rendu l'arbitrage :
+
+> **Une installation Boilerack possède une seule racine de topics. Les surfaces
+> en sont des sous-arbres.**
+>
+> | Sous-arbre | Surface |
+> |---|---|
+> | `<racine>/telemetry/…` | lecture — §4.2, §11 |
+> | `<racine>/bridge/…` | lecture, service — §11 |
+> | `<racine>/command` | transactionnelle |
+> | `<racine>/ack/<role>` | transactionnelle |
+
+**La surface de lecture n'est pas touchée.** La racine est celle qu'elle
+configure déjà, ses onze suffixes sont inchangés, et son défaut reste `boiler`.
+Ce sont les topics **transactionnels** qui en sont désormais dérivés :
+`boilerack/command` et `boilerack/ack` deviennent des défauts de bibliothèque —
+au sens où W1 §8.3 a qualifié `DEFAULT_ACK_TOPIC_PREFIX` — et cessent d'être
+l'autorité runtime.
+
+**Pourquoi ce sens et pas l'autre.** Converger vers `boilerack/…` aurait exigé
+de migrer une surface **livrée et documentée** — §11, C10, le fichier d'exemple.
+Converger vers la racine existante ne coûte que deux **défauts que rien n'a
+jamais publiés**, aucun écrivain n'ayant jamais été actif.
+
+**La précondition de §14 est donc satisfaite** : la coexistence n'est plus
+permanente ni tacite, elle est arbitrée. `V1_SUFFIXES` reste ce qu'il est — la
+liste fermée des suffixes de la surface de LECTURE — et continue d'exclure la
+commande et les acquittements, qui appartiennent à l'autre sous-arbre.
+
 ---
 
 ## 15. Inconnues restantes
