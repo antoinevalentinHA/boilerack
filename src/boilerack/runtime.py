@@ -36,7 +36,7 @@ docs/design/c8-composition-root.md.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Final, Protocol, Sequence
+from typing import TYPE_CHECKING, Callable, Final, Protocol, Sequence
 
 from boilerack.adapters.config import MqttConfig, VclientConfig
 from boilerack.adapters.mqtt_paho import PahoMqttClient
@@ -65,6 +65,7 @@ __all__ = [
     "Runtime",
     "ReadSurfaceRunner",
     "build_runtime",
+    "TransactionSurfaceConfig",
 ]
 
 #: Messages des groupes d'erreurs. Non contractuels : seule importe la
@@ -98,6 +99,36 @@ class NeverStop:
 
 
 @dataclass(frozen=True)
+class TransactionSurfaceConfig:
+    """AUTORITE D'ACTIVATION de la voie transactionnelle (W4-E1 §7.2).
+
+    `enabled` decide si la composition transactionnelle est AUTORISEE. Elle ne
+    dit rien d'autre — et surtout pas que Boilerack serait l'ecrivain souverain
+    de l'installation : cette question releve de W4-F. Le nom porte cette
+    distinction, la cle activant une SURFACE, pas une ecriture.
+
+    DEFAUT FERME
+        `False`. Une configuration qui ne mentionne ni la table ni la cle laisse
+        la voie fermee, et un fichier ecrit avant ce lot reste valide sans rien
+        composer.
+
+    POURQUOI ICI, ET PAS DANS `adapters/config.py`
+        Ce dernier porte les « modeles de configuration technique des
+        ADAPTATEURS reels (C4) » ; une autorite de composition n'en est pas un.
+        Ce module heberge deja `RuntimeConfig`, que `config.py` importe : y
+        ajouter ce type ne cree aucune arete d'import nouvelle.
+    """
+
+    enabled: bool = False
+
+    def __post_init__(self) -> None:
+        if type(self.enabled) is not bool:
+            raise ValueError(
+                f"enabled doit etre un booleen : {self.enabled!r}"
+            )
+
+
+@dataclass(frozen=True)
 class RuntimeConfig:
     """Configuration d'assemblage. **Contient** les configurations existantes.
 
@@ -114,6 +145,11 @@ class RuntimeConfig:
     vclient: VclientConfig
     read_surface: ReadSurfaceConfig = field(default_factory=ReadSurfaceConfig)
     specs: Sequence[MeasurementSpec] = V1_MEASUREMENTS
+    #: W4-E1 §7.2. Fabrique par defaut, donc FERMEE : toute construction
+    #: existante de `RuntimeConfig` reste valide et reste fermee.
+    transaction_surface: TransactionSurfaceConfig = field(
+        default_factory=TransactionSurfaceConfig
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.mqtt, MqttConfig):
@@ -126,6 +162,11 @@ class RuntimeConfig:
             raise ValueError(
                 f"read_surface doit etre un ReadSurfaceConfig : "
                 f"{type(self.read_surface).__name__}"
+            )
+        if not isinstance(self.transaction_surface, TransactionSurfaceConfig):
+            raise ValueError(
+                f"transaction_surface doit etre un TransactionSurfaceConfig : "
+                f"{type(self.transaction_surface).__name__}"
             )
         object.__setattr__(self, "specs", tuple(self.specs))
 
@@ -315,6 +356,9 @@ def build_runtime(
     *,
     clock: Clock | None = None,
     transaction: TransactionSurface | None = None,
+    transaction_factory: (
+        Callable[[PresenceMqttClient, Clock], TransactionSurface] | None
+    ) = None,
 ) -> Runtime:
     """Construit les adaptateurs concrets et les cable. **Seul endroit** ou ils le sont.
 
@@ -350,6 +394,27 @@ def build_runtime(
     preuves hors terrain. Ce n'est plus l'absence de dependances qui ferme la
     voie — elles existent — mais le fait que rien ne les assemble : une
     abstention, verifiee par des preuves dediees plutot que declaree ici.
+
+    COUTURE W4-E1 §6.1 — `transaction_factory`
+        `transaction` attend une surface DEJA construite. Or celle-ci exige, par
+        W1 §7.5, la MEME instance `MqttClient` que la surface de lecture — et
+        cette instance est construite ici, sans etre exposee. Un appelant ne
+        peut donc pas la construire avant l'appel.
+
+        `transaction_factory` leve cette impossibilite : elle recoit le client
+        unique et l'horloge, et rend la surface. Elle est appliquee APRES la
+        construction du client et AVANT celle du `ReadSurfaceRunner`.
+
+        **Cette fonction ne DECIDE rien.** Elle n'evalue aucune autorite, ne
+        choisit aucun topic, ne construit ni `Profile`, ni `VClient`, ni second
+        client MQTT, et ignore W4-F. Elle applique une fabrique qu'on lui remet,
+        ou n'en applique aucune. La DECISION de composer appartient a
+        `lifecycle`, et a lui seul (W4-E1 §6) : executer une fabrique injectee ne
+        fait pas de cette racine une seconde autorite de composition, pas plus
+        que l'injection de l'horloge n'y transfere la maitrise du temps.
+
+        `None` par defaut : le comportement est alors identique a celui d'avant
+        W4-E2.
     """
     clock = clock if clock is not None else SystemClock()
     # L'annotation dit ce que la surface de lecture EXIGE : le port MQTT et la
@@ -359,6 +424,10 @@ def build_runtime(
     # C11 : l'etat de connexion est cree ici et remis au publieur, qui l'abonne
     # lui-meme au client. La racine assemble ; elle ne cable pas de rappel.
     connection = ConnectionState()
+    # W4-E1 §6.1 : la fabrique voit le client unique et l'horloge deja retenus.
+    # Elle est appliquee AVANT le runner, qui doit recevoir la surface.
+    if transaction_factory is not None:
+        transaction = transaction_factory(mqtt, clock)
     publisher = ReadSurfacePublisher(
         mqtt=mqtt,
         clock=clock,

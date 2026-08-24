@@ -58,7 +58,14 @@ from boilerack.lifecycle import (
     resultat_logique,
     run_lifecycle,
 )
-from boilerack.runtime import NeverStop, ReadSurfaceRunner, RuntimeConfig, StopSignal, build_runtime
+from boilerack.runtime import (
+    NeverStop,
+    ReadSurfaceRunner,
+    RuntimeConfig,
+    StopSignal,
+    TransactionSurfaceConfig,
+    build_runtime,
+)
 from boilerack.testing import VirtualClock
 
 POSIX = os.name == "posix"
@@ -79,11 +86,17 @@ class _FauxPaho:
     def will_clear(self): ...
 
 
-def _config_runtime() -> RuntimeConfig:
-    """Configuration d'assemblage sans aucune valeur de site."""
+def _config_runtime(*, transactionnelle: bool = False) -> RuntimeConfig:
+    """Configuration d'assemblage sans aucune valeur de site.
+
+    `transactionnelle` ouvre l'autorite W4-E2. Le defaut reste FERME : les
+    dizaines de tests C9 qui appellent cette fabrique gardent exactement le
+    comportement qu'ils eprouvaient avant W4-E2.
+    """
     return RuntimeConfig(
         mqtt=MqttConfig(host="broker.invalid"),
         vclient=VclientConfig(executable="vclient"),
+        transaction_surface=TransactionSurfaceConfig(enabled=transactionnelle),
     )
 
 # ---------------------------------------------------------------------------
@@ -1717,11 +1730,15 @@ def _monter_runtime(monkeypatch, action=None) -> _RunnerFactice:
     runner = _RunnerFactice(action)
     vrai = boilerack.lifecycle.build_runtime
 
-    def faux(config, stop, *, clock=None):
+    def faux(config, stop, *, clock=None, transaction_factory=None):
         assert clock is not None, "l'horloge C9 doit etre injectee"
         assert hasattr(stop, "is_set")
+        # W4-E2 : la fabrique est RELEVEE, jamais appliquee ici. Ces tests C9
+        # portent sur le cycle de vie, pas sur la composition — et la relever
+        # permet de prouver qu'elle vaut `None` quand l'autorite est fermee.
         faux.vu = (config, stop, clock)  # type: ignore[attr-defined]
-        return SimpleNamespace(publisher=None, runner=runner)
+        faux.fabrique = transaction_factory  # type: ignore[attr-defined]
+        return SimpleNamespace(publisher=None, runner=runner, transaction=None)
 
     monkeypatch.setattr(boilerack.lifecycle, "build_runtime", faux)
     assert vrai is not faux
@@ -1828,6 +1845,48 @@ def test_le_cycle_de_vie_injecte_bien_l_etat_et_l_horloge_c9(monkeypatch) -> Non
     assert isinstance(stop, SignalStop)
     assert isinstance(clock, WakeupClock)
     assert runner.appels == ["run"]
+
+
+@pytest.mark.reference
+def test_le_cycle_de_vie_ne_transmet_aucune_fabrique_si_l_autorite_est_fermee(
+    monkeypatch,
+) -> None:
+    """La COUTURE elle-meme est eprouvee, pas seulement ses deux extremites.
+
+    POURQUOI CE TEST EXISTE
+        `_composer_transaction` rend bien `None` sur autorite fermee, et
+        `build_runtime` compose bien ce qu'on lui donne : ces deux faits ont
+        leurs propres preuves. Ils ne disent RIEN du fil qui les relie. Retirer
+        l'argument `transaction_factory=` de l'appel reel laissait toute la suite
+        verte — la voie devenait alors morte en production sans qu'aucune
+        barriere ne bouge.
+
+        Ce test porte donc sur l'ARGUMENT REELLEMENT TRANSMIS par `run_lifecycle`
+        a `build_runtime`, releve par le double de `_monter_runtime`.
+    """
+    _monter_runtime(monkeypatch)
+    run_lifecycle(_config_runtime())
+    assert boilerack.lifecycle.build_runtime.fabrique is None  # type: ignore[attr-defined]
+
+
+@pytest.mark.reference
+def test_le_cycle_de_vie_transmet_une_fabrique_si_l_autorite_est_ouverte(
+    monkeypatch,
+) -> None:
+    """Le pendant du precedent : ouverte, l'autorite fait circuler la fabrique.
+
+    Les deux sont indispensables. Le cas ferme seul serait satisfait par une
+    couture supprimee — `None` y est justement la valeur attendue. C'est le cas
+    OUVERT qui rougit lorsque l'argument disparait de l'appel.
+
+    Le double RELEVE la fabrique sans jamais l'appliquer : rien n'est compose
+    ici, aucun `vclient` n'est construit, aucun processus n'est lance.
+    """
+    _monter_runtime(monkeypatch)
+    run_lifecycle(_config_runtime(transactionnelle=True))
+    fabrique = boilerack.lifecycle.build_runtime.fabrique  # type: ignore[attr-defined]
+    assert fabrique is not None, "la couture lifecycle -> build_runtime est rompue"
+    assert callable(fabrique)
 
 
 @pytest.mark.reference

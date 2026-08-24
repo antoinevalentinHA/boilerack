@@ -1051,16 +1051,50 @@ def test_la_surface_exige_les_deux_dependances_de_w4() -> None:
         assert parametres[obligatoire].kind is inspect.Parameter.KEYWORD_ONLY
 
 
-def test_la_surface_n_est_construite_nulle_part_en_production() -> None:
+def test_la_surface_n_est_composee_que_par_lifecycle() -> None:
+    """Barriere W3 « aucune composition » — REMPLACEE par une liste FERMEE.
+
+    Jusqu'a W4-E2, aucun module de production n'appelait
+    `build_transaction_surface`, et c'etait la garantie de fermeture. W4-E1 §11
+    prescrit son remplacement : la composition existe desormais, mais un seul
+    lieu a le droit de la DECIDER.
+
+    La preuve porte sur des APPELS releves par AST — une definition et un import
+    n'en sont pas — et sur la liste fermee de leurs sites. Un second appelant
+    fait echouer ce test.
+
+    Ce que cette barriere ne dit plus, et qui est porte ailleurs : que la
+    composition n'a lieu QUE sous autorite. Deux tests de
+    `tests/test_lifecycle.py` l'etablissent sur la couture reelle
+    `run_lifecycle` -> `build_runtime` —
+    `test_le_cycle_de_vie_ne_transmet_aucune_fabrique_si_l_autorite_est_fermee`
+    et `test_le_cycle_de_vie_transmet_une_fabrique_si_l_autorite_est_ouverte`.
+    Le cas OUVERT est le necessaire : le cas ferme seul serait satisfait par une
+    couture supprimee.
+    """
     racine = pathlib.Path(__file__).resolve().parents[1] / "src" / "boilerack"
     appelants = []
     for fichier in racine.rglob("*.py"):
-        if "__pycache__" in fichier.parts or fichier.name == "transaction_wiring.py":
+        if "__pycache__" in fichier.parts:
             continue
-        source = fichier.read_text(encoding="utf-8")
-        if "build_transaction_surface(" in source:
-            appelants.append(fichier.relative_to(racine).as_posix())
-    assert appelants == []
+        arbre = ast.parse(fichier.read_text(encoding="utf-8"))
+        alias: dict[str, str] = {}
+        for noeud in ast.walk(arbre):
+            if isinstance(noeud, ast.ImportFrom):
+                for nom in noeud.names:
+                    alias[nom.asname or nom.name] = nom.name
+        for noeud in ast.walk(arbre):
+            if not isinstance(noeud, ast.Call):
+                continue
+            cible = noeud.func
+            nom = None
+            if isinstance(cible, ast.Name):
+                nom = alias.get(cible.id, cible.id)
+            elif isinstance(cible, ast.Attribute):
+                nom = cible.attr
+            if nom == "build_transaction_surface":
+                appelants.append(fichier.relative_to(racine).as_posix())
+    assert sorted(appelants) == ["lifecycle.py"]
 
 
 def test_aucun_second_client_mqtt() -> None:

@@ -31,6 +31,7 @@ from boilerack.runtime import (
     Runtime,
     RuntimeConfig,
     StopSignal,
+    TransactionSurfaceConfig,
     build_runtime,
 )
 from boilerack.testing import FakeMqttClient, VirtualClock
@@ -237,13 +238,20 @@ def _config(**surcharges) -> RuntimeConfig:
 
 
 def test_config_contient_les_configurations_existantes() -> None:
-    """Aucune redeclaration : les trois configurations restent seules autorites."""
+    """Aucune redeclaration : les configurations existantes restent seules autorites.
+
+    W4-E2 ajoute `transaction_surface`, qui est une AUTORITE D'ACTIVATION et non
+    une redeclaration : elle ne reprend aucun champ d'une autre structure. La
+    liste reste FERMEE — un cinquieme membre fait rougir ce test.
+    """
     import dataclasses
 
     champs = {f.name for f in dataclasses.fields(RuntimeConfig)}
-    assert champs == {"mqtt", "vclient", "read_surface", "specs"}
+    assert champs == {"mqtt", "vclient", "read_surface", "specs", "transaction_surface"}
     for interdit in ("host", "port", "prefix", "snapshot_period_s", "heartbeat_period_s"):
         assert interdit not in champs
+    # L'autorite ne porte qu'un booleen : elle ne duplique rien.
+    assert {f.name for f in dataclasses.fields(TransactionSurfaceConfig)} == {"enabled"}
 
 
 def test_config_gelee_et_specs_immuables() -> None:

@@ -92,12 +92,13 @@ paramètre — un coût sans contrepartie.
 
 ## Fichier de configuration
 
-Format **TOML**. Trois tables, **et aucune autre** :
+Format **TOML**. Quatre tables, **et aucune autre** :
 
 ```toml
 [mqtt]
 [vclient]
 [read_surface]
+[transaction_surface]
 ```
 
 Le schéma est **fermé** : toute table inconnue et toute clé inconnue sont
@@ -113,7 +114,7 @@ booléens, commentaires — le fichier est destiné à être édité à la main 
 absence de toute dépendance nouvelle. YAML aurait introduit la **deuxième**
 dépendance d'exécution du projet ; JSON n'admet pas de commentaires.
 
-### Les 13 clés publiques
+### Les 14 clés publiques
 
 | Table | Clé | Type TOML | Obligatoire | Défaut |
 |---|---|---|---|---|
@@ -130,8 +131,9 @@ dépendance d'exécution du projet ; JSON n'admet pas de commentaires.
 | `[read_surface]` | `prefix` | string | non | `"boiler"` |
 | | `snapshot_period_s` | integer | non | `30` |
 | | `heartbeat_period_s` | integer | non | `30` |
+| `[transaction_surface]` | `enabled` | boolean | non | `false` |
 
-**6 + 4 + 3 = 13 clés.** Deux seulement sont obligatoires : `mqtt.host` et
+**6 + 4 + 3 + 1 = 14 clés.** Deux seulement sont obligatoires : `mqtt.host` et
 `vclient.executable`. Ce sont les deux valeurs de site que le dépôt ne peut pas
 deviner, et il n'en invente aucun défaut.
 
@@ -307,6 +309,44 @@ redéfinie ici.
 > consommateur en aval — tableau de bord, automatisation, enregistreur — doit
 > être mis à jour en conséquence.
 
+#### Amendement W4-E2 — racine commune des quatre sous-arbres
+
+*Extension de sémantique ajoutée après coup. Elle ne réécrit rien de ce qui
+précède : l'énoncé initial reste exact, il est devenu **incomplet**.*
+
+Depuis W4-E2, `prefix` gouverne la **racine commune** de quatre sous-arbres, et
+non plus les seuls topics de lecture :
+
+| Sous-arbre | Surface |
+|---|---|
+| `<prefix>/telemetry/…` | lecture — inchangée |
+| `<prefix>/bridge/…` | lecture, service — inchangée |
+| `<prefix>/command` | commande, entrant |
+| `<prefix>/ack/<role>` | commande, sortant |
+
+**Autorité :** `w4e-composition-activation.md` §8.4, qui tranche la dette de
+convergence des namespaces ouverte par C7 §14 et que W1 §19 qualifie de
+« décision C7 + C10 ». La dette portait bien sur ce document autant que sur le
+contrat de lecture, et c'est pourquoi l'amendement figure ici.
+
+**Ce que l'amendement ne fait pas.** Il n'est **pas** un renommage et n'ajoute
+**aucune clé** : le nom `prefix`, sa table, son type, son caractère facultatif
+et son défaut `"boiler"` sont inchangés. Une installation qui ne touche pas à
+`prefix` publie exactement les topics de lecture qu'elle publiait avant W4-E2 —
+la convergence s'est faite **vers** la racine existante, précisément pour ne
+migrer aucune surface déjà livrée.
+
+**Les deux sous-arbres de commande sont conditionnels.** Ils ne sont ni
+souscrits ni publiés tant que la voie transactionnelle n'est pas composée. Cette
+composition a sa propre autorité, hors de la présente surface :
+`w4e-composition-activation.md` §14. Fermée — ce qu'elle est par défaut —
+`prefix` ne gouverne en pratique que les deux sous-arbres de lecture.
+
+**Le « Contrat important » ci-dessus s'en trouve élargi d'autant.** Modifier
+`prefix` déplace désormais aussi le topic de commande et le préfixe
+d'acquittement. Un consommateur en aval qui **publie** des commandes doit donc
+être mis à jour au même titre que ceux qui lisent.
+
 ### `snapshot_period_s`
 Entier strictement positif, en **secondes**. Défaut `30`.
 
@@ -374,14 +414,20 @@ type.
 
 | Champ | Motif |
 |---|---|
-| `MqttConfig.command_topic` | **mort** — aucun consommateur dans le code |
-| `MqttConfig.ack_topic_prefix` | **mort dans le chemin d'exécution** — le noyau transactionnel a son propre paramètre, jamais alimenté par cette valeur, et il n'est pas câblé |
+| `MqttConfig.command_topic` | **dérivé** de `[read_surface].prefix` lors de la composition W4-E — non réglable séparément (W4-E1 §8.4) |
+| `MqttConfig.ack_topic_prefix` | **dérivé** de `[read_surface].prefix` lors de la composition W4-E — non réglable séparément (W4-E1 §8.4) |
 | `VclientConfig.write_timeout_s` | **mort** — aucun consommateur |
 | `RuntimeConfig.specs` | **surface interne fermée** — la table des huit mesures est un contrat C7, pas un réglage |
 
 Leur présence dans une structure interne **ne constitue pas** un engagement
 d'interface publique. Exposer un champ parce qu'il existe reviendrait à
 publier des boutons qui ne font rien, et à s'engager à les maintenir.
+
+Les deux premiers ont changé de motif — non de **statut** — depuis W4-E2 : ils
+ne sont plus morts, ils sont **dérivés**. Les exposer réintroduirait la double
+autorité que §8.4 vient précisément de supprimer, en permettant à un
+utilisateur de désaccorder les topics de commande de la racine qui les
+gouverne. Leur non-exposition est donc désormais **plus** motivée, pas moins.
 
 **C10 ne les supprime pas.** Retirer un champ mort toucherait les lots C3 et C4
 et anticiperait la surface d'écriture ; c'est une dette identifiée, datée, et
@@ -631,8 +677,8 @@ défaut `INFO` la rend visible, sans bavardage.
 
 C10 livrera un exemple de configuration, **sans aucun secret**.
 
-Il doit : contenir les trois tables ; distinguer visiblement les deux clés
-obligatoires des onze optionnelles ; montrer ou commenter les valeurs par
+Il doit : contenir les quatre tables ; distinguer visiblement les deux clés
+obligatoires des douze optionnelles ; montrer ou commenter les valeurs par
 défaut ; expliquer que le mot de passe se fournit par `BOILERACK_MQTT_PASSWORD`
 et **nulle part ailleurs**.
 
@@ -710,7 +756,7 @@ Les noms de tests ne sont pas fixés ici ; les propriétés le sont.
 - une configuration minimale — les deux clés obligatoires seules — produit un
   `RuntimeConfig` valide ;
 - chaque valeur par défaut non fournie vaut **exactement** celle annoncée ;
-- table inconnue refusée ; clé inconnue refusée, dans chacune des trois tables ;
+- table inconnue refusée ; clé inconnue refusée, dans chacune des quatre tables ;
 - TOML malformé refusé ; fichier absent refusé ; fichier illisible refusé ;
 - chaque clé obligatoire absente est refusée, en nommant la clé.
 

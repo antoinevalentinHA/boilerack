@@ -43,7 +43,7 @@ from typing import Any, Final, Mapping
 from boilerack.adapters.config import MqttConfig, VclientConfig
 from boilerack.read_surface.config import ReadSurfaceConfig
 from boilerack.read_surface.measurements import check_snapshot_period
-from boilerack.runtime import RuntimeConfig
+from boilerack.runtime import RuntimeConfig, TransactionSurfaceConfig
 
 __all__ = ["ConfigurationError", "PASSWORD_ENV_VAR", "load_config"]
 
@@ -52,13 +52,14 @@ __all__ = ["ConfigurationError", "PASSWORD_ENV_VAR", "load_config"]
 #: segment intermediaire nomme le sous-systeme. Nom PUBLIC : il ne changera plus.
 PASSWORD_ENV_VAR: Final = "BOILERACK_MQTT_PASSWORD"
 
-#: Les trois tables du schema, et aucune autre.
-_TABLES: Final = ("mqtt", "vclient", "read_surface")
+#: Les quatre tables du schema, et aucune autre.
+_TABLES: Final = ("mqtt", "vclient", "read_surface", "transaction_surface")
 
-#: Les treize cles publiques, par table.
+#: Les quatorze cles publiques, par table.
 _CLES_MQTT: Final = ("host", "port", "client_id", "keepalive", "username", "tls")
 _CLES_VCLIENT: Final = ("executable", "host", "port", "read_timeout_s")
 _CLES_READ_SURFACE: Final = ("prefix", "snapshot_period_s", "heartbeat_period_s")
+_CLES_TRANSACTION_SURFACE: Final = ("enabled",)
 
 #: Cles refusees NOMMEMENT dans `[mqtt]`, avec leur motif. Un message dedie vaut
 #: mieux qu'un « cle inconnue » generique : celui qui les ecrit a une intention
@@ -291,6 +292,27 @@ def _read_surface(contenu: Mapping[str, Any]) -> ReadSurfaceConfig:
 # ---------------------------------------------------------------------------
 
 
+def _transaction_surface(contenu: Mapping[str, Any]) -> TransactionSurfaceConfig:
+    """Autorite d'activation (W4-E1 §7.2, §14). FERMEE par defaut.
+
+    Trois absences valent fermeture, et aucune ne produit d'erreur : table
+    absente, table vide, cle absente. Un fichier ecrit avant ce lot reste donc
+    valide, et reste ferme.
+
+    Aucune coercition : `_exiger_bool` refuse `"true"`, `1` et `0` comme il
+    refuse le reste. Une autorite d'ecriture ne s'accorde pas par inadvertance
+    de typage.
+    """
+    _verifier_cles("transaction_surface", contenu, _CLES_TRANSACTION_SURFACE)
+
+    arguments: dict[str, Any] = {}
+    if "enabled" in contenu:
+        arguments["enabled"] = _exiger_bool(
+            "transaction_surface", "enabled", contenu["enabled"]
+        )
+    return _construire("transaction_surface", TransactionSurfaceConfig, arguments)
+
+
 def load_config(chemin: str | os.PathLike[str]) -> RuntimeConfig:
     """Lit, valide et assemble la configuration. Ne lance jamais le runtime.
 
@@ -312,6 +334,9 @@ def load_config(chemin: str | os.PathLike[str]) -> RuntimeConfig:
         mqtt=_mqtt(_table(document, "mqtt")),
         vclient=_vclient(_table(document, "vclient")),
         read_surface=_read_surface(_table(document, "read_surface")),
+        transaction_surface=_transaction_surface(
+            _table(document, "transaction_surface")
+        ),
     )
     _verifier_surface(config)
     return config
