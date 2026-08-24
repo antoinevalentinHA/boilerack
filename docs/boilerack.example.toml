@@ -37,3 +37,14 @@ executable = "vclient"
 # prefix = "boiler"           # racine de TOUS les topics publies
 # snapshot_period_s = 30      # secondes ; borne par la fraicheur des mesures
 # heartbeat_period_s = 30     # secondes ; 0 desactive le battement
+
+# Voie de commande (ecriture chaudiere). FERMEE par defaut, et cet exemple la
+# laisse fermee : la table entiere est commentee, et la copier telle quelle
+# donne une installation qui ne compose aucun ecrivain.
+#
+# Ouvrir cette autorite ne fait pas de Boilerack l'ecrivain de l'installation :
+# cela autorise seulement la composition de la voie. Reference :
+# docs/design/w4e-composition-activation.md
+
+# [transaction_surface]
+# enabled = false             # autorise la composition de la voie de commande

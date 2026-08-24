@@ -43,12 +43,14 @@ import selectors
 import signal
 import socket
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from types import TracebackType
 from typing import Final, Iterable, Sequence
 
+from boilerack.adapters.config import MqttConfig
 from boilerack.clock import Clock, SystemClock, check_duration
+from boilerack.read_surface.topics import build_topic
 from boilerack.runtime import Runtime, RuntimeConfig, build_runtime
 
 __all__ = [
@@ -423,6 +425,104 @@ def resultat_logique(cause: signal.Signals | None) -> int:
     return CODE_ARRET_NORMAL
 
 
+def _composer_transaction(config: RuntimeConfig):
+    """Rend une fabrique de surface transactionnelle, ou `None` si non autorisee.
+
+    AUTORITE D'ACTIVATION — W4-E1 §6, §7.2
+        Ce module est le SEUL lieu de DECISION de composer. `enabled` faux ou
+        absent : la fonction rend `None`, aucune piece transactionnelle n'est
+        construite, et le comportement est celui d'avant W4-E2.
+
+        `enabled` vrai signifie « la configuration autorise la composition ».
+        Cela ne fait PAS de Boilerack l'ecrivain souverain de l'installation :
+        cette question releve de W4-F, qui seul peut neutraliser l'ecrivain
+        historique et autoriser une ecriture reelle.
+
+    IMPORTS TARDIFS, ET POURQUOI
+        Les quatre briques transactionnelles sont importees DANS la fonction. Un
+        import au niveau du module chargerait le coeur, son transport et
+        l'adaptateur d'ecriture au simple `import boilerack.lifecycle` — y
+        compris quand l'autorite est fermee. La barriere qui interdit
+        l'activation par import porte desormais sur ce module autant que sur
+        `runtime`, et ces imports tardifs sont ce qui la tient.
+
+    RIEN N'EST CONSTRUIT ICI
+        Cette fonction ne fabrique aucune piece : elle rend une fermeture. Les
+        constructions n'ont lieu que si `build_runtime` applique la fabrique,
+        avec le client MQTT unique qu'il vient de creer (W1 §7.5, W4-E1 §6.1).
+    """
+    if not config.transaction_surface.enabled:
+        return None
+
+    def fabriquer(mqtt, clock):
+        # Importe ici, jamais au niveau du module : voir la docstring.
+        from boilerack.adapters.process_runner import SubprocessRunner
+        from boilerack.adapters.vclient_write import (
+            VClientCli,
+            VclientWriteInvocation,
+        )
+        from boilerack.core.production_profile import build_production_profile
+        from boilerack.transaction_wiring import build_transaction_surface
+
+        invocation = VclientWriteInvocation(config.vclient)
+        # Construire l'ecrivain ne lance AUCUN processus : `VClientCli` ne fait
+        # que retenir sa configuration et son lanceur. Seul un `write()` reel
+        # invoquerait `vclient`, et rien ne l'appelle au demarrage.
+        vclient = VClientCli(config.vclient, SubprocessRunner(), invocation=invocation)
+        return build_transaction_surface(
+            mqtt=mqtt,
+            clock=clock,
+            config=_config_mqtt_transactionnelle(config),
+            vclient=vclient,
+            profile=build_production_profile(),
+        )
+
+    return fabriquer
+
+
+def _config_mqtt_transactionnelle(config: RuntimeConfig) -> MqttConfig:
+    """`MqttConfig` derive : DEUX champs changent, sept restent identiques.
+
+    NAMESPACE — W4-E1 §8.4
+        Une installation possede une seule racine de topics, et les surfaces en
+        sont des sous-arbres. La racine est celle que la surface de lecture
+        configure deja ; les topics transactionnels en sont DERIVES, avec la
+        meme validation qu'elle — `build_topic`, qui normalise le prefixe et
+        refuse un suffixe mal forme.
+
+            <racine>/telemetry/…   lecture, inchangee
+            <racine>/bridge/…      lecture, inchangee
+            <racine>/command       transactionnelle, entrant
+            <racine>/ack/<role>    transactionnelle, sortant
+
+        Le segment `/<role>` est ajoute par le coeur ; ce module ne fournit que
+        le prefixe.
+
+        Les defauts `"boilerack/command"` et `"boilerack/ack"` de `MqttConfig`
+        deviennent des defauts de BIBLIOTHEQUE : legitimes pour un test qui
+        construit une configuration sans composition, jamais l'autorite runtime.
+
+    UNE SEULE IDENTITE DE CONNEXION — W1 §7.5, W4-E1 §8.4
+        Ce derive ne change QUE `command_topic` et `ack_topic_prefix`. Les sept
+        autres champs de `MqttConfig` — hote, port, identifiant client,
+        keepalive, identifiants d'authentification, TLS — sont preserves a
+        l'identique ; un test les compare un a un, nommement. Il ne produit donc
+        ni second client, ni second
+        `client_id`, ni seconde connexion — ce que l'interdiction de W1 §7.5
+        protege reellement, sa propre clause de portee disant qu'« il existe un
+        seul objet client en runtime ».
+
+        L'unique client reste celui de `build_runtime`, et la surface le recoit
+        tel quel.
+    """
+    racine = config.read_surface.prefix
+    return replace(
+        config.mqtt,
+        command_topic=build_topic(racine, "command"),
+        ack_topic_prefix=build_topic(racine, "ack"),
+    )
+
+
 def run_lifecycle(
     config: RuntimeConfig,
     *,
@@ -453,7 +553,12 @@ def run_lifecycle(
     FIL PRINCIPAL requis.
     """
     with SignalScope(surveilles) as wakeup:
-        runtime: Runtime = build_runtime(config, wakeup.stop, clock=wakeup.clock)
+        runtime: Runtime = build_runtime(
+            config,
+            wakeup.stop,
+            clock=wakeup.clock,
+            transaction_factory=_composer_transaction(config),
+        )
         runtime.runner.run()
         # Drainage ULTIME avant de conclure. Un signal peut arriver apres le
         # dernier point de controle du runner — pendant `stop()`, par exemple —

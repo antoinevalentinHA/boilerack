@@ -321,6 +321,44 @@ connexion violerait W1-P4 ; la restauration W0, elle, ne la viole jamais.
 
 ---
 
+#### 7.5.1 Le `MqttConfig` dérivé de W4-E2 — note de clôture
+
+*Note ajoutée après coup, et **non normative**. Elle ne réécrit rien de §7.5 :
+la clause a été énoncée ici, sa tension a été disposée ailleurs, et les deux
+doivent rester lisibles.*
+
+§7.5 écrit que le lot de câblage « **MUST NOT** dériver un second `MqttConfig` ».
+W4-E2 en dérive pourtant un, par `replace(config.mqtt, …)`, pour transmettre à
+`build_transaction_surface` les topics du sous-arbre de commande. La tension est
+réelle, et elle a été **tranchée avant l'écriture du code**, non découverte
+après : `w4e-composition-activation.md` §8.4 la dispose ainsi —
+
+> Un `MqttConfig` dérivé qui ne diffère que par ces deux topics **n'est pas une
+> seconde connexion**, et ne relève donc pas de ce que W1 §7.5 interdit.
+
+**Pourquoi cette lecture, et pas la lettre.** La motivation entière de §7.5
+porte sur l'**identité de connexion** : deux instances partageant un `client_id`
+« se déconnectent mutuellement en boucle », et le registre de souscriptions de
+W0 est **par objet client**. La clause de portée de §7.5 le dit elle-même, dans
+les termes qui suivent quelques paragraphes plus haut :
+
+> « Cette clause dit qu'il existe **un seul objet client** en runtime. »
+
+L'interdiction protège donc l'unicité du **client**, pas l'unicité de la valeur
+des topics. Un dérivé qui ne touche à aucune propriété de connexion ne crée ni
+seconde instance, ni second `client_id`, ni seconde session.
+
+**Ce que le dérivé change, exhaustivement.** Deux champs : `command_topic` et
+`ack_topic_prefix`. Sont préservés à l'identique `host`, `port`, `client_id`,
+`keepalive`, `username`, `password` et `tls` — c'est-à-dire toute propriété de
+connexion.
+
+**L'invariant de §7.5 reste intégralement tenu.** L'unique `PahoMqttClient`
+demeure celui que `build_runtime` construit ; la surface transactionnelle le
+reçoit tel quel, sans jamais en fabriquer un autre. Cet invariant n'est pas
+seulement affirmé : W4-E2 en fait une **barrière falsifiable**, éprouvée par une
+sonde qui construit un second client dans `lifecycle.py` et doit la faire rougir.
+
 ## 8. Préfixe d'ACK — suppression de la double autorité
 
 ### 8.1 Le constat

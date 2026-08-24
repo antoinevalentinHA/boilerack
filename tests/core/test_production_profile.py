@@ -238,22 +238,29 @@ def test_le_profil_factice_est_inchange_et_distinct() -> None:
     assert set(fake.commands) & set(build_production_profile().commands) == set()
 
 
-def test_le_profil_de_production_n_est_construit_nulle_part_en_production() -> None:
-    """W4-D livre le profil ; il ne le branche pas. La composition est W4-E.
+def test_le_profil_de_production_n_est_construit_que_par_lifecycle() -> None:
+    """W4-D livrait le profil sans le brancher ; W4-E2 le branche, sous autorite.
 
-    Barriere symetrique de celles de W3 : la fabrique existe, et aucun module de
-    production ne l'appelle. Un appel apparaissant ici fait echouer ce test.
+    Liste FERMEE, et non plus absence : `lifecycle.py` est le seul lieu de
+    DECISION (W4-E1 §6). Un second appelant fait echouer ce test.
 
-    AUCUNE EXCLUSION, ET C'EST LE POINT
+    AUCUNE EXEMPTION DE FICHIER, ET C'EST LE POINT
         Le balayage couvre **tous** les modules de `src/boilerack`, y compris
-        chaque `__init__.py`. Exempter un nom de fichier — meme celui qui declare
-        la fabrique, meme un paquet — creerait un angle mort ou un appel
-        passerait inapercu, et la preuve affirmerait alors plus qu'elle ne
-        montre.
+        chaque `__init__.py`. Exempter un nom — meme celui qui declare la
+        fabrique, meme un paquet — creerait un angle mort ou un appel passerait
+        inapercu.
 
         Aucune exemption n'est necessaire : la recherche porte sur un `ast.Call`.
         Ni l'`ImportFrom` de `core/__init__.py`, ni le `FunctionDef` de
-        `production_profile.py` n'en sont un. Seul un APPEL est releve.
+        `production_profile.py` n'en sont un. Seul un APPEL est releve, ce qui
+        laisse `lifecycle.py` apparaitre nommement dans la liste plutot que par
+        exemption.
+
+    Ce que cette barriere ne dit PAS : que le profil n'est construit que sous
+    autorite. Elle constate le LIEU ; la CONDITION est prouvee sur la couture
+    reelle par les deux tests
+    `tests/test_lifecycle.py::test_le_cycle_de_vie_*_fabrique_si_l_autorite_est_*`,
+    fermee puis ouverte.
     """
     racine = pathlib.Path(__file__).resolve().parents[2] / "src" / "boilerack"
     modules = [f for f in racine.rglob("*.py") if "__pycache__" not in f.parts]
@@ -268,4 +275,4 @@ def test_le_profil_de_production_n_est_construit_nulle_part_en_production() -> N
                 and noeud.func.id == "build_production_profile"
             ):
                 appelants.append(fichier.relative_to(racine).as_posix())
-    assert appelants == []
+    assert sorted(appelants) == ["lifecycle.py"]

@@ -34,6 +34,14 @@ from boilerack.adapters.vclient_write import (
 )
 from boilerack.transport.vclient import TransportStatus, VClient, WriteResult
 
+#: Racine des modules de production, resolue depuis CE FICHIER.
+#:
+#: La resolution etait relative au repertoire courant jusqu'a W4-E2. Lance
+#: depuis ailleurs, `rglob` ne rendait alors AUCUN fichier et les barrieres de
+#: ce module passaient au vert sans rien avoir examine. Une barriere vacante est
+#: pire qu'une barriere absente : elle rassure.
+_SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "boilerack"
+
 CONFIG = VclientConfig(
     executable="vclient", host="demon.test", port=4242, write_timeout_s=5.0
 )
@@ -206,9 +214,7 @@ def test_aucune_valeur_metier_ne_sort_de_l_adaptateur() -> None:
 
 def test_l_adaptateur_ne_prononce_aucun_verdict_metier() -> None:
     """`applied`, `accepted`, `rejected` : vocabulaire du coeur, pas du transport."""
-    source = pathlib.Path(
-        "src/boilerack/adapters/vclient_write.py"
-    ).read_text(encoding="utf-8")
+    source = (_SRC / "adapters" / "vclient_write.py").read_text(encoding="utf-8")
     corps = source.split('"""', 2)[2]
     for interdit in ("applied", "accepted", "rejected", "Reason", "Ack"):
         assert interdit not in corps, f"verdict metier dans l'adaptateur : {interdit}"
@@ -306,9 +312,7 @@ def test_la_signature_de_commande_inconnue_n_est_pas_transposee() -> None:
 
 def test_ces_deux_statuts_sont_absents_du_module() -> None:
     """Preuve structurelle : ils ne sont pas seulement evites, ils sont absents."""
-    source = pathlib.Path(
-        "src/boilerack/adapters/vclient_write.py"
-    ).read_text(encoding="utf-8")
+    source = (_SRC / "adapters" / "vclient_write.py").read_text(encoding="utf-8")
     corps = source.split('"""', 2)[2]
     assert "TransportStatus.DAEMON_UNREACHABLE" not in corps
     assert "TransportStatus.UNKNOWN_COMMAND" not in corps
@@ -398,7 +402,7 @@ def test_un_appel_declenche_au_plus_une_invocation(res: ProcessResult) -> None:
 
 def test_aucune_boucle_ni_reessai_dans_le_source() -> None:
     """Preuve structurelle : `write` ne contient ni boucle ni seconde invocation."""
-    source = pathlib.Path("src/boilerack/adapters/vclient_write.py").read_text(
+    source = (_SRC / "adapters" / "vclient_write.py").read_text(
         encoding="utf-8"
     )
     arbre = ast.parse(source)
@@ -530,7 +534,7 @@ def test_une_valeur_irrepresentable_ne_lance_aucun_processus() -> None:
 
 def test_la_fabrique_ne_porte_aucune_constante_de_site() -> None:
     """Hote, port et executable viennent de la configuration, jamais du code."""
-    source = pathlib.Path("src/boilerack/adapters/vclient_write.py").read_text(
+    source = (_SRC / "adapters" / "vclient_write.py").read_text(
         encoding="utf-8"
     )
     for interdit in ("localhost", "192.168", "/home/", ".service", ".timer", "3002"):
@@ -584,8 +588,11 @@ def test_la_taxonomie_de_transport_n_a_pas_ete_modifiee() -> None:
 
 
 def _modules_production() -> list[pathlib.Path]:
-    racine = pathlib.Path("src/boilerack")
-    return [f for f in racine.rglob("*.py") if "__pycache__" not in f.parts]
+    """Tous les modules de production. Le balayage ne doit JAMAIS etre vide."""
+    modules = [f for f in _SRC.rglob("*.py") if "__pycache__" not in f.parts]
+    assert modules, f"balayage vide : {_SRC}"
+    assert any(f.name == "lifecycle.py" for f in modules), "lifecycle.py absent"
+    return modules
 
 
 
@@ -593,7 +600,7 @@ def _modules_production() -> list[pathlib.Path]:
 
 def test_l_adaptateur_ne_connait_ni_mqtt_ni_profil_ni_runtime() -> None:
     """Graphe d'import : la couche adaptateur ne remonte vers rien."""
-    source = pathlib.Path("src/boilerack/adapters/vclient_write.py").read_text(
+    source = (_SRC / "adapters" / "vclient_write.py").read_text(
         encoding="utf-8"
     )
     cibles = []
@@ -732,7 +739,7 @@ def test_la_grandeur_de_value_n_est_lue_nulle_part_dans_le_source() -> None:
     Le module doit consulter `value` pour verifier son TYPE, et pour cela
     seulement. Aucune comparaison de grandeur ne doit y figurer.
     """
-    source = pathlib.Path("src/boilerack/adapters/vclient_write.py").read_text(
+    source = (_SRC / "adapters" / "vclient_write.py").read_text(
         encoding="utf-8"
     )
     corps = source.split('"""', 2)[2]
@@ -892,24 +899,49 @@ _SYMBOLES_DE_COMPOSITION = {
 }
 
 
-def test_aucun_module_de_production_ne_compose_la_voie_ecrivable() -> None:
-    """Preuve centrale de la fermeture, depuis que celle-ci est une ABSTENTION.
+#: Seul module de production autorise a APPELER les symboles de composition.
+#: W4-E1 §6 : la decision de composer appartient a `lifecycle`, et a lui seul.
+_LIEU_DE_DECISION = "lifecycle.py"
 
-    Les deux dependances existent : un module qui les assemblerait obtiendrait
-    une voie fonctionnelle. Plus rien ne l'en empeche structurellement — seule
-    cette preuve le detecte. Elle doit donc etre sensible aux formes qu'un tel
-    module emploierait REELLEMENT, et pas seulement a la plus naive.
 
-    Aucune exemption par nom de fichier : le module qui DEFINIT un symbole n'a
-    pas plus le droit de l'appeler qu'un autre. Definir est permis, appeler ne
-    l'est pas — et une definition n'est pas un `ast.Call`.
+def test_seul_lifecycle_compose_la_voie_ecrivable() -> None:
+    """Preuve centrale de la fermeture — liste FERMEE depuis W4-E2.
+
+    Jusqu'a W4-E2, aucun module de production n'appelait ces symboles. La
+    fermeture etait une ABSTENTION totale. W4-E1 §11 prescrit son remplacement :
+    la composition existe desormais, mais **un seul lieu** a le droit de la
+    decider, et un second fait rougir ce test.
+
+    La preuve reste sensible aux formes qu'un module emploierait REELLEMENT —
+    alias d'import et acces par attribut compris — et n'exempte aucun fichier
+    par son nom : le module qui DEFINIT un symbole n'a pas plus le droit de
+    l'appeler qu'un autre. Definir est permis, appeler ne l'est pas, et une
+    definition n'est pas un `ast.Call`.
+
+    Ce que cette barriere ne dit PAS : que la composition n'a lieu que sous
+    autorite. Elle constate le LIEU, pas la CONDITION. La condition est prouvee
+    par le couple
+    `tests/test_lifecycle.py::test_le_cycle_de_vie_ne_transmet_aucune_fabrique_si_l_autorite_est_fermee`
+    et `…::test_le_cycle_de_vie_transmet_une_fabrique_si_l_autorite_est_ouverte`,
+    qui portent sur l'argument REELLEMENT transmis par `run_lifecycle`.
+
+    Le lieu de LECTURE de l'autorite est, lui, ferme par
+    `tests/test_w4e2_composition.py::test_seul_lifecycle_consulte_l_autorite_d_activation`.
     """
     fautifs = []
     for fichier in _modules_production():
+        if fichier.name == _LIEU_DE_DECISION:
+            continue
         arbre = ast.parse(fichier.read_text(encoding="utf-8"))
         for symbole in sorted(_symboles_appeles(arbre) & _SYMBOLES_DE_COMPOSITION):
             fautifs.append(f"{fichier.as_posix()} appelle {symbole}")
     assert fautifs == []
+
+    # Et le lieu autorise les appelle bien tous les quatre : la barriere ne doit
+    # pas rester verte parce que la composition aurait disparu.
+    lifecycle = next(f for f in _modules_production() if f.name == _LIEU_DE_DECISION)
+    appeles = _symboles_appeles(ast.parse(lifecycle.read_text(encoding="utf-8")))
+    assert _SYMBOLES_DE_COMPOSITION <= appeles
 
 
 def test_la_barriere_detecte_un_appel_direct() -> None:
@@ -994,7 +1026,7 @@ def test_les_implementations_de_write_forment_une_liste_fermee() -> None:
     La seule exemption porte sur la DECLARATION du Protocol, dont le corps est
     `...` — et un test voisin verifie que c'est bien le cas.
     """
-    racine = pathlib.Path("src/boilerack")
+    racine = _SRC
     implementations = []
     for fichier in _modules_production():
         relatif = fichier.relative_to(racine).as_posix()
@@ -1026,7 +1058,7 @@ def test_la_liste_fermee_verrait_un_write_asynchrone() -> None:
 def test_l_exemption_du_protocol_est_exacte_et_justifiee() -> None:
     """L'unique exemption porte sur une DECLARATION, dont le corps est `...`."""
     arbre = ast.parse(
-        pathlib.Path("src/boilerack/transport/vclient.py").read_text(encoding="utf-8")
+        (_SRC / "transport" / "vclient.py").read_text(encoding="utf-8")
     )
     corps = [
         n
