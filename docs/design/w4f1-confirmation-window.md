@@ -1,6 +1,33 @@
 # W4-F1 — Fenêtre de confirmation et critère de coexistence
 
-> **Sous-lot W4-F1 — analyse et critère. Version 3**, après audit delta de la V2.
+> **Sous-lot W4-F1 — analyse et critère. Version 5**, correction delta après audit
+> indépendant de la V4. Quatorze findings traités. Un **blocant** : une survivance
+> de l'inférence retirée subsistait au §6.5, où le texte concluait encore à une
+> impossibilité « arithmétique » ; elle est réécrite. Sont également corrigés :
+> le motif historique du seuil V1 (§8.5), la portée de la condition 4 de `T0 GO`
+> (§8.2.1), le nommage des colonnes du §6.2 — valeurs et raisonnement
+> **inchangés** —, le fondement de `O ≤ R` (§8.5), la portée du cliquet dans
+> l'invariant (§8.5), la règle d'admissibilité d'une source (§8.5), la portée de
+> l'interdiction sur `borne_publique_C5` (§8.5), et le libellé de `U-2` (§9).
+> **Aucun seuil, aucune formule, aucun statut de branche n'est modifié ; aucune
+> autorisation nouvelle n'est accordée.**
+>
+> **Version 4**, **amendement normatif de `C1`**, par décision humaine explicite prise après le réexamen consigné dans
+> `w4f2-c1-reexamen.md`. L'amendement sépare deux grandeurs que la V3 confondait :
+> **`R`**, durée totale d'invocation — temps mural — et **`O`**, occupation
+> effective de la liaison partagée. Il retire l'inférence non établie
+> `rafale_max ≥ 2,669 s` (§6.5, §8.5), requalifie `borne_publique_C5` en **donnée
+> de référence non qualifiée** (§8.5), érige en clause normative l'**invariant de
+> sûreté** que `C1` sert (§8.5), et corrige le motif de la branche A (§8.2.1). Il
+> **ne fixe aucun seuil**, **n'établit aucun régime**, et **ne rend `T0 GO`
+> atteignable en rien** : `seuil_C1` devient **non calculable**, et la barrière
+> reste fermée. Les §3 à §5, §7 et §8.6 à §8.10 sont **inchangés**.
+>
+> **À la date de la V4**, W4-F2 est **ouvert comme chantier** et **non autorisé
+> comme terrain** ; **les mentions** « W4-F2 reste fermé » ci-dessous sont des
+> **états datés de la V3**, conservées telles quelles.
+>
+> **Version 3**, après audit delta de la V2.
 > Quatre majeurs corrigés : `C1` reposait sur un **quantile** là où la garantie est
 > une **borne** (§8.5) ; la cadence de 30 s ignorait la **latence de libération**
 > de la liaison (§8.6.1, §8.6.2) ; `E7` avait perdu sa conséquence d'arrêt
@@ -269,7 +296,7 @@ R + 30 ≤ 8R      ⟺      R ≥ 30/7 ≈ 4,286 s
 **Vérification sur l'ordonnanceur réel** — sonde jetable hors ligne, horizon
 30 min virtuelles :
 
-| Coût par lecture | Occupation | Rafale max | Lectures d'affilée | Chaînage |
+| Coût par lecture (`R`) | Temps actif simulé | Regroupement max | Lectures d'affilée | Chaînage |
 |---:|---:|---:|---:|:--|
 | 4,000 s | 65,3 % | 32,0 s | 8 | non |
 | 4,250 s | 68,9 % | 34,0 s | 8 | non |
@@ -281,6 +308,21 @@ R + 30 ≤ 8R      ⟺      R ≥ 30/7 ≈ 4,286 s
 
 La transition est **nette** au seuil dérivé : 8 lectures à 4,250 s, onze à
 4,286 s. À 8 s, la liaison n'est **jamais relâchée** sur tout l'horizon simulé.
+
+> **Nature des colonnes — précision normative introduite en V4, nommage corrigé en
+> V5.** Les trois colonnes « Coût par lecture (`R`) », « Temps actif simulé » et
+> « Regroupement max » sont dérivées de **`R`**, la durée totale d'invocation, et
+> décrivent le **temps mural** d'un ordonnanceur simulé. **C'est l'emploi légitime
+> de `R`**, et le seuil de réalimentation `R ≥ 30/7` en relève entièrement : il
+> décrit un chaînage de cycles, non une contention.
+>
+> **Ces colonnes ne sont pas la grandeur de `C1`.** La V4 les nommait
+> « Occupation » et « Rafale max », en collision directe avec le vocabulaire
+> normatif qu'elle venait d'introduire au §8.5 ; **les noms sont corrigés en V5**,
+> les valeurs et le raisonnement demeurant **inchangés**. Le « Regroupement max »
+> de ce tableau **MUST NOT** être lu comme l'`occupation_max` du §8.5, qui est une
+> grandeur en **`O`**. La seule relation établie entre les deux est
+> **`O ≤ R`** ; leur différence, et leur égalité éventuelle, sont inconnues.
 
 > **Proximité à consigner.** Le maximum documenté par C5 est **4,029 s**. Le
 > seuil de réalimentation est à **0,257 s** au-dessus. Le régime de contention
@@ -334,26 +376,48 @@ régime où une transaction arrivant pendant une occupation attend sa libératio
 puis paie son propre coût. Sous ce régime, et sous lui seul, les seuils du §8.5
 s'appliquent. Si `vcontrold` entrelace ou parallélise, ils sont sans objet.
 
-**Ce que le régime additif impliquerait, arithmétiquement.**
+**Ce que le régime additif impliquerait — et ce qu'il n'implique pas.**
 
-| Grandeur | Valeur | Source |
-|---|---:|---|
-| budget du superviseur | 5,000 s | W4-C §8 |
-| coût d'une transaction, minimum | 2,669 s | C5 §9 |
-| coût d'une transaction, maximum | 4,029 s | C5 §9 |
-| attente tolérable, cas favorable | **2,331 s** | `5,000 − 2,669` |
-| attente tolérable, cas défavorable | **0,971 s** | `5,000 − 4,029` |
+| Grandeur | Valeur | Source | Type |
+|---|---:|---|---|
+| budget du superviseur | 5,000 s | W4-C §8 | budget |
+| durée d'invocation, minimum observé | 2,669 s | C5 §9 | **`R`** |
+| durée d'invocation, maximum observé | 4,029 s | C5 §9 | **`R`** |
 
-Une lecture de Boilerack coûte, dans la même plage, **2,669 à 4,029 s**. Sous le
-régime additif, **une seule lecture en cours dépasse déjà l'attente tolérable**,
-avant même qu'il soit question de rafale. Le problème des rafales est réel mais
-**second** : le premier est qu'une transaction unique occupe presque tout le
-budget d'une autre.
+> **Retrait d'une inférence — V4.** La V3 concluait ici qu'*« une seule lecture
+> en cours dépasse déjà l'attente tolérable »*, en soustrayant du budget les
+> valeurs ci-dessus et en les employant simultanément comme **occupation imposée
+> par Boilerack**. **Cette conclusion est retirée**, et avec elle les deux lignes
+> « attente tolérable » qui la préparaient.
+>
+> **Motif.** C5 §9 mesure une **durée totale d'invocation**, soit `R`.
+> L'occupation `O` — la part pendant laquelle un client détient la liaison et en
+> exclut les autres — vérifie **`O ≤ R`**, et rien de plus : une mesure de `R`
+> peut **majorer** `O`, elle ne peut pas la **minorer**. Aucune minoration de `O`
+> n'est donc disponible, et l'énoncé de la V3 n'était pas soutenu par la mesure
+> qu'il invoquait.
+>
+> **Ce que ce retrait n'établit pas.** Il n'établit **ni** que `O` soit inférieure
+> à 2,669 s, **ni** qu'une attente existe dans la mesure C5, **ni** que la
+> coexistence soit possible. Il retire une **certitude** que les données ne
+> portaient pas ; il ne la remplace par aucune autre.
 
-> **Ce constat n'est pas une conclusion terrain.** Il dit : *si* le régime est
-> additif, *alors* la coexistence est arithmétiquement impossible aux coûts
-> documentés. Établir le régime est le travail de **T0** (§8.2), et c'est
-> pourquoi T0 précède toute exposition.
+Sous le régime additif, la question reste donc entière : **la valeur de `O`, pour
+une lecture comme pour une rafale, n'est établie par aucune source du dépôt.**
+
+> **Ce constat n'est pas une conclusion terrain — réécrit en V5.** La V3 concluait
+> ici que *« si le régime est additif, alors la coexistence est arithmétiquement
+> impossible aux coûts documentés »*. **Cette conclusion est retirée**, comme
+> l'inférence dont elle découlait.
+>
+> Ce qui subsiste est plus étroit, et ne conclut dans **aucun** sens : la valeur
+> de `O` n'est établie par aucune source du dépôt, **y compris sous régime
+> additif**. Rien ne permet donc d'affirmer que la coexistence serait impossible,
+> ni qu'elle serait possible.
+>
+> **Établir le régime reste le travail de T0** (§8.2), et T0 précède toujours
+> toute exposition. **Cette absence de connaissance n'autorise rien** : elle laisse
+> `C1` non calculable, donc la barrière du §8.2.1 fermée.
 
 ---
 
@@ -511,18 +575,39 @@ La barrière ne porte pas seulement sur la calculabilité : elle porte aussi sur
 
 | Branche | T0-B | Conséquence normative |
 |---|---|---|
-| **A** | `ADDITIF` | `C1` est valide **et** arithmétiquement inatteignable aux coûts documentés (§6.5). **`W4-F2 NON QUALIFIABLE — STOP`. Aucun T1.** |
+| **A** | `ADDITIF` | `C1` est **valide** mais **non calculable** : ses deux termes exigent des grandeurs qu'aucune source ne fournit (§8.5). **`W4-F2 NON QUALIFIABLE — STOP`. Aucun T1.** |
 | **B** | `NON ADDITIF` | `C1` additive **n'est pas applicable**. Elle doit être remplacée par un contrat documentaire adapté, **avant T1**, et ce remplacement **exige un nouvel audit**. Tant qu'il n'existe pas : **`T0 NO-GO — STOP`.** |
 | **C** | `INDÉTERMINÉ` | la validité de `C1` n'est **pas démontrée**. **`W4-F2 NON QUALIFIABLE — STOP`. Aucun T1.** |
+
+> **Changement de motif en V4, à conclusion inchangée.** La V3 fermait la branche
+> A sur une **arithmétique** — « le seuil est dépassé par construction ». Cette
+> arithmétique reposait sur l'inférence retirée au §6.5, et **elle tombe avec
+> elle**. Ce qui la remplace est une **insuffisance de données** : sous un régime
+> additif établi, `C1` serait le bon critère, mais **aucun de ses deux termes
+> n'est calculable** (§8.5). La sortie normative reste **identique** —
+> `W4-F2 NON QUALIFIABLE — STOP`, aucun T1 — et le mot reste juste : la
+> coexistence **ne peut pas être jugée en l'état**.
+>
+> **La différence n'est pas cosmétique.** Une impossibilité arithmétique
+> n'aurait jamais pu être levée par une mesure ; une insuffisance de données le
+> peut, en principe. **Cela ne rend aucune mesure autorisée, ni aucun `T0 GO` plus
+> proche** : c'est une correction de motif, pas un assouplissement.
 
 > **Pourquoi la branche A conduit à `NON QUALIFIABLE` et non à `NON QUALIFIÉ`.**
 > Les deux termes ne disent pas la même chose. `NON QUALIFIÉ` signifie *la
 > coexistence a été éprouvée et elle échoue* ; `NON QUALIFIABLE` signifie *elle
-> ne peut pas être jugée en l'état*. En branche A, rien n'a été éprouvé : c'est
-> l'arithmétique, avant toute exposition, qui montre que la configuration
-> actuelle ne peut pas satisfaire `C1`. Le mot juste est donc
-> `NON QUALIFIABLE` — et la suite appartient à un lot qui changerait la
-> configuration, non à une mesure.
+> ne peut pas être jugée en l'état*. En branche A, rien n'a été éprouvé, et
+> **rien ne peut l'être** : les deux termes de `C1` exigent des grandeurs
+> qu'aucune source ne fournit (§8.5). Le mot juste est donc `NON QUALIFIABLE`.
+>
+> **Correction V4 de ce motif.** La V3 écrivait ici que « c'est l'arithmétique
+> qui montre que la configuration actuelle ne peut pas satisfaire `C1` », et en
+> déduisait que la suite appartenait à « un lot qui changerait la configuration,
+> non à une mesure ». **Cette arithmétique est retirée** (§6.5, §8.5), et la
+> conséquence qu'on en tirait avec elle : **rien n'établit qu'un changement de
+> configuration soit la suite**, ni qu'une mesure ne le soit pas. Ce qui reste
+> établi est plus étroit — **la barrière est fermée faute de données**, et ce
+> document ne désigne **aucune** suite.
 
 > **`T0 GO`** si et seulement si **toutes** ces conditions sont réunies :
 >
@@ -530,7 +615,10 @@ La barrière ne porte pas seulement sur la calculabilité : elle porte aussi sur
 > 2. la résolution de la source de `C1` satisfait la règle du §8.5 ;
 > 3. les cadences et le budget de réaction du §8.6 sont atteignables ;
 > 4. **T0-B a rendu un régime compatible avec le contrat `C1` actuellement
->    figé** — ce qui, aujourd'hui, exclut les trois branches ci-dessus ;
+>    figé** — aujourd'hui, les branches **B** et **C** échouent à cette condition ;
+>    en branche **A**, elle serait **tenue** si `ADDITIF` était établi, et ce sont
+>    alors les conditions **1** et **2** qui bloquent, `borne_sonde` et
+>    `occupation_max` étant sans source *(précision V5)* ;
 > 5. aucune inconnue structurante ne rend le critère invalide.
 >
 > Sinon : **`STOP`**, selon la branche. On ne « mesure pas quand même ». Le
@@ -595,29 +683,96 @@ des trois qui atteste la fonction plutôt que le processus.
 **C1 — l'occupation ne doit pas pouvoir faire dépasser le budget du
 superviseur.**
 
+> **Invariant de sûreté — clause normative introduite en V4.** `C1` est un moyen ;
+> ce qui suit est la fin, et **MUST** survivre à toute révision future de la
+> formule :
+>
+> **L'exposition de Boilerack ne doit jamais pouvoir faire échouer une sonde du
+> superviseur historique** — c'est-à-dire ne jamais pouvoir porter la durée
+> totale d'une sonde au-delà de son budget de 5 s — **car un tel échec engage le
+> premier pas d'une chaîne à deux échecs qui aboutit à un redémarrage machine
+> automatique** (W4-C §8).
+>
+> Trois propriétés accompagnent l'invariant et **MUST** lui survivre : la
+> **population** est celle des sondes du superviseur, et elle seule ; la garantie
+> est une **borne déterministe**, jamais un quantile ; et toute mesure ultérieure
+> **portant sur une borne qualifiée** ne peut que **durcir** le critère, jamais le
+> relâcher.
+>
+> *Précision V5.* Le cliquet joue **entre bornes qualifiées** : c'est ce que le
+> `max` réalise. Le **premier** établissement d'une borne qualifiée ne « durcit »
+> aucun niveau antérieur — il **fixe** le premier niveau, aucun n'existant avant
+> lui.
+>
+> **Toute formule qui prétendrait remplacer `C1` est jugée à ce niveau**, non à
+> celui de son algèbre.
+
+**Deux grandeurs, à ne jamais confondre — distinction introduite en V4.**
+
+| Symbole | Grandeur | Emploi légitime |
+|---|---|---|
+| **`R`** | **durée totale d'invocation** — temps mural, de l'appel au résultat | ordonnancement, chaînage des cycles, seuil de réalimentation (§6.2), `T_release` et `cadence_max` (§8.6.1) |
+| **`O`** | **occupation** — durée pendant laquelle un client détient la liaison partagée et en exclut les autres | contention : c'est la grandeur que `C1` borne |
+
+**Seule relation établie : `O ≤ R`.** Leur différence est inconnue, leur égalité
+éventuelle aussi. Une mesure de `R` peut donc **majorer** `O` ; elle **MUST NOT**
+servir à la **minorer**.
+
+> **Fondement de `O ≤ R` — ajouté en V5.** Le démon est invoqué avec `-n` et sert
+> ses clients de façon **strictement séquentielle** — fait établi par le constat
+> Acte A. Une invocation se décompose donc en **attente éventuelle avant session**
+> puis **durée de session**, et l'occupation — la détention effective de la
+> liaison — vaut au plus la seconde. D'où `O ≤ R`.
+>
+> **Ce fondement ne pose rien d'autre** : il n'établit **aucune** attente non
+> nulle, **aucune** inégalité stricte, **aucune** valeur.
+
 Formule figée ici :
 
 ```
-borne_effective  =  max( borne_publique_C5 , borne_T0_superviseur )
-seuil_C1         =  budget_superviseur  −  borne_effective
-rafale_max(T1) ≤ seuil_C1      et      rafale_max(T2) ≤ seuil_C1
+borne_sonde        =  max( bornes supérieures déterministes disponibles,
+                           qualifiées sur la population des sondes du superviseur )
+seuil_C1           =  budget_superviseur  −  borne_sonde
+occupation_max(T1) ≤ seuil_C1      et      occupation_max(T2) ≤ seuil_C1
 ```
 
 **La population pertinente est celle des sondes du superviseur**, et elle seule.
 Pas l'ensemble des connexions au démon : le pont y domine numériquement, et son
 coût ne gouverne aucun budget que `C1` protège.
 
-| Terme | Valeur | Provenance |
-|---|---:|---|
-| `budget_superviseur` | 5,000 s | W4-C §8 |
-| `borne_publique_C5` | **4,029 s** | C5 §9, maximum publié |
-| `borne_T0_superviseur` | — | T0-C, **uniquement si** T0-A montre que la population des sondes du superviseur est **isolable** |
-| **`seuil_C1` par défaut** | **0,971 s** | `5,000 − 4,029` |
+| Terme | Type | Valeur | Provenance et statut |
+|---|---|---:|---|
+| `budget_superviseur` | budget | 5,000 s | W4-C §8 — **fait d'installation** |
+| `borne_sonde` | **`R`** de la sonde, hors exposition Boilerack | — | **aucune valeur admissible à ce jour** — voir ci-dessous ; inconnue **`U-2`** (§9) |
+| `occupation_max(T1)`, `occupation_max(T2)` | **`O`** cumulée vue par une sonde | — | **aucune source ne la fournit** ; inconnue **`U-7`** (§9) |
+| **`seuil_C1`** | durée | **non calculable** | `borne_sonde` n'existant pas |
 
-*Justification.* Sous le régime additif (§6.5), une transaction concurrente paie
-l'attente **puis** son propre coût. Pour que la somme reste sous le budget,
-l'attente doit rester sous `budget − coût`. Ce n'est pas une fraction choisie :
-c'est la soustraction que le régime impose.
+> **`borne_publique_C5` est requalifiée en V4 — donnée de référence, non borne.**
+> La valeur **4,029 s** de C5 §9 demeure au dossier comme **donnée de référence
+> non qualifiée**. Elle **MUST NOT** être employée comme `borne_sonde`, pour trois
+> motifs cumulatifs : c'est un **maximum empirique** d'un petit jeu de mesures, et
+> non une borne supérieure démontrée ; sa **population n'est pas qualifiée**
+> comme celle des sondes du superviseur — C5 place au contraire sa campagne
+> « entre deux cycles du superviseur local, pour écarter toute contention avec
+> lui » ; et C5 §9 déclare lui-même n'arrêter **aucun budget de production**.
+>
+> **Portée exacte de l'interdiction — précisée en V5.** Elle porte sur l'emploi de
+> `borne_publique_C5` **comme `borne_sonde`**. Ses emplois explicitement typés
+> **`R`** demeurent **licites** : la comparaison au seuil de réalimentation (§6.2)
+> et le calcul de `T_release` et de `cadence_max` (§8.6.1) s'appuient légitimement
+> sur cette valeur en tant que durée d'invocation.
+>
+> **Conséquence, assumée :** `borne_sonde` n'a **aucune valeur admissible**, donc
+> **`seuil_C1` est non calculable**, donc **`C1` est non calculable**. Ce n'est
+> pas un relâchement : une condition non calculable **ne peut pas être
+> satisfaite**, et la condition 1 de `T0 GO` échoue.
+
+*Justification de la forme.* Sous le régime additif (§6.5), une sonde qui arrive
+pendant une occupation attend sa libération, **puis** paie son propre coût. Pour
+que la somme reste sous le budget, l'occupation subie doit rester sous
+`budget − coût propre de la sonde`. Ce n'est pas une fraction choisie : c'est la
+soustraction que le régime impose. **La V4 ne change pas cette forme** ; elle
+corrige le **type** de ses deux termes.
 
 > **`C1` est une borne déterministe, pas une politique probabiliste.** La V2
 > employait un **quantile** — `q95` — là où la garantie revendiquée est une
@@ -628,10 +783,14 @@ c'est la soustraction que le régime impose.
 > supérieure** du coût de la sonde y entre.
 
 > **T0 ne peut que resserrer `C1`, jamais la relâcher.** C'est le rôle du `max`
-> dans `borne_effective`. Une mesure T0 qui rendrait une borne **supérieure** à
-> 4,029 s durcit le seuil ; une mesure qui rendrait une borne **inférieure** est
-> sans effet, la valeur publiée l'emportant. Le sens de la variation est donc
-> unilatéral, et il va vers la sûreté.
+> dans `borne_sonde`. Entre deux bornes **qualifiées**, la plus grande l'emporte :
+> une mesure T0 plus haute durcit le seuil, une mesure plus basse est sans effet.
+> Le sens de la variation est donc unilatéral, et il va vers la sûreté.
+>
+> **Précision V4.** Le `max` ne porte que sur des bornes **qualifiées** au sens du
+> tableau ci-dessus. Y faire entrer une donnée non qualifiée — telle que
+> `4,029 s` — reviendrait à **fabriquer** un seuil, et le cliquet protégerait
+> alors une valeur sans fondement au lieu d'une borne.
 >
 > *Pourquoi cette précaution.* Sans le `max`, une population T0 dominée par le
 > pont — dont les transactions peuvent être plus courtes que celles du
@@ -639,40 +798,62 @@ c'est la soustraction que le régime impose.
 > l'on cherche à protéger le superviseur. Le seuil deviendrait plus permissif
 > parce qu'on aurait mesuré la mauvaise population.
 
-> **Si T0-A ne permet pas d'isoler les sondes du superviseur**, alors
-> `borne_T0_superviseur` **n'existe pas** et `seuil_C1 = 0,971 s`. On ne fabrique
-> **pas** une borne à partir d'un mélange pont/superviseur : une borne tirée de
-> la mauvaise population n'est pas une borne conservatrice, c'est une borne
-> fausse.
+> **Si T0-A ne permet pas d'isoler les sondes du superviseur**, alors aucune
+> borne qualifiée n'existe, `borne_sonde` reste vide, et **`seuil_C1` demeure non
+> calculable**. On ne fabrique **pas** une borne à partir d'un mélange
+> pont/superviseur : une borne tirée de la mauvaise population n'est pas une
+> borne conservatrice, c'est une borne fausse.
+>
+> **Correction V4.** La V3 rabattait ce cas sur `seuil_C1 = 0,971 s`, valeur
+> dérivée de la donnée non qualifiée `4,029 s`. **Ce repli est retiré** : il
+> revenait à employer comme borne ce que le paragraphe précédent interdit
+> précisément d'employer ainsi.
 
 > **Portée de la garantie.** `C1` n'a de sens que sous le régime **additif**. Si
 > T0-B rend `NON ADDITIF` ou `INDÉTERMINÉ`, la barrière du §8.2.1 s'applique et
 > il n'y a pas de T1 : `C1` n'est alors ni satisfaite ni violée, elle est **sans
 > objet**.
 
-Le seuil de 2,5 s de la V1, présenté comme « moitié du budget », était **faux** —
-il dépassait déjà l'attente tolérable sur toute la plage C5, et il est retiré.
+Le seuil de 2,5 s de la V1, présenté comme « moitié du budget », était **une
+fraction choisie** et non la soustraction que le régime impose. Il est **retiré**,
+et ce retrait reste justifié par ce seul motif. *(Motif réécrit en V5 : la V3
+l'appuyait sur une « attente tolérable », notion supprimée par la V4.)*
 
-> **Résolution exigée de la source.** `C1` compare une durée à un seuil qui vaut
-> **0,971 s** par défaut. La source retenue en T0-D pour mesurer `rafale_max` —
-> M1, ou toute autre source qu'aura désignée T0-A — **MUST** avoir une résolution
-> temporelle permettant de **décider sans ambiguïté** du dépassement.
+> **Résolution exigée de la source.** La source retenue en T0-D pour mesurer
+> `occupation_max` **MUST** avoir une résolution temporelle permettant de
+> **décider sans ambiguïté** du dépassement du seuil.
 >
 > Une mesure de résolution `r` porte une incertitude de quantification d'au plus
 > `r` sur une durée, et l'écart entre deux instants relevés en porte jusqu'à
-> `2r`. Pour que la comparaison au seuil reste tranchée sur toute la plage
-> utile, il faut donc `2r < seuil_C1`, soit :
+> `2r`. Pour que la comparaison au seuil reste tranchée sur toute la plage utile,
+> il faut donc `2r < seuil_C1`, soit :
 >
 > ```
-> r  <  seuil_C1 / 2      =  0,4855 s  au seuil par défaut
+> r  <  seuil_C1 / 2
 > ```
 >
-> Soit, arrondi **dans le sens sûr**, `r < 0,485 s`. Arrondir à 0,486 s
-> relâcherait la condition d'un millième : sur une règle conservatrice, on
-> arrondit vers le bas.
+> L'arrondi de cette borne se fait **dans le sens sûr**, c'est-à-dire **vers le
+> bas** : relâcher la condition fût-ce d'un millième est exclu sur une règle
+> conservatrice.
 >
-> Une résolution à la seconde — cas courant d'un journal système — **ne
-> satisfait pas** cette condition. Si aucune source disponible ne l'atteint :
+> **Statut en V4 — non calculable, et suspendue.** La règle est **conservée sous
+> forme symbolique** : elle demeure une exigence normative, mais `seuil_C1` étant
+> non calculable, **aucune valeur de `r` n'est dérivable**. La valeur `0,485 s`
+> de la V3 découlait du seuil retiré ; **elle est retirée avec lui**, et
+> **aucune valeur ne la remplace**.
+>
+> **Le sens d'un futur déplacement est indéterminé.** Un `seuil_C1` ultérieurement
+> plus **grand** relâcherait la résolution exigée ; un seuil plus **petit** la
+> durcirait. **Aucun sens ne MUST être présumé**, et en particulier il **MUST
+> NOT** être supposé qu'une source à la seconde deviendrait admissible.
+>
+> **Règle d'admissibilité — ajoutée en V5.** L'admissibilité d'une source **MUST**
+> être réétablie depuis un `seuil_C1` calculé sur une **borne qualifiée** ; elle
+> n'est présumée dans **aucun** sens. La V3 excluait nommément la résolution à la
+> seconde, mais par une dérivation du seuil aujourd'hui retiré : cette exclusion
+> **tombe avec sa dérivation**, et **elle n'est remplacée par aucune admission**.
+>
+> Conséquence immédiate, inchangée dans son effet :
 > **`C1` non calculable ⇒ `T0 GO` impossible ⇒ `W4-F2 NON QUALIFIABLE — STOP`.**
 
 > **Hypothèse revendiquée, et sa portée.** `C1` n'a de sens que sous le régime
@@ -681,11 +862,20 @@ il dépassait déjà l'attente tolérable sur toute la plage C5, et il est retir
 > ce remplacement relève d'un amendement documentaire, pas d'un choix
 > d'exploitant.
 
-> **`C1` est vraisemblablement inatteignable.** Une lecture unique coûte 2,669 à
-> 4,029 s, donc `rafale_max ≥ 2,669 s > 0,971 s` **par construction**. C'est un
-> résultat, non un défaut du critère : sous le régime additif, la coexistence est
-> arithmétiquement impossible aux coûts documentés. `C1` est la forme falsifiable
-> de cet énoncé, et c'est pourquoi elle est évaluée **dès T1** (§8.7).
+> **Retrait d'une inférence — V4.** La V3 concluait ici que « `C1` est
+> vraisemblablement inatteignable », au motif qu'*« une lecture unique coûte
+> 2,669 à 4,029 s, donc `rafale_max ≥ 2,669 s` par construction »*. **Cette
+> inférence est retirée.** Elle déduisait une **minoration de `O`** d'une mesure
+> de `R`, ce que la relation `O ≤ R` ne permet pas.
+>
+> **Ce qui subsiste, et qui est plus faible :** aucune minoration de
+> `occupation_max` n'est disponible, et aucune majoration ne l'est non plus au
+> regard d'un seuil lui-même non calculable. **`C1` n'est ni satisfaite, ni
+> violée, ni évaluable en l'état.**
+>
+> **`C1` reste évaluée dès T1** (§8.7) lorsqu'elle redeviendra calculable. Tant
+> qu'elle ne l'est pas, la barrière du §8.2.1 s'applique et **il n'y a pas de
+> T1** : la question de son évaluation ne se pose donc pas.
 
 **C2 — le pont historique ne doit pas être dégradé.**
 
@@ -983,12 +1173,20 @@ rapporter au reste du chantier.
 | Réf | Inconnue | Statut |
 |---|---|---|
 | **U-1** | régime de concurrence de `vcontrold` — additif, entrelacé, ou autre | **`PREUVE TERRAIN / SOURCE EXTERNE REQUISE`** — conditionne §6.5 et la validité même de `C1` ; **T0-B** peut le trancher sans exposition si les sources le permettent |
-| **U-2** | durée réelle d'une sonde du superviseur (M6) | **`PREUVE TERRAIN / SOURCE EXTERNE REQUISE`** — **aucun substitut admis** (§8.3) |
+| **U-2** | durée réelle d'une sonde du superviseur (M6), **et borne supérieure déterministe de cette durée, qualifiée sur la population des sondes** | **`PREUVE TERRAIN / SOURCE EXTERNE REQUISE`** — **aucun substitut admis** (§8.3) ; **conditionne `borne_sonde`** (§8.5). *Portée élargie en V5 : la V3 ne demandait que la durée réelle, là où `borne_sonde` exige une borne.* |
 | **U-3** | capacité réelle du journal `vcontrold` : clôture, durée, attribution par client | **`PREUVE TERRAIN / SOURCE EXTERNE REQUISE`** — **T0-A** ; conditionne la calculabilité de `C1` |
 | **U-4** | sensibilité de M2 à un retard interne du pont | **`PREUVE TERRAIN / SOURCE EXTERNE REQUISE`** — §8.4 ; borne ce que `C2` démontre |
 | **U-5** | phase du superviseur au démarrage de Boilerack | **non observable et non contrôlable** — fonde le §8.7 |
 | **U-6** | référence T0 du pont sur cette installation | mesurable **par W4-F2**, phase T0-C |
+| **U-7** | **occupation `O`** — durée de détention effective de la liaison partagée, pour une lecture et pour une rafale | **`PREUVE TERRAIN / SOURCE EXTERNE REQUISE`** — **introduite en V4**. Aucune source du dépôt ne la fournit ; seule `O ≤ R` est établie. Conditionne le terme `occupation_max` de `C1` (§8.5) |
 | **I-7** | délai de propagation après changement réel | **non levable avant W4-F4** — circularité assumée (§4.4) |
+
+> **Ce que la V4 ajoute à ce tableau.** `U-7` n'est pas une inconnue nouvelle du
+> système : c'est une inconnue que la V3 **masquait** en employant `R` à la place
+> de `O`. La nommer ne dégrade rien ; elle rend visible ce qui manquait déjà.
+> Ensemble, **`U-2`** — qui conditionne `borne_sonde` — et **`U-7`** — qui
+> conditionne `occupation_max` — expliquent pourquoi les **deux** termes de `C1`
+> sont aujourd'hui sans source.
 
 `I-7` n'obstrue pas W4-F2, qui n'écrit pas. Elle figure ici parce que le §4.4 en
 fait le seul point où la fenêtre de confirmation pourrait se révéler
