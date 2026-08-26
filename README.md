@@ -6,6 +6,9 @@ Viessmann équipées d'une liaison Optolink.
 > **État : en construction. Rien n'est publiable ni utilisable à ce stade.**
 > Aucune prerelease n'a été diffusée.
 
+Les contrats de construction et les lots de conception sont indexés dans
+[docs/design/README.md](docs/design/README.md).
+
 ## Ce que fait ce projet
 
 Des commandes identifiées, expirables et confirmées par relecture réelle de la
@@ -82,6 +85,10 @@ Le détail de chaque clé, des validations et des garanties figure dans
 Vérifié sur **une seule installation** : régulation `VScotHO1` (`20CB`),
 protocole `P300`, circuit `M1` et eau chaude sanitaire, sur une Vitodens 200-W
 B2HB. Aucune compatibilité n'est revendiquée au-delà.
+
+**« Vérifié » qualifie ici la caractérisation de cette installation — ce que les
+contrats ont établi en l'observant — et non un essai de Boilerack, qui n'a pas eu
+lieu : voir la réserve de la section « Installation et lancement ».
 
 ## Licence
 
