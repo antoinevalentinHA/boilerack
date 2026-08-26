@@ -28,5 +28,17 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      # Lot B1 : jeu de regles minimal, perimetre `src` seul, exclusion de
+      # `_legacy/primitives.py` -- le tout declare dans `pyproject.toml`, et
+      # non repete ici. Aucun drapeau : l'etape doit appliquer exactement la
+      # configuration du depot, sans la reinterpreter en ligne de commande.
+      #
+      # Avant les tests, et non apres : une occurrence de lint se lit en une
+      # ligne, la ou un echec de suite demande une lecture de journal.
+      #
+      # `ruff` est deja installe par l'etape precedente, via l'extra `dev`.
+      - name: Verification statique
+        run: python -m ruff check src
+
       - name: Tests
         run: python -m pytest -q
