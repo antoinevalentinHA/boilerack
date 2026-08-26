@@ -440,4 +440,8 @@ def test_aucune_dependance_ajoutee() -> None:
     racine = pathlib.Path(boilerack.cli.__file__).parents[2]
     pyproject = tomllib.loads((racine / "pyproject.toml").read_text(encoding="utf-8"))
     assert pyproject["project"]["dependencies"] == ["paho-mqtt>=2.1,<3"]
-    assert pyproject["project"]["optional-dependencies"] == {"dev": ["pytest>=8"]}
+    # B1 : `ruff` rejoint l'extra de developpement. La garde reste une egalite
+    # STRICTE — c'est elle qui interdit l'ajout silencieux d'une dependance.
+    assert pyproject["project"]["optional-dependencies"] == {
+        "dev": ["pytest>=8", "ruff>=0.16"]
+    }

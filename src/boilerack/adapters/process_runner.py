@@ -90,7 +90,9 @@ class SubprocessRunner:
     suite de tests.
     """
 
-    def __init__(self, *, runner: Callable[..., subprocess.CompletedProcess] = subprocess.run) -> None:
+    def __init__(
+        self, *, runner: Callable[..., subprocess.CompletedProcess] = subprocess.run
+    ) -> None:
         self._runner = runner
 
     def run(
