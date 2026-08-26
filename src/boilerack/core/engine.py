@@ -42,7 +42,6 @@ Doctrine appliquee :
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 
 from boilerack.clock import Clock
 from boilerack.core.ack import Ack, Reason, ack_to_json
