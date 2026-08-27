@@ -40,6 +40,18 @@ jobs:
       - name: Verification statique
         run: python -m ruff check src
 
+      # Lot B2 : MEME jeu de regles et MEME limite que l'etape precedente, sur
+      # le perimetre `tests`. Rien n'est redeclare : la configuration de
+      # `pyproject.toml` s'applique a l'un comme a l'autre, seul le chemin
+      # change.
+      #
+      # Une etape distincte, et non un second chemin ajoute a la precedente :
+      # une regression de lint se lit alors immediatement pour ce qu'elle est
+      # -- du code de production, ou du code de test -- sans ouvrir le journal.
+      # L'etape precedente reste inchangee.
+      - name: Verification statique des tests
+        run: python -m ruff check tests
+
       # Lot C1 : reglage PAR DEFAUT, perimetre `src/boilerack` -- `_legacy`
       # COMPRIS, faute d'erreur a y exclure -- et version cible `3.11`, le tout
       # declare dans `pyproject.toml`. Aucun drapeau, ni argument de chemin :
