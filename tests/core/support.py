@@ -56,7 +56,9 @@ def payload(
     return json.dumps(body).encode("utf-8")
 
 
-def message(payload_bytes: bytes, *, topic: str = "cmd/in", qos: int = 1, dup: bool = False) -> Message:
+def message(
+    payload_bytes: bytes, *, topic: str = "cmd/in", qos: int = 1, dup: bool = False
+) -> Message:
     return Message(topic=topic, payload=payload_bytes, qos=qos, dup=dup)
 
 

@@ -22,7 +22,14 @@ from boilerack.transport.vclient import TransportStatus
 FIXTURES = pathlib.Path(__file__).parent.parent / "fixtures" / "vclient"
 
 CHAMPS_COLLECTE = {"collected_at", "client_version", "argv", "env", "external_timeout_s", "origin"}
-CHAMPS_RESULTAT = {"returncode", "duration_ms", "stdout_len", "stderr_len", "stdout_b64", "stderr_b64"}
+CHAMPS_RESULTAT = {
+    "returncode",
+    "duration_ms",
+    "stdout_len",
+    "stderr_len",
+    "stdout_b64",
+    "stderr_b64",
+}
 
 #: Les deux seules fixtures rejouables a l'identique sur le binaire. Les autres
 #: sont des transcriptions fideles du rapport de collecte : leur longueur en
@@ -108,7 +115,14 @@ def test_la_provenance_est_qualifiee_sans_ambiguite(nom: str) -> None:
 
 
 def test_exactement_deux_recaptures_et_sept_transcriptions() -> None:
-    natures = {n: ("recapture" if "recaptur" in charger(n)["collection"]["origin"] else "transcription") for n in TOUTES}
+    natures = {
+        n: (
+            "recapture"
+            if "recaptur" in charger(n)["collection"]["origin"]
+            else "transcription"
+        )
+        for n in TOUTES
+    }
     assert sorted(n for n, v in natures.items() if v == "recapture") == ["help", "version"]
     assert len([n for n, v in natures.items() if v == "transcription"]) == 7
 

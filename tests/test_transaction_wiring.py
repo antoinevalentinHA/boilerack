@@ -44,7 +44,6 @@ from boilerack.runtime import ReadSurfaceRunner
 from boilerack.testing import VirtualClock, build_fake_profile
 from boilerack.transaction_wiring import (
     COMMAND_QOS,
-    TransactionSurface,
     build_transaction_surface,
 )
 from boilerack.transport.mqtt import Message
@@ -876,7 +875,7 @@ def test_coupure_mqtt_ne_modifie_pas_le_verdict_metier() -> None:
     surface, mqtt, paho, vclient, clock = _surface(
         lectures={"get_sonde": 20.0, "get_temp_consigne": 21.0}
     )
-    runner = _runner(surface, mqtt, vclient, clock, StopArme())
+    _runner(surface, mqtt, vclient, clock, StopArme())
     surface.install()
     paho.fire_on_message(paho_message(rid(1), "temp_consigne", 21.0))
     _admettre(surface)

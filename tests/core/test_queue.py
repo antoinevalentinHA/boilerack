@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from boilerack.core import Reason
 from boilerack.core.ack import AckStatus
-from boilerack.transport.vclient import ReadResult, WriteResult
+from boilerack.transport.vclient import WriteResult
 from boilerack.transport import TransportStatus
 from support import Harness, message, payload, rid
 

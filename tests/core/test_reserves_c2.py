@@ -7,15 +7,13 @@
 
 from __future__ import annotations
 
-import math
 
 import pytest
 
 from boilerack.clock import SystemClock
-from boilerack.core.ack import AckStatus
 from boilerack.testing import VirtualClock
 from boilerack.transport import TransportStatus
-from boilerack.transport.vclient import ReadResult, WriteResult
+from boilerack.transport.vclient import ReadResult
 from support import START, Harness, message, payload, rid
 
 

@@ -22,7 +22,6 @@ import configparser
 import pathlib
 import re
 import subprocess
-import sys
 import sysconfig
 import venv
 

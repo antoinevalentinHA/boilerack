@@ -6,9 +6,9 @@ import pytest
 
 from boilerack.core import TerminalCache
 from boilerack.core.ack import Ack, AckStatus, Reason
-from boilerack.transport.vclient import ReadResult, WriteResult
+from boilerack.transport.vclient import WriteResult
 from boilerack.transport import TransportStatus
-from support import START, Harness, message, payload, rid
+from support import Harness, message, payload, rid
 
 
 def _apply_ok(h: Harness, request_id: str, value=1) -> None:

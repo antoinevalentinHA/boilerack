@@ -415,7 +415,9 @@ def test_secret_sans_username_reste_valide(ecrire, monkeypatch) -> None:
 
 
 def test_username_seul_reste_valide(ecrire) -> None:
-    config = load_config(ecrire('[mqtt]\nhost = "b"\nusername = "u"\n[vclient]\nexecutable = "v"\n'))
+    config = load_config(
+        ecrire('[mqtt]\nhost = "b"\nusername = "u"\n[vclient]\nexecutable = "v"\n')
+    )
     assert config.mqtt.username == "u"
     assert config.mqtt.password is None
 

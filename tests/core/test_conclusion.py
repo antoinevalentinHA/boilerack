@@ -19,7 +19,6 @@ sans reseau, sans Paho, sans I/O reelle.
 
 from __future__ import annotations
 
-import pytest
 
 from boilerack.clock import Clock
 from boilerack.core import TransactionalCore

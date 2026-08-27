@@ -19,7 +19,7 @@ import pytest
 
 import boilerack.cli
 from boilerack.cli import CODE_CONFIGURATION, LOG_LEVELS, build_parser, main
-from boilerack.config import PASSWORD_ENV_VAR, ConfigurationError
+from boilerack.config import PASSWORD_ENV_VAR
 from boilerack.runtime import RuntimeConfig
 
 MINIMALE = """
@@ -163,7 +163,9 @@ def test_resultat_130_projete(config_valide, lifecycle_double) -> None:
 
 def test_erreur_de_configuration_rend_deux_sans_trace(tmp_path, capsys) -> None:
     mauvais = tmp_path / "mauvais.toml"
-    mauvais.write_text('[mqtt]\nhost = "b"\nhots = 1\n[vclient]\nexecutable = "v"\n', encoding="utf-8")
+    mauvais.write_text(
+        '[mqtt]\nhost = "b"\nhots = 1\n[vclient]\nexecutable = "v"\n', encoding="utf-8"
+    )
     code = main(["--config", str(mauvais)])
     capture = capsys.readouterr()
     assert code == CODE_CONFIGURATION
