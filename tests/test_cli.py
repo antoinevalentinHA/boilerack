@@ -443,5 +443,5 @@ def test_aucune_dependance_ajoutee() -> None:
     # B1 : `ruff` rejoint l'extra de developpement. La garde reste une egalite
     # STRICTE — c'est elle qui interdit l'ajout silencieux d'une dependance.
     assert pyproject["project"]["optional-dependencies"] == {
-        "dev": ["pytest>=8", "ruff>=0.16"]
+        "dev": ["mypy>=2.3", "pytest>=8", "ruff>=0.16"]
     }

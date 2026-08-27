@@ -46,7 +46,7 @@ import threading
 from dataclasses import dataclass, replace
 from datetime import datetime
 from types import TracebackType
-from typing import Final, Iterable, Sequence
+from typing import Final, Iterable, Literal, Sequence
 
 from boilerack.adapters.config import MqttConfig
 from boilerack.clock import Clock, SystemClock, check_duration
@@ -343,7 +343,7 @@ class SignalScope:
         type_exc: type[BaseException] | None,
         exc: BaseException | None,
         trace: TracebackType | None,
-    ) -> bool:
+    ) -> Literal[False]:
         """Restaure tout, et ne perd jamais une erreur.
 
         Politique alignee sur celle de C8, et non inventee ici :

@@ -70,6 +70,10 @@ logger = logging.getLogger(__name__)
 # `MQTT_ERR_SUCCESS` vaut 0 dans Paho. On tente d'importer la constante officielle
 # pour rester fidele a l'API, sans coupler l'import de ce module a Paho : les
 # tests injectent un client et n'installent aucune dependance reseau a l'import.
+# `MQTTErrorCode` est une enumeration d'entiers ; `int` couvre donc la constante
+# importee comme le repli, et la comparaison `rc != _MQTT_ERR_SUCCESS` porte sur
+# des entiers dans les deux cas.
+_MQTT_ERR_SUCCESS: int
 try:  # pragma: no cover - depend de l'installation de Paho
     from paho.mqtt.client import MQTT_ERR_SUCCESS as _MQTT_ERR_SUCCESS
 except Exception:  # pragma: no cover
@@ -109,7 +113,10 @@ def _reason_is_success(reason_code: object) -> bool:
     if is_failure is not None:
         return not bool(is_failure)
     try:
-        return int(reason_code) == 0  # type: ignore[arg-type]
+        # `reason_code` est `object` : la conversion n'est tentee que sous
+        # `try`, et l'echec est rattrape juste dessous. Le code d'erreur reel
+        # est `call-overload`, non `arg-type`.
+        return int(reason_code) == 0  # type: ignore[call-overload]
     except (TypeError, ValueError):
         return False
 
@@ -283,7 +290,11 @@ class PahoMqttClient:
                         self._early_acks.discard(mid)
                         confirm_now = True
                     else:
-                        self._pending[mid] = handle
+                        # `mid` vient d'un `getattr` sur l'objet rendu par
+                        # Paho : l'adaptateur ne DECODE rien et le memorise
+                        # tel quel. Le registre est indexe par ce que le
+                        # transport a fourni, sans le reinterpreter.
+                        self._pending[mid] = handle  # type: ignore[index]
         finally:
             # Fermeture de la fenêtre. Quand plus AUCUNE publication n'enregistre,
             # tout crédit d'ACK précoce non consommé est OBSOLETE : on le purge.
