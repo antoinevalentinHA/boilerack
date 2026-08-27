@@ -116,7 +116,9 @@ def _reason_is_success(reason_code: object) -> bool:
         # `reason_code` est `object` : la conversion n'est tentee que sous
         # `try`, et l'echec est rattrape juste dessous. Le code d'erreur reel
         # est `call-overload`, non `arg-type`.
-        return int(reason_code) == 0  # type: ignore[call-overload]
+        # Sous `strict`, la conversion rend `Any` : le code `no-any-return`
+        # s'ajoute a `call-overload`, que mypy signale comme non couvert sinon.
+        return int(reason_code) == 0  # type: ignore[call-overload, no-any-return]
     except (TypeError, ValueError):
         return False
 
@@ -167,7 +169,13 @@ class PahoMqttClient:
         # Import de Paho UNIQUEMENT ici : les tests injectent un client et ne
         # dependent jamais de Paho. Aucune politique de reconnexion maison n'est
         # installee : on s'en remet au comportement natif de Paho.
-        from paho.mqtt.client import CallbackAPIVersion, Client
+        # `paho.mqtt.client` ne REEXPORTE pas explicitement `CallbackAPIVersion`,
+        # et `strict` interdit la reexportation implicite. Le defaut est celui du
+        # paquet tiers, non du notre : l'attribut existe et est documente par Paho.
+        from paho.mqtt.client import (  # type: ignore[attr-defined]
+            CallbackAPIVersion,
+            Client,
+        )
 
         client = Client(CallbackAPIVersion.VERSION2, client_id=config.client_id)
         if config.username is not None:

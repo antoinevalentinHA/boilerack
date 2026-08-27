@@ -51,7 +51,7 @@ from boilerack.core.dedup import (
     InFlightRegistry,
     TerminalCache,
 )
-from boilerack.core.profile import Profile
+from boilerack.core.profile import CommandSpec, Profile
 from boilerack.core.validation import Rejection, ValidatedCommand, validate
 from boilerack.bounded_queue import BoundedQueue, QueueEmpty
 from boilerack.transport.mqtt import Message, MqttClient, PublishHandle
@@ -453,7 +453,9 @@ class TransactionalCore:
         return self._terminal.purge()
 
 
-def _confirms(read_value, target, tolerance: float, spec) -> bool:
+def _confirms(
+    read_value: float | None, target: float, tolerance: float, spec: CommandSpec
+) -> bool:
     """Vrai si la valeur relue confirme la cible, selon le type du role.
 
     - entier : egalite exacte (`read == target`) ;

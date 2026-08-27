@@ -46,12 +46,13 @@ import threading
 from dataclasses import dataclass, replace
 from datetime import datetime
 from types import TracebackType
-from typing import Final, Iterable, Literal, Sequence
+from typing import Any, Callable, Final, Iterable, Literal, Sequence
 
 from boilerack.adapters.config import MqttConfig
 from boilerack.clock import Clock, SystemClock, check_duration
 from boilerack.read_surface.topics import build_topic
 from boilerack.runtime import Runtime, RuntimeConfig, build_runtime
+from boilerack.transport.mqtt import PresenceMqttClient
 
 __all__ = [
     "SIGNALS_SURVEILLES",
@@ -425,7 +426,16 @@ def resultat_logique(cause: signal.Signals | None) -> int:
     return CODE_ARRET_NORMAL
 
 
-def _composer_transaction(config: RuntimeConfig):
+# `TransactionSurface` N'EST PAS NOMMEE, ET POURQUOI
+#     La nommer demanderait soit un `if TYPE_CHECKING:` en tete de module --
+#     que `test_le_module_n_a_aucun_effet_de_bord_a_l_import` interdit, seuls
+#     sept types de noeuds etant admis au niveau superieur -- soit un import
+#     global de `boilerack.transaction_wiring`, qui romprait la barriere
+#     d'imports tardifs decrite ci-dessous. Le type de retour degrade donc en
+#     `Any`, et lui seul : tout ce qui est nommable reste nomme.
+def _composer_transaction(
+    config: RuntimeConfig,
+) -> Callable[[PresenceMqttClient, Clock], Any] | None:
     """Rend une fabrique de surface transactionnelle, ou `None` si non autorisee.
 
     AUTORITE D'ACTIVATION — W4-E1 §6, §7.2
@@ -454,7 +464,7 @@ def _composer_transaction(config: RuntimeConfig):
     if not config.transaction_surface.enabled:
         return None
 
-    def fabriquer(mqtt, clock):
+    def fabriquer(mqtt: PresenceMqttClient, clock: Clock) -> Any:
         # Importe ici, jamais au niveau du module : voir la docstring.
         from boilerack.adapters.process_runner import SubprocessRunner
         from boilerack.adapters.vclient_write import (

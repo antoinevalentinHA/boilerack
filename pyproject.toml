@@ -53,7 +53,9 @@ packages = ["src/boilerack"]
 # Lot B1 : verification statique, jeu MINIMAL et perimetre RESTREINT.
 #
 # PERIMETRE
-#     `src` seul. L'extension a `tests` est le pas B2, non decide.
+#     `src` et `tests`. Le second est le pas B2, DECIDE et applique : les deux
+#     perimetres partagent cette configuration, et la CI les verifie l'un apres
+#     l'autre en deux etapes distinctes.
 #
 # JEU DE REGLES
 #     Declare explicitement, et non herite du defaut de l'outil : ce que `ruff`
@@ -85,8 +87,10 @@ select = ["E4", "E7", "E9", "F", "E501"]
 #     AUCUNE erreur de type. Voir docs/design/outillage-qualite-cadrage.md §4.5.
 #
 # NIVEAU
-#     Le reglage par defaut, et lui seul. Le passage a `--strict` est le pas C2,
-#     non decide : il porterait sur 22 erreurs et 7 fichiers.
+#     `strict`. C'est le pas C2, DECIDE et execute : mesure avant execution,
+#     15 erreurs sur 7 fichiers -- et non les 22 annoncees par le cadrage, les
+#     corrections de C1 en ayant efface sept au passage. Aucune n'a demande de
+#     changement semantique.
 #
 # VERSION CIBLE
 #     `3.11`, plancher declare par `requires-python` et plus basse version que
@@ -95,6 +99,7 @@ select = ["E4", "E7", "E9", "F", "E501"]
 [tool.mypy]
 python_version = "3.11"
 files = ["src/boilerack"]
+strict = true
 
 [tool.pytest.ini_options]
 addopts = "--strict-markers"
