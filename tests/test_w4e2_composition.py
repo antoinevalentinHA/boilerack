@@ -671,7 +671,10 @@ def test_b9_aucune_ecriture_chaudiere_au_demarrage(paho_double, monkeypatch) -> 
     ecritures = []
 
     class EcrivainEspion:
-        def __init__(self, config, runner, *, invocation=None):
+        def __init__(self, config, runner, *, invocation=None, clock=None):
+            # `clock` suit la signature reelle depuis
+            # `g2-observabilite-preuve.md` : elle ne sert qu'a MESURER une
+            # duree d'ecriture, et aucune ecriture n'a lieu a l'assemblage.
             self.config = config
 
         def read(self, command):  # pragma: no cover - non sollicite ici

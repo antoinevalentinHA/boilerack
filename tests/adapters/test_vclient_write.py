@@ -19,6 +19,7 @@ import ast
 import json
 import pathlib
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Mapping
 
 import pytest
@@ -32,7 +33,13 @@ from boilerack.adapters.vclient_write import (
     VClientCli,
     VclientWriteInvocation,
 )
-from boilerack.transport.vclient import TransportStatus, VClient, WriteResult
+from boilerack.testing.fake_clock import VirtualClock
+from boilerack.transport.vclient import (
+    TransportStatus,
+    VClient,
+    WriteObservation,
+    WriteResult,
+)
 
 #: Racine des modules de production, resolue depuis CE FICHIER.
 #:
@@ -41,6 +48,16 @@ from boilerack.transport.vclient import TransportStatus, VClient, WriteResult
 #: ce module passaient au vert sans rien avoir examine. Une barriere vacante est
 #: pire qu'une barriere absente : elle rassure.
 _SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "boilerack"
+
+def _horloge() -> VirtualClock:
+    """Horloge INJECTEE dans chaque adaptateur d'ecriture.
+
+    Elle ne sert qu'a la mesure de duree de `g2-observabilite-preuve.md`.
+    Figee, elle rend cette mesure DETERMINISTE — duree nulle — et n'influence
+    aucun verdict : la classification est calculee avant qu'elle n'intervienne.
+    """
+    return VirtualClock(datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc))
+
 
 CONFIG = VclientConfig(
     executable="vclient", host="demon.test", port=4242, write_timeout_s=5.0
@@ -122,7 +139,9 @@ def sortie(**champs) -> bytes:
 
 def adaptateur(res: ProcessResult, *, config: VclientConfig = CONFIG):
     runner = FauxRunner(res)
-    return VClientCli(config, runner, invocation=VclientWriteInvocation(config)), runner
+    return VClientCli(
+        config, runner, invocation=VclientWriteInvocation(config), clock=_horloge()
+    ), runner
 
 
 # ---------------------------------------------------------------------------
@@ -203,13 +222,21 @@ def test_value_absente_rend_la_sortie_inexploitable() -> None:
 
 
 def test_aucune_valeur_metier_ne_sort_de_l_adaptateur() -> None:
-    """`WriteResult` ne porte que `status` et `detail` — jamais une valeur.
+    """Aucune VALEUR METIER ne sort de l'adaptateur — intention INCHANGEE.
 
-    Verrou structurel : aucune implementation future ne peut y faire remonter
-    `value`, le champ n'existe pas.
+    Le verrou porte sur `value`, pas sur le nombre de champs. Il est ici
+    ETENDU : `WriteObservation`, ajoutee par `g2-observabilite-preuve.md`, est
+    soumise au meme interdit. Elle porte la signature BRUTE du transport, jamais
+    une valeur de datapoint — W4-C §16.4 interdit d'ailleurs d'interpreter le
+    champ `value` d'une reponse d'ecriture.
     """
     champs = set(WriteResult.__dataclass_fields__)
-    assert champs == {"status", "detail"}
+    assert champs == {"status", "detail", "observation"}
+    assert "value" not in champs
+
+    observes = set(WriteObservation.__dataclass_fields__)
+    assert observes == {"args", "stdout", "stderr", "returncode", "duration_s"}
+    assert "value" not in observes
 
 
 def test_l_adaptateur_ne_prononce_aucun_verdict_metier() -> None:
@@ -445,7 +472,10 @@ def test_l_adaptateur_ne_relit_jamais_pour_confirmer() -> None:
 def test_un_nom_invalide_leve_avant_toute_invocation(mauvais: str) -> None:
     """W4-A §7.2 et §8 : memes regles que le lecteur, avant tout processus."""
     adapt = VClientCli(
-        CONFIG, RunnerInterdit(), invocation=VclientWriteInvocation(CONFIG)
+        CONFIG,
+        RunnerInterdit(),
+        invocation=VclientWriteInvocation(CONFIG),
+        clock=_horloge(),
     )
     with pytest.raises(InvalidCommandName):
         adapt.write(mauvais, 2.0)
@@ -488,7 +518,7 @@ def test_la_fabrique_est_reellement_substituable() -> None:
     runner = FauxRunner(
         resultat(stdout=sortie(command="echo-double", raw="OK", error=""))
     )
-    adapt = VClientCli(CONFIG, runner, invocation=double)
+    adapt = VClientCli(CONFIG, runner, invocation=double, clock=_horloge())
     r = adapt.write("setNiveauM1", 2.0)
     assert double.appels == [("setNiveauM1", 2.0)]
     assert runner.appels[0][0] == ["faux", "--x"]
@@ -498,7 +528,7 @@ def test_la_fabrique_est_reellement_substituable() -> None:
 def test_une_fabrique_sans_echo_n_invente_aucune_verification() -> None:
     double = FabriqueDouble(Invocation(args=["faux"], echo=""))
     runner = FauxRunner(resultat(stdout=sortie(command="n'importe quoi")))
-    adapt = VClientCli(CONFIG, runner, invocation=double)
+    adapt = VClientCli(CONFIG, runner, invocation=double, clock=_horloge())
     assert adapt.write("setNiveauM1", 2.0).status is TransportStatus.OK
 
 
@@ -525,7 +555,10 @@ def test_une_valeur_non_entiere_est_refusee_et_non_devinee(valeur: float) -> Non
 def test_une_valeur_irrepresentable_ne_lance_aucun_processus() -> None:
     """Le refus de B devient une issue de transport, pas une exception."""
     adapt = VClientCli(
-        CONFIG, RunnerInterdit(), invocation=VclientWriteInvocation(CONFIG)
+        CONFIG,
+        RunnerInterdit(),
+        invocation=VclientWriteInvocation(CONFIG),
+        clock=_horloge(),
     )
     r = adapt.write("setNiveauM1", 2.5)
     assert r.status is TransportStatus.TRANSPORT_ERROR
@@ -566,12 +599,21 @@ def test_le_diagnostic_est_borne() -> None:
 
 
 def test_la_taxonomie_de_transport_n_a_pas_ete_modifiee() -> None:
-    """Obligation 21 : W4-B n'ajoute aucun champ ni statut.
+    """Obligation 21 : LA TAXONOMIE est intacte — c'est elle que l'obligation vise.
 
-    L'arbitrage de §7.3 est tranche en faveur de `detail` : aucun champ `raw`
-    n'est ajoute a `WriteResult`.
+    L'arbitrage de §7.3 avait ete tranche en faveur de `detail` seul. Il a ete
+    ROUVERT par `g2-observabilite-preuve.md`, dont l'autorite est §7.3 lui-meme :
+    l'ajout d'un champ y est admis sous reserve d'un « arbitrage explicite ».
+    `observation` est cet ajout, et il est OPTIONNEL.
+
+    Ce que l'obligation 21 interdit — modifier la taxonomie — reste tenu :
+    `TransportStatus` est inchange, statut pour statut.
     """
-    assert set(WriteResult.__dataclass_fields__) == {"status", "detail"}
+    assert set(WriteResult.__dataclass_fields__) == {
+        "status",
+        "detail",
+        "observation",
+    }
     assert {s.name for s in TransportStatus} == {
         "OK",
         "DAEMON_UNREACHABLE",
@@ -639,7 +681,10 @@ def test_un_espacement_de_controle_est_deja_refuse_par_l_heritage(
     ne les voit donc jamais — et c'est bien ainsi : le trou reel etait ailleurs.
     """
     adapt = VClientCli(
-        CONFIG, RunnerInterdit(), invocation=VclientWriteInvocation(CONFIG)
+        CONFIG,
+        RunnerInterdit(),
+        invocation=VclientWriteInvocation(CONFIG),
+        clock=_horloge(),
     )
     with pytest.raises(InvalidCommandName):
         adapt.write(controle, 2.0)
@@ -671,7 +716,9 @@ def test_un_espacement_interne_n_emet_rien(mauvais: str) -> None:
     Ses regles ne sont donc pas elargies ; la garde est ajoutee cote ecriture.
     """
     runner = RunnerInterdit()
-    adapt = VClientCli(CONFIG, runner, invocation=VclientWriteInvocation(CONFIG))
+    adapt = VClientCli(
+        CONFIG, runner, invocation=VclientWriteInvocation(CONFIG), clock=_horloge()
+    )
     r = adapt.write(mauvais, 2.0)
     assert r.status is TransportStatus.TRANSPORT_ERROR
     assert "non fabricable" in r.detail
@@ -680,7 +727,10 @@ def test_un_espacement_interne_n_emet_rien(mauvais: str) -> None:
 def test_les_noms_a_espacement_de_bordure_restent_refuses_par_le_lecteur() -> None:
     """Les regles heritees continuent de s'appliquer AVANT la garde d'ecriture."""
     adapt = VClientCli(
-        CONFIG, RunnerInterdit(), invocation=VclientWriteInvocation(CONFIG)
+        CONFIG,
+        RunnerInterdit(),
+        invocation=VclientWriteInvocation(CONFIG),
+        clock=_horloge(),
     )
     for borde in (" setNiveauM1", "setNiveauM1 "):
         with pytest.raises(InvalidCommandName):
@@ -792,7 +842,10 @@ def test_raw_error_et_flux_longs_ensemble_restent_bornes() -> None:
 def test_une_valeur_de_type_invalide_est_refusee_sans_processus(mauvaise) -> None:
     """Aucune valeur d'appelant invalide ne remonte en exception brute."""
     adapt = VClientCli(
-        CONFIG, RunnerInterdit(), invocation=VclientWriteInvocation(CONFIG)
+        CONFIG,
+        RunnerInterdit(),
+        invocation=VclientWriteInvocation(CONFIG),
+        clock=_horloge(),
     )
     r = adapt.write("setNiveauM1", mauvaise)
     assert r.status is TransportStatus.TRANSPORT_ERROR
@@ -820,7 +873,9 @@ class FabriqueQuiCasse:
 
 
 def test_une_erreur_d_entree_de_la_fabrique_devient_une_issue() -> None:
-    adapt = VClientCli(CONFIG, RunnerInterdit(), invocation=FabriqueQuiEchoue())
+    adapt = VClientCli(
+        CONFIG, RunnerInterdit(), invocation=FabriqueQuiEchoue(), clock=_horloge()
+    )
     r = adapt.write("setNiveauM1", 2.0)
     assert r.status is TransportStatus.TRANSPORT_ERROR
     assert "ValueError" in r.detail
@@ -832,7 +887,9 @@ def test_une_erreur_de_programmation_de_la_fabrique_remonte() -> None:
     Deguiser un bug en issue de transport le rendrait invisible, et le coeur
     engagerait une relecture pour une invocation qui n'a jamais eu de sens.
     """
-    adapt = VClientCli(CONFIG, RunnerInterdit(), invocation=FabriqueQuiCasse())
+    adapt = VClientCli(
+        CONFIG, RunnerInterdit(), invocation=FabriqueQuiCasse(), clock=_horloge()
+    )
     with pytest.raises(RuntimeError):
         adapt.write("setNiveauM1", 2.0)
 
@@ -842,7 +899,9 @@ def test_un_detail_d_exception_tres_long_est_borne() -> None:
         def build(self, command: str, value: float) -> Invocation:
             raise ValueError("Z" * 5000)
 
-    adapt = VClientCli(CONFIG, RunnerInterdit(), invocation=FabriqueBavarde())
+    adapt = VClientCli(
+        CONFIG, RunnerInterdit(), invocation=FabriqueBavarde(), clock=_horloge()
+    )
     detail = adapt.write("setNiveauM1", 2.0).detail
     assert len(detail) < 400
 
@@ -1073,3 +1132,195 @@ def test_l_exemption_du_protocol_est_exacte_et_justifiee() -> None:
         and instruction.value.value is Ellipsis
         for instruction in unique.body
     ), "l'exemption ne vaut que pour un corps `...`"
+
+
+# ---------------------------------------------------------------------------
+# Z. Observabilite de preuve — `g2-observabilite-preuve.md`
+# ---------------------------------------------------------------------------
+
+
+class RunnerQuiConsommeDuTemps:
+    """Lanceur qui fait AVANCER l'horloge, pour eprouver la mesure de duree."""
+
+    def __init__(self, horloge: VirtualClock, res: ProcessResult, secondes: float):
+        self._horloge = horloge
+        self._res = res
+        self._secondes = secondes
+
+    def run(self, args, *, timeout):  # type: ignore[no-untyped-def]
+        self._horloge.advance(self._secondes)
+        return self._res
+
+
+def test_l_observation_porte_les_cinq_elements_exiges() -> None:
+    """`G.2` §16 item 4 : invocation, stdout, stderr, code retour, duree."""
+    horloge = _horloge()
+    res = resultat(returncode=0, stdout=SUCCES_REEL, stderr=b"")
+    adapt = VClientCli(
+        CONFIG,
+        RunnerQuiConsommeDuTemps(horloge, res, 1.045),
+        invocation=VclientWriteInvocation(CONFIG),
+        clock=horloge,
+    )
+
+    obs = adapt.write("setNiveauM1", 2.0).observation
+
+    assert obs is not None
+    # La ligne REELLE, telle qu'executee : executable, drapeaux de site, puis
+    # la commande et sa valeur en UN SEUL mot du shell (W4-C, 22 aout 2026).
+    assert obs.args[0] == CONFIG.executable
+    assert "-J" in obs.args
+    assert obs.args[-2:] == ("-c", "setNiveauM1 2")
+    assert obs.stdout == SUCCES_REEL
+    assert obs.stderr == b""
+    assert obs.returncode == 0
+    assert obs.duration_s == 1.045
+
+
+def test_la_duree_vient_de_l_horloge_injectee_et_de_rien_d_autre() -> None:
+    """Aucun compteur de la bibliotheque standard : la mesure est DETERMINISTE."""
+    horloge = _horloge()
+    adapt = VClientCli(
+        CONFIG,
+        RunnerQuiConsommeDuTemps(horloge, resultat(stdout=SUCCES_REEL), 3.5),
+        invocation=VclientWriteInvocation(CONFIG),
+        clock=horloge,
+    )
+    obs = adapt.write("setNiveauM1", 2.0).observation
+    assert obs is not None and obs.duration_s == 3.5
+
+
+def test_stdout_et_stderr_sont_integraux_et_separes() -> None:
+    """Ni tronques, ni fusionnes — `W4-A` §18, obligation 5."""
+    long_out = b"x" * 5000
+    long_err = b"y" * 5000
+    adapt, _ = adaptateur(resultat(returncode=1, stdout=long_out, stderr=long_err))
+
+    r = adapt.write("setNiveauM1", 2.0)
+
+    assert r.observation is not None
+    assert r.observation.stdout == long_out
+    assert r.observation.stderr == long_err
+    assert len(r.observation.stdout) == 5000
+    assert len(r.observation.stderr) == 5000
+
+
+def test_detail_reste_borne_meme_quand_l_observation_est_integrale() -> None:
+    """« Un diagnostic se borne » — la phrase de W4-B reste vraie."""
+    adapt, _ = adaptateur(resultat(returncode=1, stdout=b"z" * 5000, stderr=b""))
+    r = adapt.write("setNiveauM1", 2.0)
+
+    assert len(r.detail) < 600
+    assert r.observation is not None and len(r.observation.stdout) == 5000
+
+
+def test_l_observation_existe_aussi_quand_l_ecriture_echoue() -> None:
+    """La preuve vaut pour TOUTE issue : un echec se consigne comme un succes."""
+    adapt, _ = adaptateur(resultat(timed_out=True, returncode=None))
+    r = adapt.write("setNiveauM1", 2.0)
+
+    assert r.status is TransportStatus.TIMEOUT
+    assert r.observation is not None
+    assert r.observation.returncode is None
+
+
+def test_aucune_observation_si_le_lanceur_n_a_jamais_ete_appele() -> None:
+    """Rien n'a ete invoque : il n'y a rien a observer, et on ne l'invente pas.
+
+    Le critere est bien l'APPEL AU LANCEUR, non l'existence d'un processus —
+    voir le test suivant, ou le lancement echoue et ou l'observation existe
+    pourtant.
+    """
+    adapt = VClientCli(
+        CONFIG,
+        RunnerInterdit(),
+        invocation=VclientWriteInvocation(CONFIG),
+        clock=_horloge(),
+    )
+    r = adapt.write("setNiveauM1", 2.5)
+
+    assert r.status is TransportStatus.TRANSPORT_ERROR
+    assert r.observation is None
+
+
+def test_l_observation_existe_quand_le_lancement_echoue() -> None:
+    """`launch_failed` : aucun processus n'est ne, mais la TENTATIVE a eu lieu.
+
+    C'est le cas limite que le contrat de `WriteResult.observation` designe
+    nommement. Rien n'a atteint le demon — W4-A §9, ligne 1 — et pourtant la
+    preuve existe : la ligne d'arguments montre CE QUI aurait ete emis, et la
+    duree montre le temps consomme par la tentative.
+    """
+    horloge = _horloge()
+    adapt = VClientCli(
+        CONFIG,
+        RunnerQuiConsommeDuTemps(
+            horloge,
+            resultat(returncode=None, launch_failed=True, launch_error="OSError"),
+            0.25,
+        ),
+        invocation=VclientWriteInvocation(CONFIG),
+        clock=horloge,
+    )
+
+    r = adapt.write("setNiveauM1", 2.0)
+
+    # Le verdict de transport est INCHANGE : la table fermee de W4-A §9 statue
+    # sans jamais consulter l'observation.
+    assert r.status is TransportStatus.TRANSPORT_ERROR
+    assert "lancement impossible" in r.detail
+
+    obs = r.observation
+    assert obs is not None
+    assert obs.args[0] == CONFIG.executable
+    assert obs.args[-2:] == ("-c", "setNiveauM1 2")
+    assert obs.returncode is None
+    assert obs.stdout == b""
+    assert obs.stderr == b""
+    assert obs.duration_s == 0.25
+
+
+def test_l_observation_ne_change_aucun_verdict() -> None:
+    """La classification est calculee AVANT que l'observation soit attachee."""
+    for res, attendu in (
+        (resultat(stdout=SUCCES_REEL), TransportStatus.OK),
+        (resultat(timed_out=True, returncode=None), TransportStatus.TIMEOUT),
+        (resultat(launch_failed=True, returncode=None), TransportStatus.TRANSPORT_ERROR),
+        (resultat(stdout=b"\xff\xfe"), TransportStatus.UNUSABLE_OUTPUT),
+    ):
+        adapt, _ = adaptateur(res)
+        assert adapt.write("setNiveauM1", 2.0).status is attendu
+
+
+def test_l_adaptateur_ne_retient_aucune_observation() -> None:
+    """Ni rétention, ni etat : `W4-A` §14 — « sans etat au-dela de sa configuration »."""
+    adapt, _ = adaptateur(resultat(stdout=SUCCES_REEL))
+    adapt.write("setNiveauM1", 2.0)
+
+    porteurs = [
+        nom
+        for nom, valeur in vars(adapt).items()
+        if isinstance(valeur, (WriteObservation, WriteResult, bytes, list, tuple))
+    ]
+    assert porteurs == []
+
+
+def test_aucune_journalisation_integrale_de_stdout_ni_stderr(caplog) -> None:
+    """`W4-A` §17 ne les admet au journal que BORNES. Rendre n'est pas journaliser."""
+    long_out = b"q" * 5000
+    adapt, _ = adaptateur(resultat(returncode=1, stdout=long_out, stderr=b"w" * 5000))
+
+    with caplog.at_level(0):
+        adapt.write("setNiveauM1", 2.0)
+
+    journal = "\n".join(rec.getMessage() for rec in caplog.records)
+    assert "q" * 600 not in journal
+    assert "w" * 600 not in journal
+
+
+def test_le_module_ne_publie_ni_n_ecrit_l_observation() -> None:
+    """Aucun fichier, aucune metrique, aucun compteur, aucune publication."""
+    source = (_SRC / "adapters" / "vclient_write.py").read_text(encoding="utf-8")
+    corps = source.split('"""', 2)[2]
+    for interdit in ("open(", "Path(", "publish", "mqtt", "Counter", "metric"):
+        assert interdit not in corps, interdit

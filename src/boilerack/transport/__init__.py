@@ -24,6 +24,7 @@ from boilerack.transport.vclient import (
     ReadResult,
     TransportStatus,
     VClient,
+    WriteObservation,
     WriteResult,
 )
 
@@ -42,5 +43,6 @@ __all__ = [
     "ReadResult",
     "TransportStatus",
     "VClient",
+    "WriteObservation",
     "WriteResult",
 ]
