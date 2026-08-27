@@ -40,5 +40,23 @@ jobs:
       - name: Verification statique
         run: python -m ruff check src
 
+      # Lot C1 : reglage PAR DEFAUT, perimetre `src/boilerack` -- `_legacy`
+      # COMPRIS, faute d'erreur a y exclure -- et version cible `3.11`, le tout
+      # declare dans `pyproject.toml`. Aucun drapeau, ni argument de chemin :
+      # `files` suffit, et l'etape applique exactement la configuration du
+      # depot sans la reinterpreter, comme l'etape precedente.
+      #
+      # Apres le lint et avant les tests : une erreur de type se lit aussi vite
+      # qu'une occurrence de lint, et plus vite qu'un echec de suite.
+      #
+      # La version cible etant figee a `3.11`, les trois branches de la matrice
+      # verifient le MEME code contre le MEME plancher. Ce qu'elles ajoutent
+      # l'une par rapport a l'autre n'est donc pas l'analyse, mais le fait que
+      # `mypy` s'installe et s'execute sur chaque interpreteur.
+      #
+      # `mypy` est deja installe par l'etape d'installation, via l'extra `dev`.
+      - name: Verification de types
+        run: python -m mypy
+
       - name: Tests
         run: python -m pytest -q
