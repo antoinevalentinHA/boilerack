@@ -576,7 +576,7 @@ def test_stop_echoue_seul_remonte_tel_quel() -> None:
 def test_base_exception_non_capturee() -> None:
     """Une interruption traverse : ce n'est pas une panne, et l'arret propre
     n'est PAS declenche — le brancher releve de la gestion de signaux, reportee."""
-    journal = _JournalQuiLeve("run_due", RuntimeError("jamais"))
+    _journal = _JournalQuiLeve("run_due", RuntimeError("jamais"))
 
     class _Interrupteur(_Journal):
         def run_due(self) -> None:

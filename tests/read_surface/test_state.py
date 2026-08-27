@@ -371,7 +371,8 @@ def test_cycle_d_une_seule_mesure_reussie() -> None:
 def test_cause_la_plus_severe(
     melange: tuple[TransportStatus, ...], attendue: TransportStatus
 ) -> None:
-    """§8.2 : daemon_unreachable > transport_error > timeout > unusable_output > unsupported_command."""
+    """§8.2 : daemon_unreachable > transport_error > timeout > unusable_output
+    > unsupported_command."""
     c = _clock()
     roles = [s.role for s in V1_MEASUREMENTS][: len(melange)]
     st = _cycle(_initial(), dict(zip(roles, melange)), c)

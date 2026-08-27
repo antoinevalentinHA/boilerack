@@ -6,7 +6,6 @@ est un ACK terminal `rejected` porteur d'une raison typee.
 
 from __future__ import annotations
 
-import math
 
 import pytest
 
@@ -42,7 +41,8 @@ def test_uuid_majuscule_refuse() -> None:
 
 
 def test_payload_incomplet() -> None:
-    assert _reject_reason(payload(rid(1), "mode", 2, drop=("expires_at",))) is Reason.INVALID_PAYLOAD
+    manquant = payload(rid(1), "mode", 2, drop=("expires_at",))
+    assert _reject_reason(manquant) is Reason.INVALID_PAYLOAD
 
 
 def test_champ_supplementaire() -> None:
@@ -68,7 +68,10 @@ def test_nan_refuse() -> None:
     # NaN injecte via une constante JSON non standard, capturee a la finitude.
     # Le type est bien numerique : la raison est `invalid_value_non_finite`,
     # PAS `invalid_type` (reserve a « pas un nombre du tout »).
-    pb = b'{"request_id":"%s","ts":"%s","expires_at":"%s","source":"t","role":"mode","value":NaN}' % (
+    pb = (
+        b'{"request_id":"%s","ts":"%s","expires_at":"%s","source":"t",'
+        b'"role":"mode","value":NaN}'
+    ) % (
         rid(1).encode(),
         START.isoformat().encode(),
         START.isoformat().encode(),
@@ -78,7 +81,10 @@ def test_nan_refuse() -> None:
 
 def test_infinities_refusees() -> None:
     for token in (b"Infinity", b"-Infinity"):
-        pb = b'{"request_id":"%s","ts":"%s","expires_at":"%s","source":"t","role":"temp_consigne","value":%s}' % (
+        pb = (
+            b'{"request_id":"%s","ts":"%s","expires_at":"%s","source":"t",'
+            b'"role":"temp_consigne","value":%s}'
+        ) % (
             rid(1).encode(),
             START.isoformat().encode(),
             (START.isoformat()).encode(),
@@ -90,7 +96,10 @@ def test_infinities_refusees() -> None:
 def test_non_finie_distincte_du_mauvais_type() -> None:
     # Frontiere O-2 : un nombre non fini et un « pas un nombre » ne partagent
     # PAS la meme raison. Le premier est numeriquement type mais non fini.
-    non_finite = b'{"request_id":"%s","ts":"%s","expires_at":"%s","source":"t","role":"mode","value":NaN}' % (
+    non_finite = (
+        b'{"request_id":"%s","ts":"%s","expires_at":"%s","source":"t",'
+        b'"role":"mode","value":NaN}'
+    ) % (
         rid(1).encode(),
         START.isoformat().encode(),
         START.isoformat().encode(),
@@ -127,8 +136,10 @@ def test_borne_haute_admise() -> None:
 
 
 def test_hors_borne_refuse() -> None:
-    assert _reject_reason(payload(rid(1), "temp_consigne", 30.5)) is Reason.INVALID_VALUE_OUT_OF_RANGE
-    assert _reject_reason(payload(rid(1), "temp_consigne", 9.5)) is Reason.INVALID_VALUE_OUT_OF_RANGE
+    trop_haut = payload(rid(1), "temp_consigne", 30.5)
+    assert _reject_reason(trop_haut) is Reason.INVALID_VALUE_OUT_OF_RANGE
+    trop_bas = payload(rid(1), "temp_consigne", 9.5)
+    assert _reject_reason(trop_bas) is Reason.INVALID_VALUE_OUT_OF_RANGE
 
 
 def test_pas_exact_admis() -> None:
@@ -148,7 +159,8 @@ def test_valeur_intermediaire_hors_pas_refusee() -> None:
 
 def test_priorite_borne_avant_pas() -> None:
     # Valeur a la fois hors borne ET hors grille -> la borne l'emporte (etape 4 < 5).
-    assert _reject_reason(payload(rid(1), "temp_consigne", 40.3)) is Reason.INVALID_VALUE_OUT_OF_RANGE
+    hors_pas = payload(rid(1), "temp_consigne", 40.3)
+    assert _reject_reason(hors_pas) is Reason.INVALID_VALUE_OUT_OF_RANGE
 
 
 # -- role ----------------------------------------------------------------------

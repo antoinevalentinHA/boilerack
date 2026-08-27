@@ -85,7 +85,9 @@ def test_payload_erreur_complet() -> None:
 def test_payload_erreur_admet_un_request_id_nul() -> None:
     """Le champ est present et vaut `null` — contrairement a `reason` dans l'ACK,
     qui est absent. Les deux conventions coexistent dans le meme composant."""
-    payload = legacy_build_error_payload(None, "dhw", "set_setpoint", "bridge_exception", "boom", TS)
+    payload = legacy_build_error_payload(
+        None, "dhw", "set_setpoint", "bridge_exception", "boom", TS
+    )
     assert payload["request_id"] is None
     assert '"request_id":null' in json_dumps(payload)
 

@@ -27,7 +27,11 @@ INSTANT = datetime(2026, 8, 1, 10, 0, 0, tzinfo=timezone.utc)
         ("2026-08-01T12:00:00+02:00", INSTANT, "fuseau explicite, converti en UTC"),
         ("2026-08-01T05:00:00-05:00", INSTANT, "fuseau negatif"),
         ("  2026-08-01T10:00:00Z  ", INSTANT, "espaces : strip applique"),
-        ("2026-08-01T10:00:00.500Z", INSTANT + timedelta(milliseconds=500), "fraction de seconde acceptee"),
+        (
+            "2026-08-01T10:00:00.500Z",
+            INSTANT + timedelta(milliseconds=500),
+            "fraction de seconde acceptee",
+        ),
     ],
 )
 def test_formes_acceptees(valeur: str, attendu: datetime, commentaire: str) -> None:

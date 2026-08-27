@@ -1810,7 +1810,9 @@ def test_une_panne_traverse_avec_son_identite(monkeypatch) -> None:
 
 @pytest.mark.reference
 def test_un_exception_group_c8_traverse_inchange(monkeypatch) -> None:
-    groupe = ExceptionGroup("echec de la boucle, puis de l'arret", [OSError("a"), RuntimeError("b")])
+    groupe = ExceptionGroup(
+        "echec de la boucle, puis de l'arret", [OSError("a"), RuntimeError("b")]
+    )
 
     def lever() -> None:
         raise groupe

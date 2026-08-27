@@ -253,9 +253,9 @@ def test_reutilisation_de_mid_ne_confirme_pas_sans_nouveau_puback() -> None:
     # Scénario C4-1 : un ACK obsolète ne doit JAMAIS confirmer une publication
     # ultérieure réutilisant le même mid.
     adapter, fake = _adapter()
-    h1 = adapter.publish("t", b"a", qos=1)
+    _h1 = adapter.publish("t", b"a", qos=1)
     mid = fake.published[0]["mid"]
-    fake.fire_on_publish(mid)   # confirme h1
+    fake.fire_on_publish(mid)   # confirme _h1
     fake.fire_on_publish(mid)   # double PUBACK obsolète (hors fenêtre -> abandonné)
     # Réutilisation forcée du même mid par une nouvelle publication.
     fake.next_mid = mid
@@ -273,8 +273,8 @@ def test_early_acks_purge_a_la_quiescence() -> None:
     # Même sous publications concurrentes simulées, aucun crédit ne survit à la
     # quiescence (plus aucune publication en enregistrement).
     adapter, fake = _adapter()
-    h = adapter.publish("t", b"a", qos=1)
-    fake.fire_on_publish(fake.published[0]["mid"])  # confirme h
+    _h = adapter.publish("t", b"a", qos=1)
+    fake.fire_on_publish(fake.published[0]["mid"])  # confirme _h
     fake.fire_on_publish(4242)  # orphelin hors fenêtre
     assert adapter._early_acks == set()
     assert adapter._registering == 0

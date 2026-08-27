@@ -20,8 +20,16 @@ CANONIQUE = "550e8400-e29b-41d4-a716-446655440000"
         (CANONIQUE.replace("-", ""), False, "forme sans tirets refusee"),
         ("", False, "chaine vide"),
         ("pas-un-uuid", False, "chaine quelconque"),
-        ("550e8400-e29b-11d4-a716-446655440000", False, "UUID v1 : les bits de version sont forces, la comparaison echoue"),
-        ("00000000-0000-0000-0000-000000000000", False, "UUID nil : version forcee a 4, ne correspond plus"),
+        (
+            "550e8400-e29b-11d4-a716-446655440000",
+            False,
+            "UUID v1 : les bits de version sont forces, la comparaison echoue",
+        ),
+        (
+            "00000000-0000-0000-0000-000000000000",
+            False,
+            "UUID nil : version forcee a 4, ne correspond plus",
+        ),
         ("550e8400-e29b-41d4-a716-44665544000", False, "un caractere manquant"),
         ("550e8400-e29b-41d4-a716-4466554400000", False, "un caractere en trop"),
         (f"  {CANONIQUE}  ", False, "espaces avant/apres : aucun strip, refuse"),

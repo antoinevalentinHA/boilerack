@@ -40,7 +40,9 @@ def test_est_conforme_au_protocole() -> None:
 
 def test_succes_renvoie_octets_bruts() -> None:
     rec: dict = {}
-    runner = SubprocessRunner(runner=_capturing_runner(rec, completed=_FakeCompleted(0, b"21.5\n", b"")))
+    runner = SubprocessRunner(
+        runner=_capturing_runner(rec, completed=_FakeCompleted(0, b"21.5\n", b""))
+    )
     res = runner.run(["/usr/bin/vclient", "-c", "getX"], timeout=5.0)
     assert isinstance(res, ProcessResult)
     assert res.returncode == 0
@@ -86,7 +88,10 @@ def test_timeout_est_signale_sans_returncode() -> None:
     rec: dict = {}
     runner = SubprocessRunner(
         runner=_capturing_runner(
-            rec, raises=subprocess.TimeoutExpired(cmd=["/x"], timeout=1.0, output=b"partiel", stderr=b"")
+            rec,
+            raises=subprocess.TimeoutExpired(
+                cmd=["/x"], timeout=1.0, output=b"partiel", stderr=b""
+            ),
         )
     )
     res = runner.run(["/x"], timeout=1.0)

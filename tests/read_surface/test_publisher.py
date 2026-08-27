@@ -457,10 +457,12 @@ def test_seules_les_exceptions_sont_interceptees() -> None:
     """Le code n'intercepte jamais `BaseException`."""
     source = pathlib.Path(publisher_module.__file__).read_text(encoding="utf-8")
     lignes_code = [
-        l for l in source.splitlines() if l.lstrip().startswith(("except ", "annonce:"))
+        ligne
+        for ligne in source.splitlines()
+        if ligne.lstrip().startswith(("except ", "annonce:"))
     ]
     assert lignes_code, "les clauses attendues sont introuvables"
-    assert not any("BaseException" in l for l in lignes_code)
+    assert not any("BaseException" in ligne for ligne in lignes_code)
 
 
 @pytest.mark.parametrize(

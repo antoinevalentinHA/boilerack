@@ -25,7 +25,8 @@ from boilerack._legacy.primitives import (
     [(10, 10), (55, 55), (60, 60), (42, 42)],
 )
 def test_entiers_dans_les_bornes(valeur: int, attendu: int) -> None:
-    assert legacy_setpoint_value(valeur, DHW_SETPOINT_MIN, DHW_SETPOINT_MAX) == (True, None, attendu)
+    resultat = legacy_setpoint_value(valeur, DHW_SETPOINT_MIN, DHW_SETPOINT_MAX)
+    assert resultat == (True, None, attendu)
 
 
 @pytest.mark.reference
