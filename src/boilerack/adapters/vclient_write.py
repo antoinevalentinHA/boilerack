@@ -38,6 +38,7 @@ lui injecte, comme le lecteur.
 from __future__ import annotations
 
 import json
+import logging
 import math
 from dataclasses import dataclass, replace
 from typing import Any, Final, Protocol, runtime_checkable
@@ -47,10 +48,13 @@ from boilerack.adapters.process_runner import ProcessResult, ProcessRunner
 from boilerack.adapters.vclient_cli import VClientCliReader
 from boilerack.clock import Clock
 from boilerack.transport.vclient import (
+    EvidenceSink,
     TransportStatus,
     WriteObservation,
     WriteResult,
 )
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "Invocation",
@@ -226,6 +230,7 @@ class VClientCli(VClientCliReader):
         *,
         invocation: WriteInvocation,
         clock: Clock,
+        evidence: EvidenceSink | None = None,
     ) -> None:
         """`clock` sert UNIQUEMENT a mesurer la duree d'une invocation d'ecriture.
 
@@ -237,6 +242,7 @@ class VClientCli(VClientCliReader):
         super().__init__(config, runner)
         self._invocation = invocation
         self._clock = clock
+        self._evidence = evidence
 
     # -- Ecriture ------------------------------------------------------------
 
@@ -290,16 +296,41 @@ class VClientCli(VClientCliReader):
         # puis l'observation lui est attachee. La table fermee de W4-A §9 ne voit
         # jamais ce champ, et aucun verdict n'en depend.
         verdict = self._classify_write(invocation.echo, result)
-        return replace(
-            verdict,
-            observation=WriteObservation(
-                args=tuple(invocation.args),
-                stdout=result.stdout,
-                stderr=result.stderr,
-                returncode=result.returncode,
-                duration_s=duree,
-            ),
+        observation = WriteObservation(
+            args=tuple(invocation.args),
+            stdout=result.stdout,
+            stderr=result.stderr,
+            returncode=result.returncode,
+            duration_s=duree,
         )
+        self._consigner(observation)
+        return replace(verdict, observation=observation)
+
+    def _consigner(self, observation: WriteObservation) -> None:
+        """Remet l'observation au puits de preuve, s'il y en a un.
+
+        INERTE PAR DEFAUT — `g2-sortie-preuve-transport.md` §5.1, clause 1.
+        Sans puits, il n'y a pas d'appel : la branche n'est meme pas prise.
+
+        AUCUN EFFET SUR LE VERDICT — clause 3. Le puits PEUT lever ; l'exception
+        est interceptee ici et journalisee BORNEE, `type(exc).__name__` et rien
+        de plus, ce que W4-A §17 autorise. La classification a deja eu lieu, et
+        le `WriteResult` rendu est le meme avec ou sans puits.
+
+        `Exception` est interceptee LARGEMENT, et c'est delibere : une preuve
+        manquante est un fait a constater, jamais une cause de verdict. Sortir
+        d'ici par une levee ferait dependre une issue de transport de la sante
+        d'un systeme de fichiers.
+
+        LA DUREE N'EN DEPEND PAS : `duration_s` est mesuree autour de la seule
+        invocation, et le depot a lieu apres.
+        """
+        if self._evidence is None:
+            return
+        try:
+            self._evidence.record(observation)
+        except Exception as exc:  # noqa: BLE001 - motif ci-dessus
+            logger.warning("puits de preuve en echec exc=%s", type(exc).__name__)
 
     # -- Classification -------------------------------------------------------
 

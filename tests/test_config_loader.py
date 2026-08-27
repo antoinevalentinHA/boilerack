@@ -12,7 +12,12 @@ import subprocess
 
 import pytest
 
-from boilerack.config import PASSWORD_ENV_VAR, ConfigurationError, load_config
+from boilerack.config import (
+    EVIDENCE_DIR_ENV_VAR,
+    PASSWORD_ENV_VAR,
+    ConfigurationError,
+    load_config,
+)
 from boilerack.read_surface.measurements import (
     V1_MEASUREMENTS,
     MeasurementSpec,
@@ -34,6 +39,7 @@ executable = "vclient"
 def sans_secret(monkeypatch):
     """Aucun test ne doit dependre de l'environnement de la machine."""
     monkeypatch.delenv(PASSWORD_ENV_VAR, raising=False)
+    monkeypatch.delenv(EVIDENCE_DIR_ENV_VAR, raising=False)
 
 
 @pytest.fixture
@@ -586,12 +592,23 @@ def _code_sans_docstrings(module) -> str:
     return ast.unparse(arbre)
 
 
-def test_le_module_ne_lit_qu_une_variable_d_environnement() -> None:
+def test_le_module_ne_lit_que_les_variables_d_environnement_contractees() -> None:
+    """DEUX variables, nommement, et aucun balayage.
+
+    Le compte est passe de 1 a 2 : `g2-sortie-preuve-transport.md` §8.2 le
+    prevoyait, et la seconde variable est l'interrupteur de campagne `G.2`.
+
+    RIEN D'AUTRE N'EST RELACHE, et c'est l'essentiel. Les deux lectures sont
+    verifiees NOMMEMENT, et les interdits de balayage sont inchanges : un test
+    qui se contenterait de retirer l'assertion de compte perdrait sa raison
+    d'etre.
+    """
     import boilerack.config as module_config
 
     code = _code_sans_docstrings(module_config)
-    assert code.count("os.environ") == 1
+    assert code.count("os.environ") == 2
     assert "os.environ.get(PASSWORD_ENV_VAR)" in code
+    assert "os.environ.get(EVIDENCE_DIR_ENV_VAR)" in code
     # « .env » n'est pas testable comme sous-chaine : `os.environ` la contient.
     # Le risque reel est le chargement d'un fichier, couvert par `dotenv`.
     for interdit in ("dotenv", "environ.items", "environ.keys", "environ.copy"):
@@ -608,3 +625,30 @@ def test_aucun_secret_ni_valeur_de_site_dans_le_module() -> None:
     assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", source)
     for interdit in ("localhost", "192.168", "/home/", "passwd"):
         assert interdit not in source.lower()
+
+
+# ---------------------------------------------------------------------------
+# L'interrupteur de campagne `G.2` — `g2-sortie-preuve-transport.md` §5.2
+# ---------------------------------------------------------------------------
+
+
+def test_sans_interrupteur_aucun_atelier_de_preuve(ecrire) -> None:
+    """INERTE PAR DEFAUT : c'est le cas de toute exploitation ordinaire."""
+    assert load_config(ecrire(MINIMALE)).evidence_dir is None
+
+
+def test_l_interrupteur_est_lu_tel_quel(ecrire, monkeypatch) -> None:
+    monkeypatch.setenv(EVIDENCE_DIR_ENV_VAR, "/home/pi/g2-atelier")
+    assert load_config(ecrire(MINIMALE)).evidence_dir == "/home/pi/g2-atelier"
+
+
+def test_un_interrupteur_vide_vaut_absence(ecrire, monkeypatch) -> None:
+    """Un interrupteur vide n'active rien : il ne designe aucun atelier."""
+    monkeypatch.setenv(EVIDENCE_DIR_ENV_VAR, "")
+    assert load_config(ecrire(MINIMALE)).evidence_dir is None
+
+
+def test_l_interrupteur_n_est_pas_une_cle_TOML(ecrire) -> None:
+    """Le schema ferme du fichier n'est PAS touche : la table y est refusee."""
+    with pytest.raises(ConfigurationError):
+        load_config(ecrire(MINIMALE + '[evidence]\ndir = "/tmp/x"\n'))

@@ -143,6 +143,12 @@ class RuntimeConfig:
 
     mqtt: MqttConfig
     vclient: VclientConfig
+    #: Repertoire d'atelier ou deposer la preuve de transport d'une campagne
+    #: `G.2`, ou `None` — cas de TOUTE exploitation ordinaire. Resolu par
+    #: `config.py` depuis l'environnement, JAMAIS depuis le fichier TOML dont le
+    #: schema ferme n'est pas touche. Voir
+    #: `docs/design/g2-sortie-preuve-transport.md` §5.2.
+    evidence_dir: str | None = None
     read_surface: ReadSurfaceConfig = field(default_factory=ReadSurfaceConfig)
     specs: Sequence[MeasurementSpec] = V1_MEASUREMENTS
     #: W4-E1 §7.2. Fabrique par defaut, donc FERMEE : toute construction
