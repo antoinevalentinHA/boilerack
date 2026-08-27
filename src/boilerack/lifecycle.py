@@ -467,6 +467,7 @@ def _composer_transaction(
     def fabriquer(mqtt: PresenceMqttClient, clock: Clock) -> Any:
         # Importe ici, jamais au niveau du module : voir la docstring.
         from boilerack.adapters.process_runner import SubprocessRunner
+        from boilerack.adapters.evidence_sink import FileEvidenceSink
         from boilerack.adapters.vclient_write import (
             VClientCli,
             VclientWriteInvocation,
@@ -481,11 +482,22 @@ def _composer_transaction(
         # `clock` est celle que `build_transaction_surface` recoit deja : aucune
         # dependance nouvelle. Elle ne sert qu'a MESURER la duree d'une ecriture,
         # jamais a decider (g2-observabilite-preuve.md).
+        # PUITS DE PREUVE — inerte par defaut. `evidence_dir` vaut `None` dans
+        # toute exploitation ordinaire, et aucun puits n'est alors construit :
+        # l'adaptateur ne prendra meme pas la branche de depot. La valeur vient
+        # de `config.py`, seul lecteur de l'environnement ; ce module n'en lit
+        # aucun. Voir `docs/design/g2-sortie-preuve-transport.md` §5.2.2.
+        evidence = (
+            None
+            if config.evidence_dir is None
+            else FileEvidenceSink(config.evidence_dir, clock=clock)
+        )
         vclient = VClientCli(
             config.vclient,
             SubprocessRunner(),
             invocation=invocation,
             clock=clock,
+            evidence=evidence,
         )
         return build_transaction_surface(
             mqtt=mqtt,

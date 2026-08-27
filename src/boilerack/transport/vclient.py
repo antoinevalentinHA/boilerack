@@ -101,12 +101,27 @@ class WriteObservation:
         confirmation metier reste une RELECTURE SEPAREE, et W4-C §16.4 interdit
         deja d'interpreter le champ `value` d'une reponse d'ecriture.
 
-    NI RETENTION, NI PUBLICATION, NI FICHIER
-        L'observation voyage dans la valeur de retour et disparait avec elle.
-        Personne ne la conserve — W4-A §14 pose l'adaptateur « sans etat au-dela
-        de sa configuration ». Elle n'est publiee sur AUCUN topic. Elle n'est
-        ecrite dans AUCUN fichier, et ne cree ni metrique ni compteur : W4-A §17
-        l'interdit.
+    A QUI ELLE EST REMISE — OBS §5.1, amende
+        L'observation est rendue a l'APPELANT IMMEDIAT et, SI ET SEULEMENT SI un
+        puits de preuve est injecte au titre de l'exception bornee de W4-A §17,
+        REMISE A CE PUITS. A personne d'autre.
+
+        Sans puits injecte — cas de toute exploitation ordinaire — elle voyage
+        dans la valeur de retour et disparait avec elle.
+
+    NI RETENTION, NI PUBLICATION
+        Personne ne la conserve, PAS MEME LE PUITS : W4-A §14 pose l'adaptateur
+        « sans etat au-dela de sa configuration », et le puits ecrit et oublie.
+        Elle n'est publiee sur AUCUN topic MQTT, sous aucune forme, ni entiere
+        ni extraite. Elle ne cree ni metrique ni compteur.
+
+    FICHIER : SEULEMENT SOUS L'EXCEPTION BORNEE
+        W4-A §17 interdit a l'adaptateur de creer un systeme d'observabilite
+        nouveau, fichier compris. Son EXCEPTION BORNEE admet qu'un puits injecte
+        depose cette observation dans les fichiers de preuve d'une campagne :
+        opt-in, inerte par defaut, hors de l'adaptateur, ecriture seulement, et
+        sans effet sur un verdict. HORS CAMPAGNE, l'interdiction demeure
+        entiere : sans puits, aucun fichier n'existe.
 
     JAMAIS JOURNALISEE INTEGRALEMENT
         W4-A §17 n'admet `stdout` et `stderr` au journal que BORNES. `detail`
@@ -124,6 +139,32 @@ class WriteObservation:
     stderr: bytes
     returncode: int | None
     duration_s: float
+
+
+@runtime_checkable
+class EvidenceSink(Protocol):
+    """Puits de PREUVE : recoit la signature brute d'une ecriture, et l'oublie.
+
+    Port de sortie de l'adaptateur d'ecriture, au titre de l'exception bornee
+    de W4-A §17. Il est TOUJOURS optionnel : sans puits injecte, aucun appel
+    n'a lieu et aucun fichier n'existe.
+
+    CE N'EST PAS UN CHEMIN DE DECISION
+        `record` ne rend rien, et l'adaptateur n'attend rien de lui. Aucun
+        verdict, aucun `ACK`, aucune duree mesuree ne depend de ce qu'il fait
+        ni du temps qu'il y met.
+
+    IL PEUT LEVER
+        L'adaptateur intercepte et journalise borne. Un puits en echec ne
+        change aucune issue : l'absence de fichier vaut constat.
+
+    CE QU'IL NE FAIT PAS
+        Il ne publie sur aucun topic, ne retient aucune observation, et n'est
+        jamais cable sur le chemin de LECTURE.
+    """
+
+    def record(self, observation: WriteObservation) -> None:
+        """Consigne `observation`. Ne rend rien, et rien n'attend son retour."""
 
 
 @dataclass(frozen=True)

@@ -11,13 +11,19 @@ DEUX SOURCES DISJOINTES
     l'environnement, n'y refuse aucune variable inconnue, et ne lit aucun
     fichier `.env` : l'environnement du processus ne lui appartient pas.
 
-    A ce jour, une seule variable est lue : le SECRET MQTT. Ce n'est pas une
-    propriete permanente. `docs/design/g2-sortie-preuve-transport.md` en
-    contracte une seconde, d'une autre nature : un INTERRUPTEUR DE CAMPAGNE,
-    ephemere, inerte si absent, et qui n'est PAS un secret. Elle n'est pas
-    encore implementee ; l'etape 3 de ce design l'introduira. Les enonces de ce
-    module ne doivent donc plus affirmer une UNICITE qui ne tiendrait qu'a
-    l'etat courant.
+    DEUX variables sont lues, et deux seulement, chacune nommement :
+
+        BOILERACK_MQTT_PASSWORD      le SECRET MQTT
+        BOILERACK_G2_EVIDENCE_DIR    l'INTERRUPTEUR DE CAMPAGNE `G.2`
+
+    Elles sont de nature differente, et le module ne les traite pas de la meme
+    facon. La premiere est un secret : elle n'est ni journalisee, ni incluse
+    dans un message. La seconde n'en est pas un : c'est un chemin d'atelier,
+    ephemere, inerte s'il est absent ou vide, contracte par
+    `docs/design/g2-sortie-preuve-transport.md` §5.2.
+
+    Aucune n'a de precedence sur l'autre, et aucune ne peut venir du fichier :
+    le schema ferme du TOML n'en porte ni l'une ni l'autre.
 
 SCHEMA FERME
     Quatre tables, quatorze cles, et rien d'autre : `mqtt` (6), `vclient` (4),
@@ -54,15 +60,29 @@ from boilerack.read_surface.config import ReadSurfaceConfig
 from boilerack.read_surface.measurements import check_snapshot_period
 from boilerack.runtime import RuntimeConfig, TransactionSurfaceConfig
 
-__all__ = ["ConfigurationError", "PASSWORD_ENV_VAR", "load_config"]
+__all__ = [
+    "ConfigurationError",
+    "EVIDENCE_DIR_ENV_VAR",
+    "PASSWORD_ENV_VAR",
+    "load_config",
+]
 
 #: Variable d'environnement portant le SECRET MQTT. Le prefixe reprend le nom
 #: de distribution, ce qui evite toute collision sur une machine partagee ; le
 #: segment intermediaire nomme le sous-systeme. Nom PUBLIC : il ne changera plus.
 #:
-#: C'est la seule variable lue A CE JOUR, non la seule que Boilerack lira jamais :
-#: voir la note de DEUX SOURCES DISJOINTES en tete de module.
+#: C'est l'une des DEUX variables lues ; l'autre est `EVIDENCE_DIR_ENV_VAR`
+#: ci-dessous. Voir DEUX SOURCES DISJOINTES en tete de module.
 PASSWORD_ENV_VAR: Final = "BOILERACK_MQTT_PASSWORD"
+
+#: Variable d'environnement de l'INTERRUPTEUR DE CAMPAGNE `G.2`. Sa valeur est
+#: le repertoire d'atelier ou le puits de preuve depose la signature brute des
+#: ecritures ; ABSENTE, aucun puits n'est construit et rien n'est ecrit.
+#:
+#: Ce n'est PAS un secret, et ce n'est pas de la configuration durable : d'ou
+#: l'environnement plutot que le fichier TOML, dont le schema ferme reste
+#: intact. Voir `docs/design/g2-sortie-preuve-transport.md` §5.2.
+EVIDENCE_DIR_ENV_VAR: Final = "BOILERACK_G2_EVIDENCE_DIR"
 
 #: Les quatre tables du schema, et aucune autre.
 _TABLES: Final = ("mqtt", "vclient", "read_surface", "transaction_surface")
@@ -227,6 +247,21 @@ def _construire(
         raise ConfigurationError(f"[{table}] : {erreur}") from None
 
 
+def _lire_atelier_de_preuve() -> str | None:
+    """Lit l'interrupteur de campagne `G.2`, une seule fois.
+
+    Absent : `None`, et aucun puits de preuve ne sera construit — c'est le cas
+    de TOUTE exploitation ordinaire. Present : sa valeur, telle quelle, sans
+    interpretation. L'existence du repertoire n'est pas verifiee ici : ce module
+    ne fait AUCUNE entree-sortie d'infrastructure, et une verification y
+    echouerait pour de mauvaises raisons.
+
+    Une valeur vide vaut ABSENCE : un interrupteur vide n'active rien.
+    """
+    valeur = os.environ.get(EVIDENCE_DIR_ENV_VAR)
+    return valeur or None
+
+
 def _lire_secret() -> str | None:
     """Lit la variable d'environnement du SECRET, une seule fois.
 
@@ -356,6 +391,7 @@ def load_config(chemin: str | os.PathLike[str]) -> RuntimeConfig:
         transaction_surface=_transaction_surface(
             _table(document, "transaction_surface")
         ),
+        evidence_dir=_lire_atelier_de_preuve(),
     )
     _verifier_surface(config)
     return config

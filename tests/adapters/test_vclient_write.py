@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ast
 import json
+import logging
 import pathlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -35,6 +36,7 @@ from boilerack.adapters.vclient_write import (
 )
 from boilerack.testing.fake_clock import VirtualClock
 from boilerack.transport.vclient import (
+    EvidenceSink,
     TransportStatus,
     VClient,
     WriteObservation,
@@ -1324,3 +1326,231 @@ def test_le_module_ne_publie_ni_n_ecrit_l_observation() -> None:
     corps = source.split('"""', 2)[2]
     for interdit in ("open(", "Path(", "publish", "mqtt", "Counter", "metric"):
         assert interdit not in corps, interdit
+
+
+# ---------------------------------------------------------------------------
+# Z bis. Le puits de preuve — `g2-sortie-preuve-transport.md`
+# ---------------------------------------------------------------------------
+
+
+class PuitsQuiCompte:
+    """Puits minimal : retient ce qu'il a recu, pour que le test le lise."""
+
+    def __init__(self) -> None:
+        self.recus: list[WriteObservation] = []
+
+    def record(self, observation: WriteObservation) -> None:
+        self.recus.append(observation)
+
+
+class PuitsQuiLeve:
+    """Puits fautif : il echoue a chaque depot."""
+
+    def __init__(self) -> None:
+        self.appels = 0
+
+    def record(self, observation: WriteObservation) -> None:
+        self.appels += 1
+        raise OSError("disque plein")
+
+
+class PuitsLent:
+    """Puits LENT : il consomme du temps sans rien signaler.
+
+    Il fait avancer l'horloge APRES la mesure d'invocation, exactement comme
+    une entree-sortie lente le ferait. C'est le cas dangereux : il ne leve pas,
+    il n'echoue pas, il retarde.
+    """
+
+    def __init__(self, horloge: VirtualClock, secondes: float) -> None:
+        self._horloge = horloge
+        self._secondes = secondes
+
+    def record(self, observation: WriteObservation) -> None:
+        self._horloge.advance(self._secondes)
+
+
+def _adaptateur_avec_puits(res: ProcessResult, puits, horloge=None):
+    horloge = horloge or _horloge()
+    runner = RunnerQuiConsommeDuTemps(horloge, res, 1.0)
+    return VClientCli(
+        CONFIG,
+        runner,
+        invocation=VclientWriteInvocation(CONFIG),
+        clock=horloge,
+        evidence=puits,
+    )
+
+
+def test_sans_puits_aucun_appel_n_a_lieu() -> None:
+    """INERTE PAR DEFAUT — la branche de depot n'est meme pas prise."""
+    adapt, _ = adaptateur(resultat(stdout=SUCCES_REEL))
+
+    r = adapt.write("setNiveauM1", 2.0)
+
+    assert r.status is TransportStatus.OK
+    assert adapt._evidence is None
+
+
+def test_le_puits_recoit_l_observation_complete() -> None:
+    puits = PuitsQuiCompte()
+    adapt = _adaptateur_avec_puits(resultat(stdout=SUCCES_REEL), puits)
+
+    adapt.write("setNiveauM1", 2.0)
+
+    assert len(puits.recus) == 1
+    obs = puits.recus[0]
+    assert obs.stdout == SUCCES_REEL
+    assert obs.returncode == 0
+    assert obs.duration_s == 1.0
+    assert obs.args[-2:] == ("-c", "setNiveauM1 2")
+
+
+def test_le_puits_recoit_la_meme_observation_que_le_resultat() -> None:
+    """Une seule observation existe : celle rendue est celle deposee."""
+    puits = PuitsQuiCompte()
+    adapt = _adaptateur_avec_puits(resultat(stdout=SUCCES_REEL), puits)
+
+    r = adapt.write("setNiveauM1", 2.0)
+
+    assert r.observation is puits.recus[0]
+
+
+def test_un_puits_qui_leve_ne_change_ni_verdict_ni_detail(caplog) -> None:
+    """Clause 3 : echec sans effet sur le verdict."""
+    puits = PuitsQuiLeve()
+    adapt = _adaptateur_avec_puits(resultat(stdout=SUCCES_REEL), puits)
+
+    with caplog.at_level(logging.WARNING):
+        avec = adapt.write("setNiveauM1", 2.0)
+
+    sans_adapt, _ = adaptateur(resultat(stdout=SUCCES_REEL))
+    sans = sans_adapt.write("setNiveauM1", 2.0)
+
+    assert puits.appels == 1
+    assert avec.status is sans.status is TransportStatus.OK
+    assert avec.detail == sans.detail
+    # Journalise BORNE : le type, et rien de plus.
+    journal = " ".join(rec.getMessage() for rec in caplog.records)
+    assert "OSError" in journal
+    assert "disque plein" not in journal
+
+
+def test_un_puits_qui_leve_ne_change_pas_l_observation_rendue() -> None:
+    """L'`ACK` du coeur se construit sur ce `WriteResult` : il est intact."""
+    adapt = _adaptateur_avec_puits(resultat(stdout=SUCCES_REEL), PuitsQuiLeve())
+
+    r = adapt.write("setNiveauM1", 2.0)
+
+    assert r.observation is not None
+    assert r.observation.stdout == SUCCES_REEL
+    assert r.observation.duration_s == 1.0
+
+
+def test_un_puits_LENT_ne_change_ni_verdict_ni_duree() -> None:
+    """Le cas dangereux : aucune levee, aucun signal, seulement du retard.
+
+    `duration_s` est mesuree autour de la SEULE invocation. Le depot a lieu
+    apres, et la lenteur du puits n'y entre pas — meme quand elle depasse
+    largement la duree de l'invocation elle-meme.
+    """
+    horloge = _horloge()
+    puits = PuitsLent(horloge, 30.0)
+    adapt = _adaptateur_avec_puits(resultat(stdout=SUCCES_REEL), puits, horloge)
+
+    r = adapt.write("setNiveauM1", 2.0)
+
+    assert r.status is TransportStatus.OK
+    assert r.observation is not None
+    assert r.observation.duration_s == 1.0  # l'invocation, non le depot
+
+
+def test_le_puits_recoit_aussi_les_ecritures_en_echec() -> None:
+    """Une preuve vaut pour toute issue, pas seulement pour les succes."""
+    puits = PuitsQuiCompte()
+    adapt = _adaptateur_avec_puits(
+        resultat(returncode=None, launch_failed=True, launch_error="OSError"), puits
+    )
+
+    r = adapt.write("setNiveauM1", 2.0)
+
+    assert r.status is TransportStatus.TRANSPORT_ERROR
+    assert len(puits.recus) == 1
+    assert puits.recus[0].returncode is None
+
+
+def test_aucun_depot_si_le_lanceur_n_a_jamais_ete_appele() -> None:
+    """Rien n'a ete invoque : il n'y a rien a deposer."""
+    puits = PuitsQuiCompte()
+    adapt = VClientCli(
+        CONFIG,
+        RunnerInterdit(),
+        invocation=VclientWriteInvocation(CONFIG),
+        clock=_horloge(),
+        evidence=puits,
+    )
+
+    r = adapt.write("setNiveauM1", 2.5)
+
+    assert r.status is TransportStatus.TRANSPORT_ERROR
+    assert puits.recus == []
+
+
+def test_l_adaptateur_ne_retient_aucune_observation_meme_avec_un_puits() -> None:
+    puits = PuitsQuiCompte()
+    adapt = _adaptateur_avec_puits(resultat(stdout=SUCCES_REEL), puits)
+    adapt.write("setNiveauM1", 2.0)
+
+    porteurs = [
+        nom
+        for nom, valeur in vars(adapt).items()
+        if isinstance(valeur, (WriteObservation, WriteResult, bytes))
+    ]
+    assert porteurs == []
+
+
+def test_le_chemin_de_LECTURE_ne_recoit_aucun_puits() -> None:
+    """Clause 6 : ecriture uniquement, jamais lecture.
+
+    Le lecteur `VClientCliReader` n'a ni parametre `evidence`, ni attribut : la
+    surface de lecture emet environ onze invocations par minute, et l'y brancher
+    inonderait l'atelier sans servir aucune preuve.
+    """
+    import inspect
+
+    from boilerack.adapters.vclient_cli import VClientCliReader
+
+    signature = inspect.signature(VClientCliReader.__init__)
+    assert "evidence" not in signature.parameters
+
+    lecteur = VClientCliReader(CONFIG, RunnerInterdit())
+    assert not hasattr(lecteur, "_evidence")
+
+
+def test_le_puits_satisfait_le_protocole_attendu() -> None:
+    assert isinstance(PuitsQuiCompte(), EvidenceSink)
+
+
+def test_un_echec_partiel_de_depot_n_a_aucun_impact_metier(tmp_path, caplog) -> None:
+    """Preuve incomplete, verdict intact — le puits REEL, en collision.
+
+    C'est le cas complet de bout en bout : un atelier deja peuple, un depot qui
+    echoue a mi-course, et une transaction qui n'en sait rien.
+    """
+    from boilerack.adapters.evidence_sink import FileEvidenceSink
+
+    (tmp_path / "01-ecriture.err").write_bytes(b"anterieur")
+    horloge = _horloge()
+    adapt = _adaptateur_avec_puits(
+        resultat(stdout=SUCCES_REEL), FileEvidenceSink(tmp_path, clock=horloge), horloge
+    )
+
+    with caplog.at_level(logging.WARNING):
+        r = adapt.write("setNiveauM1", 2.0)
+
+    assert r.status is TransportStatus.OK
+    assert r.observation is not None and r.observation.duration_s == 1.0
+    # La preuve est incomplete, et cela se voit : un fichier sur trois.
+    assert (tmp_path / "01-ecriture.out").exists()
+    assert not (tmp_path / "01-ecriture.meta").exists()
+    assert "FileExistsError" in " ".join(r.getMessage() for r in caplog.records)

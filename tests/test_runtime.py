@@ -241,13 +241,26 @@ def test_config_contient_les_configurations_existantes() -> None:
     """Aucune redeclaration : les configurations existantes restent seules autorites.
 
     W4-E2 ajoute `transaction_surface`, qui est une AUTORITE D'ACTIVATION et non
-    une redeclaration : elle ne reprend aucun champ d'une autre structure. La
-    liste reste FERMEE — un cinquieme membre fait rougir ce test.
+    une redeclaration : elle ne reprend aucun champ d'une autre structure.
+
+    `g2-sortie-preuve-transport.md` ajoute `evidence_dir`, pour la meme raison :
+    c'est un INTERRUPTEUR DE CAMPAGNE, resolu depuis l'environnement, qui ne
+    reprend aucun champ d'aucune autre structure. Ni l'un ni l'autre ne relache
+    ce que ce test garde.
+
+    La liste reste FERMEE — un septieme membre fait rougir ce test.
     """
     import dataclasses
 
     champs = {f.name for f in dataclasses.fields(RuntimeConfig)}
-    assert champs == {"mqtt", "vclient", "read_surface", "specs", "transaction_surface"}
+    assert champs == {
+        "mqtt",
+        "vclient",
+        "read_surface",
+        "specs",
+        "transaction_surface",
+        "evidence_dir",
+    }
     for interdit in ("host", "port", "prefix", "snapshot_period_s", "heartbeat_period_s"):
         assert interdit not in champs
     # L'autorite ne porte qu'un booleen : elle ne duplique rien.

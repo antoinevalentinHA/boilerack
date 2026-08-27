@@ -21,6 +21,7 @@ from boilerack.transport.mqtt import (
     Subscription,
 )
 from boilerack.transport.vclient import (
+    EvidenceSink,
     ReadResult,
     TransportStatus,
     VClient,
@@ -40,6 +41,7 @@ __all__ = [
     "Publication",
     "PublishHandle",
     "Subscription",
+    "EvidenceSink",
     "ReadResult",
     "TransportStatus",
     "VClient",

@@ -671,11 +671,16 @@ def test_b9_aucune_ecriture_chaudiere_au_demarrage(paho_double, monkeypatch) -> 
     ecritures = []
 
     class EcrivainEspion:
-        def __init__(self, config, runner, *, invocation=None, clock=None):
+        def __init__(
+            self, config, runner, *, invocation=None, clock=None, evidence=None
+        ):
             # `clock` suit la signature reelle depuis
             # `g2-observabilite-preuve.md` : elle ne sert qu'a MESURER une
             # duree d'ecriture, et aucune ecriture n'a lieu a l'assemblage.
+            # `evidence` la suit depuis `g2-sortie-preuve-transport.md` : sans
+            # interrupteur de campagne il vaut `None`, et rien n'est depose.
             self.config = config
+            self.evidence = evidence
 
         def read(self, command):  # pragma: no cover - non sollicite ici
             raise AssertionError("lecture par la voie transactionnelle a l'assemblage")
@@ -919,3 +924,61 @@ def test_le_recensement_des_barrieres_est_exhaustif() -> None:
     couvertes = portees_ici | set(portees_ailleurs)
     attendues = {f"B{n}" for n in range(1, 20)}
     assert couvertes == attendues, f"non couvertes : {sorted(attendues - couvertes)}"
+
+
+def _temoin_d_ecrivain(recus):
+    """Double d'ecrivain qui ne retient que le puits recu a la construction."""
+
+    class EcrivainTemoin:
+        def __init__(
+            self, config, runner, *, invocation=None, clock=None, evidence=None
+        ):
+            recus.append(evidence)
+
+        def read(self, command):  # pragma: no cover - non sollicite ici
+            raise AssertionError("lecture a l'assemblage")
+
+        def write(self, command, value):  # pragma: no cover - non sollicite ici
+            raise AssertionError("ecriture a l'assemblage")
+
+    return EcrivainTemoin
+
+
+def test_aucun_puits_de_preuve_sans_interrupteur(monkeypatch) -> None:
+    """INERTE PAR DEFAUT, jusque dans la racine de composition.
+
+    `evidence_dir` vaut `None` dans toute exploitation ordinaire : aucun
+    `FileEvidenceSink` n'est construit, et l'adaptateur ne prendra meme pas la
+    branche de depot.
+    """
+    import boilerack.adapters.vclient_write as module_ecriture
+
+    recus = []
+    monkeypatch.setattr(module_ecriture, "VClientCli", _temoin_d_ecrivain(recus))
+
+    build_runtime(
+        ouvert(), NeverStop(), transaction_factory=_composer_transaction(ouvert())
+    )
+
+    assert recus == [None]
+
+
+def test_un_puits_est_construit_quand_l_interrupteur_est_pose(
+    monkeypatch, tmp_path
+) -> None:
+    """Et il vise le repertoire designe, sans rien y ecrire a l'assemblage."""
+    import dataclasses
+
+    import boilerack.adapters.vclient_write as module_ecriture
+    from boilerack.adapters.evidence_sink import FileEvidenceSink
+
+    recus = []
+    monkeypatch.setattr(module_ecriture, "VClientCli", _temoin_d_ecrivain(recus))
+
+    config = dataclasses.replace(ouvert(), evidence_dir=str(tmp_path))
+    build_runtime(config, NeverStop(), transaction_factory=_composer_transaction(config))
+
+    assert len(recus) == 1
+    assert isinstance(recus[0], FileEvidenceSink)
+    # Construire le puits n'ecrit RIEN : l'atelier reste vide.
+    assert list(tmp_path.iterdir()) == []
