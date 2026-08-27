@@ -588,6 +588,29 @@ d'exception, jamais la charge utile complète.
 > et **MUST NOT** créer de système d'observabilité nouveau : ni métrique, ni
 > compteur, ni fichier.
 
+> **Exception bornée — capture de preuve de campagne.** *Amendement porté par
+> `g2-sortie-preuve-transport.md` §4.1.*
+>
+> Un **puits de preuve** (`EvidenceSink`) **MAY** être injecté dans l'adaptateur
+> d'écriture, et **MAY** déposer sur disque la signature brute d'une invocation
+> d'écriture, aux conditions **cumulatives** suivantes :
+>
+> 1. il est **opt-in** et **inerte par défaut** : à défaut d'injection, aucun
+>    appel n'a lieu et aucun fichier n'existe ;
+> 2. il n'est actif que pour la **durée d'une campagne** au sens de `G.2` —
+>    condition **déclarative**, adossée à la preuve du §5.4 de
+>    `g2-sortie-preuve-transport.md` ;
+> 3. son implémentation vit **hors de l'adaptateur** ;
+> 4. il ne crée **ni métrique, ni compteur** — l'interdiction demeure entière
+>    sur ces deux-là ;
+> 5. il ne dépose **que** la signature d'une **écriture**, jamais d'une lecture ;
+> 6. il **MUST NOT** influencer un verdict, ni lever dans le chemin d'écriture.
+>
+> **Ce que cette exception ne fait pas.** Elle n'autorise **aucun** système
+> d'observabilité **permanent** — c'est ce que la clause ci-dessus protégeait, et
+> cela reste protégé. Elle n'assouplit rien sur la journalisation : `stdout` et
+> `stderr` demeurent **bornés au journal**.
+
 La valeur écrite est une consigne de chauffage, pas un secret ; la journaliser
 est nécessaire pour reconstituer une transaction. `stdout` et `stderr` **MAY**
 être journalisés bornés, et **MUST** être capturés intégralement pour W4-C — ce

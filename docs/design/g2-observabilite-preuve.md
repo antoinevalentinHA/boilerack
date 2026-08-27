@@ -236,23 +236,34 @@ et un porteur distinct s'en écarterait.
 > **MUST NOT** être interprété comme […] une confirmation que quoi que ce soit a
 > été appliqué. »* **La confirmation métier reste une relecture séparée.**
 
-> **Clause — ni rétention, ni publication.** Les octets bruts sont **rendus à
-> l'appelant immédiat, et à lui seul**.
+> **Clause — ni rétention, ni publication.** *Remplacée par
+> `g2-sortie-preuve-transport.md` §4.2.3. La rédaction d'origine est citée là-bas,
+> intégralement, avec le sort de chacun de ses fragments.*
+>
+> Les octets bruts sont **rendus à l'appelant immédiat** et, **si et seulement
+> si** un puits de preuve est injecté au titre de l'exception bornée de
+> `W4-A` §17, **remis à ce puits**. À personne d'autre.
 >
 > - **Aucune rétention.** Ni l'adaptateur, ni le cœur, ni la surface
->   transactionnelle **MUST NOT** conserver l'observation au-delà de l'appel qui
->   l'a produite : pas de champ d'instance, pas de liste, pas de cache, pas de
->   dernier-résultat. `W4-A` §14 pose l'adaptateur *« sans état au-delà de sa
->   configuration »*, et une observation retenue serait de l'état.
+>   transactionnelle, **ni le puits**, **MUST NOT** conserver l'observation
+>   au-delà de l'appel qui l'a produite : pas de champ d'instance, pas de liste,
+>   pas de cache, pas de dernier-résultat. `W4-A` §14 pose l'adaptateur *« sans
+>   état au-delà de sa configuration »*, et une observation retenue serait de
+>   l'état. **Le puits écrit et oublie.**
 > - **Aucune publication.** L'observation **MUST NOT** être publiée sur MQTT,
 >   sous aucun topic, sous aucune forme, ni entière ni extraite. Les topics
 >   d'`ACK` gardent exactement le contenu que `W1` leur donne.
-> - **Aucun fichier.** `W4-A` §17 l'interdit, et ce lot ne le demande pas.
+> - **Aucun fichier, hors l'exception bornée de `W4-A` §17.** Le lot
+>   `g2-sortie-preuve-transport.md` y ouvre une exception **opt-in, inerte par
+>   défaut**, portée par un `EvidenceSink` injecté. **Hors campagne,
+>   l'interdiction demeure entière.**
 >
 > **Ce que « rendre » veut dire, exactement** : l'observation voyage **dans la
-> valeur de retour**, l'appelant en fait ce que son propre contrat lui permet, et
-> elle disparaît avec elle. Sous `G.2`, cet appelant est **l'exploitant de la
-> campagne**, qui la consigne dans son atelier — §7.
+> valeur de retour**, et le cas échéant **jusqu'au puits**. L'appelant en fait ce
+> que son propre contrat lui permet, et elle disparaît avec elle. Sous `G.2`, cet
+> appelant est **le cœur** — non l'exploitant, comme la rédaction d'origine le
+> disait à tort — et son contrat lui interdit d'en rien faire. C'est le **puits**,
+> et lui seul, qui la porte jusqu'à l'atelier de l'exploitant.
 
 ### 5.2 R-B — l'obligation 11 est rouverte, et l'autorité est fondée
 
