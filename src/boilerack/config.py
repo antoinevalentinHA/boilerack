@@ -1,18 +1,27 @@
 """Chargement et validation de la configuration utilisateur (lot C10).
 
-Traduit un fichier TOML et une variable d'environnement en un `RuntimeConfig`
-pret a etre execute, ou refuse en nommant la faute. Implemente le contrat
+Traduit un fichier TOML et l'environnement en un `RuntimeConfig` pret a etre
+execute, ou refuse en nommant la faute. Implemente le contrat
 `docs/design/c10-user-interface.md`.
 
 DEUX SOURCES DISJOINTES
     Le fichier porte **toute** la configuration durable ; l'environnement porte
-    **le seul secret**, et rien d'autre. Il n'y a donc aucune precedence a
-    arbitrer : une cle ne peut pas venir des deux endroits. Boilerack ne balaie
-    pas l'environnement, n'y refuse aucune variable inconnue, et ne lit aucun
+    ce qui n'y a pas sa place. Il n'y a donc aucune precedence a arbitrer : une
+    cle ne peut pas venir des deux endroits. Boilerack ne balaie pas
+    l'environnement, n'y refuse aucune variable inconnue, et ne lit aucun
     fichier `.env` : l'environnement du processus ne lui appartient pas.
 
+    A ce jour, une seule variable est lue : le SECRET MQTT. Ce n'est pas une
+    propriete permanente. `docs/design/g2-sortie-preuve-transport.md` en
+    contracte une seconde, d'une autre nature : un INTERRUPTEUR DE CAMPAGNE,
+    ephemere, inerte si absent, et qui n'est PAS un secret. Elle n'est pas
+    encore implementee ; l'etape 3 de ce design l'introduira. Les enonces de ce
+    module ne doivent donc plus affirmer une UNICITE qui ne tiendrait qu'a
+    l'etat courant.
+
 SCHEMA FERME
-    Trois tables, treize cles, et rien d'autre. Toute table ou cle inconnue est
+    Quatre tables, quatorze cles, et rien d'autre : `mqtt` (6), `vclient` (4),
+    `read_surface` (3), `transaction_surface` (1). Toute table ou cle inconnue est
     refusee. Cette strictesse est legitime parce que Boilerack possede
     integralement son schema : elle transforme une faute de frappe silencieuse,
     qui laisserait un reglage sans effet, en une erreur immediate et nommee.
@@ -26,7 +35,7 @@ TYPES TOML, PAS TYPES PYTHON
     battement.
 
 AUCUNE ENTREE-SORTIE D'INFRASTRUCTURE
-    Ce module lit un fichier et une variable d'environnement. Il n'ouvre aucune
+    Ce module lit un fichier et l'environnement. Il n'ouvre aucune
     socket, ne resout aucun nom d'hote, ne lance aucun processus et ne verifie
     pas l'existence de l'executable `vclient` : ce sont des verifications
     d'infrastructure, et elles echoueraient pour de mauvaises raisons. Il ne
@@ -47,9 +56,12 @@ from boilerack.runtime import RuntimeConfig, TransactionSurfaceConfig
 
 __all__ = ["ConfigurationError", "PASSWORD_ENV_VAR", "load_config"]
 
-#: Unique variable d'environnement lue par Boilerack. Le prefixe reprend le nom
+#: Variable d'environnement portant le SECRET MQTT. Le prefixe reprend le nom
 #: de distribution, ce qui evite toute collision sur une machine partagee ; le
 #: segment intermediaire nomme le sous-systeme. Nom PUBLIC : il ne changera plus.
+#:
+#: C'est la seule variable lue A CE JOUR, non la seule que Boilerack lira jamais :
+#: voir la note de DEUX SOURCES DISJOINTES en tete de module.
 PASSWORD_ENV_VAR: Final = "BOILERACK_MQTT_PASSWORD"
 
 #: Les quatre tables du schema, et aucune autre.
@@ -216,7 +228,7 @@ def _construire(
 
 
 def _lire_secret() -> str | None:
-    """Lit l'unique variable d'environnement, une seule fois.
+    """Lit la variable d'environnement du SECRET, une seule fois.
 
     Absente : aucun mot de passe. Presente : sa valeur, telle quelle, sans
     interpretation ni decodage. Elle n'est ni journalisee, ni incluse dans un
