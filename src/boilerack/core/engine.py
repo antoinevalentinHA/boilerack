@@ -133,7 +133,12 @@ class TransactionalCore:
         l'admission. Le pilotage de l'execution (`process_next`) reste explicite.
         """
         target = mqtt if mqtt is not None else self._mqtt
-        target.set_message_handler(self.submit)
+        # `submit` rend `Ack | None`, la ou `MessageHandler` est typé
+        # `Callable[[Message], None]` : l'ecart est DELIBERE. W1 §11.4 interdit
+        # d'y toucher — « MUST NOT modifier la signature de `MessageHandler`
+        # pour la recuperer » — la valeur rendue etant ignoree par le transport,
+        # l'acquittement passant par MQTT et jamais par un retour d'appel.
+        target.set_message_handler(self.submit)  # type: ignore[arg-type]
 
     # -- admission -----------------------------------------------------------
 
