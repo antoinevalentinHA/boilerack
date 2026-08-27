@@ -478,7 +478,15 @@ def _composer_transaction(
         # Construire l'ecrivain ne lance AUCUN processus : `VClientCli` ne fait
         # que retenir sa configuration et son lanceur. Seul un `write()` reel
         # invoquerait `vclient`, et rien ne l'appelle au demarrage.
-        vclient = VClientCli(config.vclient, SubprocessRunner(), invocation=invocation)
+        # `clock` est celle que `build_transaction_surface` recoit deja : aucune
+        # dependance nouvelle. Elle ne sert qu'a MESURER la duree d'une ecriture,
+        # jamais a decider (g2-observabilite-preuve.md).
+        vclient = VClientCli(
+            config.vclient,
+            SubprocessRunner(),
+            invocation=invocation,
+            clock=clock,
+        )
         return build_transaction_surface(
             mqtt=mqtt,
             clock=clock,

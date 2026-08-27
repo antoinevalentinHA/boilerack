@@ -39,13 +39,18 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Final, Protocol, runtime_checkable
 
 from boilerack.adapters.config import VclientConfig
 from boilerack.adapters.process_runner import ProcessResult, ProcessRunner
 from boilerack.adapters.vclient_cli import VClientCliReader
-from boilerack.transport.vclient import TransportStatus, WriteResult
+from boilerack.clock import Clock
+from boilerack.transport.vclient import (
+    TransportStatus,
+    WriteObservation,
+    WriteResult,
+)
 
 __all__ = [
     "Invocation",
@@ -220,9 +225,18 @@ class VClientCli(VClientCliReader):
         runner: ProcessRunner,
         *,
         invocation: WriteInvocation,
+        clock: Clock,
     ) -> None:
+        """`clock` sert UNIQUEMENT a mesurer la duree d'une invocation d'ecriture.
+
+        Elle est INJECTEE, comme tout le reste : aucun appel direct a un compteur
+        de la bibliotheque standard n'est fait ici, et `VirtualClock` rend la
+        mesure deterministe en test. Le chemin de LECTURE, herite de
+        `VClientCliReader`, ne l'emploie pas.
+        """
         super().__init__(config, runner)
         self._invocation = invocation
+        self._clock = clock
 
     # -- Ecriture ------------------------------------------------------------
 
@@ -263,10 +277,29 @@ class VClientCli(VClientCliReader):
                 ),
             )
 
+        # MESURE — autour de la SEULE invocation, et de rien d'autre. Le budget
+        # de temps n'est pas touche : `write_timeout_s` garde sa valeur et son
+        # effet, et la mesure ne l'influence en aucune facon.
+        debut = self._clock.monotonic()
         result = self._runner.run(
             invocation.args, timeout=self._config.write_timeout_s
         )
-        return self._classify_write(invocation.echo, result)
+        duree = self._clock.monotonic() - debut
+
+        # La classification est calculee D'ABORD, sans connaitre l'observation,
+        # puis l'observation lui est attachee. La table fermee de W4-A §9 ne voit
+        # jamais ce champ, et aucun verdict n'en depend.
+        verdict = self._classify_write(invocation.echo, result)
+        return replace(
+            verdict,
+            observation=WriteObservation(
+                args=tuple(invocation.args),
+                stdout=result.stdout,
+                stderr=result.stderr,
+                returncode=result.returncode,
+                duration_s=duree,
+            ),
+        )
 
     # -- Classification -------------------------------------------------------
 
@@ -412,18 +445,39 @@ class VClientCli(VClientCliReader):
     def _diagnostic(message: str, stdout: str, stderr: str) -> str:
         """Assemble un diagnostic BORNE dans `detail`.
 
-        ARBITRAGE DE W4-A §7.3, OBLIGATION 11 — `WriteResult` ne porte pas de
-        champ `raw`, contrairement a `ReadResult`. W4-A demandait de trancher :
-        soit `detail` suffit, soit W4-B propose un champ.
+        ARBITRAGE DE W4-A §7.3, OBLIGATION 11 — CONSERVE, PUIS ROUVERT.
 
-        **`detail` suffit, et aucun champ n'est ajoute.** Le seul besoin qui
-        exigeait la sortie INTEGRALE d'une ecriture etait la capture de W4-C —
-        or W4-C a eu lieu, et l'a capturee hors du code, dans des fichiers
-        dedies. Ce qui reste utile a l'execution est un diagnostic, et un
-        diagnostic se borne. Ajouter un champ a la taxonomie de transport pour un
-        besoin desormais satisfait ailleurs serait un elargissement sans
-        consommateur — et l'obligation 21 interdit par ailleurs a W4-B de
-        modifier la taxonomie.
+        L'arbitrage de W4-B, tel qu'il a ete rendu, et qui reste consigne parce
+        qu'il etait juste au moment ou il l'a ete :
+
+            « `detail` suffit, et aucun champ n'est ajoute. Le seul besoin qui
+            exigeait la sortie INTEGRALE d'une ecriture etait la capture de
+            W4-C — or W4-C a eu lieu, et l'a capturee hors du code, dans des
+            fichiers dedies. Ce qui reste utile a l'execution est un diagnostic,
+            et un diagnostic se borne. Ajouter un champ a la taxonomie de
+            transport pour un besoin desormais satisfait ailleurs serait un
+            elargissement sans consommateur — et l'obligation 21 interdit par
+            ailleurs a W4-B de modifier la taxonomie. »
+
+        ROUVERT par `g2-observabilite-preuve.md`, et voici la cause : `G.2` fait
+        de BOILERACK l'executant de l'invocation. La capture « hors du code »
+        devient impossible, et le consommateur existe — `G.2` §16, item 4. Les
+        deux premisses de l'arbitrage sont tombees ; W4-B ne pouvait pas les
+        prevoir.
+
+        CE QUI N'A PAS CHANGE, ET C'EST L'ESSENTIEL
+            « Ce qui reste utile a l'execution est un diagnostic, et un
+            diagnostic se borne. » Cette phrase reste vraie. `detail` demeure
+            BORNE, par `_borner`, et ce n'est pas par lui que passe la sortie
+            integrale.
+
+            La taxonomie `TransportStatus` n'est pas touchee non plus :
+            l'obligation 21 est respectee. Le champ ajoute est
+            `WriteResult.observation`, optionnel, et il ne porte aucun statut.
+
+        OU SE TROUVE DESORMAIS LA SORTIE INTEGRALE
+            Dans `WriteObservation`, rendue par `write()`. Jamais journalisee,
+            jamais retenue, jamais publiee. Voir sa docstring.
         """
         morceaux = [message]
         extrait_out = stdout.strip()
