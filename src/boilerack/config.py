@@ -38,7 +38,7 @@ from __future__ import annotations
 import os
 import tomllib
 from pathlib import Path
-from typing import Any, Final, Mapping
+from typing import Any, Callable, Final, Mapping, TypeVar
 
 from boilerack.adapters.config import MqttConfig, VclientConfig
 from boilerack.read_surface.config import ReadSurfaceConfig
@@ -194,7 +194,14 @@ def _exiger_presence(table: str, contenu: Mapping[str, Any], cle: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _construire(table: str, fabrique, arguments: dict[str, Any]):
+#: Le type rendu par la fabrique passee a `_construire`. Sans lui, la fonction
+#: rendrait `Any`, et chaque appelant declarant un type concret le dissimulerait.
+_T = TypeVar("_T")
+
+
+def _construire(
+    table: str, fabrique: Callable[..., _T], arguments: dict[str, Any]
+) -> _T:
     """Delegue la validation des valeurs aux structures existantes.
 
     Leurs `__post_init__` restent **seules autorites** des plages, des chaines

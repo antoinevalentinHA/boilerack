@@ -145,7 +145,7 @@ class Ack:
         )
 
 
-def ack_to_dict(ack: Ack) -> dict:
+def ack_to_dict(ack: Ack) -> dict[str, str]:
     """Projection minimale d'un ACK vers un dictionnaire serialisable.
 
     `reason` / `reason_class` n'apparaissent QUE pour un rejet.

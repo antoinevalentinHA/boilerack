@@ -91,7 +91,9 @@ class SubprocessRunner:
     """
 
     def __init__(
-        self, *, runner: Callable[..., subprocess.CompletedProcess] = subprocess.run
+        self,
+        *,
+        runner: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
     ) -> None:
         self._runner = runner
 

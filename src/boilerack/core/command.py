@@ -18,6 +18,7 @@ import math
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from boilerack.core.ack import Reason
 
@@ -132,7 +133,7 @@ def _require_non_empty_str(raw: object, field: str) -> str:
     return raw
 
 
-def decode_payload(payload: bytes) -> dict:
+def decode_payload(payload: bytes) -> dict[str, Any]:
     """Decode des octets bruts en objet JSON.
 
     N'accepte QUE des octets UTF-8 representant un objet JSON. Les constantes
