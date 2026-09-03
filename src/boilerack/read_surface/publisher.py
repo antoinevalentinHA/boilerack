@@ -59,6 +59,7 @@ from boilerack.read_surface.config import ReadSurfaceConfig
 from boilerack.read_surface.measurements import (
     V1_MEASUREMENTS,
     MeasurementSpec,
+    apply_projection,
     check_snapshot_period,
 )
 from boilerack.read_surface.payload import format_scalar
@@ -441,9 +442,22 @@ class ReadSurfacePublisher:
         if self._connection.consume_recovery():
             self._tenter(erreurs, self._online_topic, _ONLINE)
 
+        # MEMOISATION PAR CYCLE — deux mesures peuvent partager une commande
+        # (§4.3 : les deux grandeurs du brulleur viennent de `getBrennerStatus`).
+        # Sans ce cache, chacune couterait une invocation distincte, alors que le
+        # contrat n'en exige qu'une seule pour une meme commande dans un meme
+        # cycle. Le cache est LOCAL au cycle : rien n'est conserve d'un cycle a
+        # l'autre, et la fraicheur de chaque role reste celle de sa periode.
+        lectures: dict[str, ReadResult] = {}
+
         for spec in dues:
             # Une exception inattendue du lecteur remonte ici, sans cloture.
-            resultat = self._reader_or_raise().read(spec.read)
+            memoisee = lectures.get(spec.read)
+            if memoisee is None:
+                resultat = self._reader_or_raise().read(spec.read)
+                lectures[spec.read] = resultat
+            else:
+                resultat = memoisee
 
             if resultat.status is TransportStatus.OK:
                 # §4.6 : scalaire, PUIS etat, PUIS instantane.
@@ -451,7 +465,7 @@ class ReadSurfacePublisher:
                 self._tenter(
                     erreurs,
                     self._scalar_topics[spec.role],
-                    format_scalar(resultat.value),
+                    format_scalar(apply_projection(spec.projection, resultat.value)),
                 )
                 self._state = record_result(
                     self._state, spec.role, TransportStatus.OK, self._clock

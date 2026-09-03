@@ -33,6 +33,8 @@ _TABLE = (
     ),
     ("heating_curve_slope", "getNeigungM1", "telemetry/heating/curve/slope", 60, 180),
     ("heating_curve_shift", "getNiveauM1", "telemetry/heating/curve/shift", 60, 180),
+    ("burner_modulation", "getBrennerStatus", "telemetry/burner/modulation", 30, 90),
+    ("burner_state", "getBrennerStatus", "telemetry/burner/state", 30, 90),
 )
 
 
@@ -53,8 +55,8 @@ def _spec(**surcharges: object) -> MeasurementSpec:
 # ---------------------------------------------------------------------------
 
 
-def test_huit_mesures_exactement() -> None:
-    assert len(V1_MEASUREMENTS) == 8
+def test_dix_mesures_exactement() -> None:
+    assert len(V1_MEASUREMENTS) == 10
 
 
 def test_autorite_immutable() -> None:
@@ -87,19 +89,27 @@ def test_suffixes_identiques_et_ordonnes_comme_c7c1() -> None:
 
 def test_roles_uniques() -> None:
     roles = [s.role for s in V1_MEASUREMENTS]
-    assert len(set(roles)) == 8
+    assert len(set(roles)) == 10
 
 
 def test_suffixes_uniques() -> None:
     suffixes = [s.suffix for s in V1_MEASUREMENTS]
-    assert len(set(suffixes)) == 8
+    assert len(set(suffixes)) == 10
 
 
-def test_commandes_de_lecture_uniques_en_v1() -> None:
-    """Constat de la v1, PAS une regle generique : le contrat n'interdit nulle
-    part que deux roles partagent une commande de lecture."""
+def test_une_seule_commande_est_partagee_en_v1() -> None:
+    """Le contrat n'interdit pas le partage : §4.3 s'en sert, une seule fois.
+
+    Les deux grandeurs du brulleur viennent d'une meme lecture,
+    `getBrennerStatus`, l'une brute et l'autre projetee. Neuf commandes
+    distinctes servent donc dix mesures — et le publieur memoise la lecture par
+    cycle pour que ce partage ne coute pas une seconde invocation.
+    """
     lectures = [s.read for s in V1_MEASUREMENTS]
-    assert len(set(lectures)) == 8
+    assert len(lectures) == 10
+    assert len(set(lectures)) == 9
+    partagees = {r for r in lectures if lectures.count(r) > 1}
+    assert partagees == {"getBrennerStatus"}
 
 
 def test_seuils_conformes_a_la_regle_trois_fois_p() -> None:
@@ -108,9 +118,14 @@ def test_seuils_conformes_a_la_regle_trois_fois_p() -> None:
 
 
 def test_periodes_du_contrat() -> None:
-    """Trois mesures a 30 s, cinq a 60 s (§4.2)."""
+    """Cinq mesures a 30 s, cinq a 60 s (§4.2, §4.3).
+
+    Les deux grandeurs du brulleur suivent la cadence des temperatures — 30 s :
+    la modulation change vite, et le pont historique la publiait deja a cette
+    cadence.
+    """
     periodes = [s.period_s for s in V1_MEASUREMENTS]
-    assert periodes.count(30) == 3
+    assert periodes.count(30) == 5
     assert periodes.count(60) == 5
 
 
@@ -119,9 +134,25 @@ def test_plus_petit_seuil_de_fraicheur() -> None:
     assert min(s.fresh_max_s for s in V1_MEASUREMENTS) == 90
 
 
-def test_aucune_mesure_de_brulleur() -> None:
-    """§4.3 : `burner_modulation` et `burner_state` sont reportes hors v1."""
-    assert not any("burner" in s.role or "burner" in s.suffix for s in V1_MEASUREMENTS)
+def test_les_deux_mesures_de_brulleur_et_leur_projection() -> None:
+    """§4.3 amende : les deux grandeurs du brulleur sont reintegrees.
+
+    `burner_state` est une projection BINAIRE NUMERIQUE — `0.0` / `1.0` —, et
+    jamais un texte : §4.5 impose un payload numerique, et il n'est pas amende.
+    """
+    from boilerack.read_surface.measurements import Projection, apply_projection
+
+    par_role = {s.role: s for s in V1_MEASUREMENTS}
+    assert par_role["burner_modulation"].projection is Projection.IDENTITY
+    assert par_role["burner_state"].projection is Projection.POSITIVE_TO_BINARY
+    assert par_role["burner_modulation"].suffix == "telemetry/burner/modulation"
+    assert par_role["burner_state"].suffix == "telemetry/burner/state"
+
+    assert apply_projection(Projection.POSITIVE_TO_BINARY, 0.0) == 0.0
+    assert apply_projection(Projection.POSITIVE_TO_BINARY, -1.0) == 0.0
+    assert apply_projection(Projection.POSITIVE_TO_BINARY, 0.0001) == 1.0
+    assert apply_projection(Projection.POSITIVE_TO_BINARY, 37.5) == 1.0
+    assert apply_projection(Projection.IDENTITY, 37.5) == 37.5
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +245,14 @@ def test_aucun_champ_supplementaire() -> None:
     import dataclasses
 
     champs = {f.name for f in dataclasses.fields(MeasurementSpec)}
-    assert champs == {"role", "read", "suffix", "period_s", "fresh_max_s"}
+    assert champs == {
+        "role",
+        "read",
+        "suffix",
+        "period_s",
+        "fresh_max_s",
+        "projection",
+    }
 
 
 # ---------------------------------------------------------------------------

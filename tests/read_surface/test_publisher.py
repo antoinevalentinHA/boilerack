@@ -663,6 +663,17 @@ _CMDS = [s.read for s in V1_MEASUREMENTS]
 _TEMPS_30S = [s for s in V1_MEASUREMENTS if s.period_s == 30]
 
 
+def _commandes_distinctes(specs):
+    """Commandes attendues d'un cycle : DISTINCTES, dans l'ordre de premiere
+    apparition. Le publieur memoise la lecture par cycle, donc deux mesures qui
+    partagent une commande ne provoquent qu'une invocation (§4.3)."""
+    vues: list[str] = []
+    for spec in specs:
+        if spec.read not in vues:
+            vues.append(spec.read)
+    return vues
+
+
 class _Lecteur:
     """Lecteur programmable : aucun processus, aucun `vclient` reel."""
 
@@ -789,17 +800,17 @@ def test_seules_les_trois_mesures_30s_dues() -> None:
     r.appels.clear()
     c.advance(30)
     p.run_due()
-    assert r.appels == [s.read for s in _TEMPS_30S]
+    assert r.appels == _commandes_distinctes(_TEMPS_30S)
 
 
-def test_les_huit_mesures_dues_a_60s() -> None:
+def test_les_dix_mesures_dues_a_60s() -> None:
     r = _Lecteur()
     p, _, c = _demarre(reader=r)
     p.run_due()
     r.appels.clear()
     c.advance(60)
     p.run_due()
-    assert r.appels == _CMDS
+    assert r.appels == _commandes_distinctes(V1_MEASUREMENTS)
 
 
 def test_ordre_exact_des_specs() -> None:
@@ -807,14 +818,21 @@ def test_ordre_exact_des_specs() -> None:
     r = _Lecteur()
     p, _, _ = _demarre(reader=r)
     p.run_due()
-    assert r.appels == _CMDS
+    assert r.appels == _commandes_distinctes(V1_MEASUREMENTS)
 
 
-def test_un_seul_appel_par_role() -> None:
+def test_une_seule_invocation_par_commande() -> None:
+    """Dix mesures, NEUF invocations : le brulleur en partage une (§4.3).
+
+    C'est la propriete qui evite que la parite de lecture coute une occupation
+    supplementaire de la liaison — laquelle est bornee par le budget de sonde du
+    superviseur.
+    """
     r = _Lecteur()
     p, _, _ = _demarre(reader=r)
     p.run_due()
-    assert len(r.appels) == len(set(r.appels)) == 8
+    assert len(r.appels) == len(set(r.appels)) == 9
+    assert len(V1_MEASUREMENTS) == 10
 
 
 # ---------------------------------------------------------------------------
@@ -828,7 +846,7 @@ def test_scalaire_publie_sur_le_bon_topic_qos1_retenu() -> None:
     n = len(client.publications)
     p.run_due()
     scalaires = [x for x in _depuis(client, n) if "/telemetry/" in x[0]]
-    assert len(scalaires) == 8
+    assert len(scalaires) == 10
     assert all(q == 1 and ret is True for _, _, q, ret in scalaires)
     assert scalaires[0][0] == "boiler/telemetry/temperatures/outdoor"
 
@@ -868,7 +886,7 @@ def test_snapshot_publie_apres_chaque_succes() -> None:
     n = len(client.publications)
     p.run_due()
     sequence = [t for t, _, _, _ in _depuis(client, n)]
-    assert len(sequence) == 17
+    assert len(sequence) == 21
     for i in range(8):
         assert "/telemetry/" in sequence[2 * i]
         assert sequence[2 * i + 1] == "boiler/bridge/telemetry_status"
@@ -1014,7 +1032,7 @@ def test_aucun_rattrapage_apres_un_reveil_tardif() -> None:
     r.appels.clear()
     c.advance(300)
     p.run_due()
-    assert r.appels == _CMDS
+    assert r.appels == _commandes_distinctes(V1_MEASUREMENTS)
     assert p.due_at() == 1300.0 + 30
 
 
@@ -1212,12 +1230,12 @@ def test_erreur_scalaire_n_empeche_ni_l_etat_ni_le_cycle() -> None:
     p, _, _ = _demarre(reader=r, mqtt=client)
     with pytest.raises(ExceptionGroup) as capture:
         p.run_due()
-    assert len(capture.value.exceptions) == 8
+    assert len(capture.value.exceptions) == 10
     assert all(
         m.last_result is TransportStatus.OK for m in p.state.measurements.values()
     )
     assert p.state.chain_status is ChainStatus.OK
-    assert r.appels == _CMDS
+    assert r.appels == _commandes_distinctes(V1_MEASUREMENTS)
 
 
 def test_erreur_de_publication_ne_transforme_pas_le_statut() -> None:
@@ -1241,8 +1259,8 @@ def test_erreur_de_snapshot_collectee_et_cycle_poursuivi() -> None:
     client.actif = True
     with pytest.raises(ExceptionGroup) as capture:
         p.run_due()
-    assert len(capture.value.exceptions) == 9
-    assert r.appels == _CMDS
+    assert len(capture.value.exceptions) == 11
+    assert r.appels == _commandes_distinctes(V1_MEASUREMENTS)
 
 
 def test_erreur_de_battement_collectee() -> None:
@@ -1539,7 +1557,14 @@ def test_lot_de_taches_fige_au_debut_de_run_due() -> None:
     """
     # 8 lectures + recalculs : le monotone progresse largement au-dela de 10 s
     # pendant l'appel, donc au-dela des echeances de battement et d'instantane.
-    horloge = _HorlogeQuiAvanceALaLecture(_DEBUT, monotonic_start=1000.0, pas=1.0)
+    # Le pas est calibre pour que le cycle complet franchisse l'echeance de 10 s
+    # SANS atteindre celle des mesures : c'est la scene que le test decrit. Il
+    # depend donc du nombre de lectures d'un cycle, et se derive de lui plutot
+    # que d'etre recopie a la main.
+    lectures_par_cycle = len({spec.read for spec in V1_MEASUREMENTS})
+    horloge = _HorlogeQuiAvanceALaLecture(
+        _DEBUT, monotonic_start=1000.0, pas=8.0 / lectures_par_cycle
+    )
     config = ReadSurfaceConfig(snapshot_period_s=10, heartbeat_period_s=10)
     r = _Lecteur()
     p, client, _ = _demarre(reader=r, clock=horloge, config=config)
@@ -1552,17 +1577,17 @@ def test_lot_de_taches_fige_au_debut_de_run_due() -> None:
     assert horloge.monotonic() > 1010.0
 
     # Chaque mesure initialement due est traitee AU PLUS UNE FOIS.
-    assert r.appels == _CMDS
+    assert r.appels == _commandes_distinctes(V1_MEASUREMENTS)
     assert len(r.appels) == len(set(r.appels))
 
     # Aucun battement : son echeance a ete franchie EN COURS d'appel.
     assert not any(t.endswith("bridge/heartbeat") for t in premier)
 
-    # Instantanes : 8 intermediaires + 1 de fin de cycle, et RIEN de plus. Aucun
-    # instantane periodique supplementaire du seul fait du franchissement.
-    assert premier.count("boiler/bridge/telemetry_status") == 9
-    assert sum(1 for t in premier if "/telemetry/" in t) == 8
-    assert len(premier) == 17
+    # Instantanes : un par mesure publiee + 1 de fin de cycle, et RIEN de plus.
+    # Aucun instantane periodique supplementaire du seul fait du franchissement.
+    assert premier.count("boiler/bridge/telemetry_status") == len(V1_MEASUREMENTS) + 1
+    assert sum(1 for t in premier if "/telemetry/" in t) == len(V1_MEASUREMENTS)
+    assert len(premier) == 2 * len(V1_MEASUREMENTS) + 1
 
     # -- second appel : la tache devenue due est traitee, une seule fois -----
     r.appels.clear()
@@ -1591,8 +1616,8 @@ def test_lot_de_taches_fige_au_debut_de_run_due() -> None:
     p.run_due()
     quatrieme = [t for t, _, _, _ in _depuis(client, dernier)]
 
-    assert r.appels == _CMDS  # UN passage, pas douze
-    assert quatrieme.count("boiler/bridge/telemetry_status") == 9
+    assert r.appels == _commandes_distinctes(V1_MEASUREMENTS)  # UN passage, pas douze
+    assert quatrieme.count("boiler/bridge/telemetry_status") == len(V1_MEASUREMENTS) + 1
     assert quatrieme.count("boiler/bridge/heartbeat") == 1  # UN au maximum
     # Ordre deterministe : le battement vient en dernier.
     assert quatrieme[-1] == "boiler/bridge/heartbeat"

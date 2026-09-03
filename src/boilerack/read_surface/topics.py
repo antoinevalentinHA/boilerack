@@ -58,7 +58,7 @@ class InvalidMqttTopic(ValueError):
 
 # -- Surface v1 -------------------------------------------------------------
 
-#: Les HUIT mesures retenues en v1, dans l'ordre de la table normative §4.2.
+#: Les DIX mesures retenues en v1, dans l'ordre de la table normative §4.2.
 TELEMETRY_SUFFIXES: Final[tuple[str, ...]] = (
     "telemetry/temperatures/outdoor",
     "telemetry/temperatures/supply",
@@ -68,6 +68,8 @@ TELEMETRY_SUFFIXES: Final[tuple[str, ...]] = (
     "telemetry/heating/reduced_reference",
     "telemetry/heating/curve/slope",
     "telemetry/heating/curve/shift",
+    "telemetry/burner/modulation",
+    "telemetry/burner/state",
 )
 
 #: Les TROIS topics de service, dans l'ordre du recapitulatif §11.
@@ -82,9 +84,9 @@ BRIDGE_SUFFIXES: Final[tuple[str, ...]] = (
     "bridge/heartbeat",
 )
 
-#: Les ONZE suffixes de la surface v1 (§11), dans un ordre stable. Aucune autre
-#: valeur n'est publiable par la surface de lecture. Ne figurent donc pas ici,
-#: et c'est voulu : les topics de brulleur (reportes, §4.3), `bridge/version`
+#: Les TREIZE suffixes de la surface v1 (§11), dans un ordre stable. Aucune
+#: autre valeur n'est publiable par la surface de lecture. Ne figurent donc pas
+#: ici, et c'est voulu : `bridge/version`
 #: (reporte, §13), la commande et les acquittements (surface transactionnelle,
 #: §14), `error/last` et `guard/*` (hors perimetre, §13), et un eventuel topic
 #: de capacites (hors v1, §10).

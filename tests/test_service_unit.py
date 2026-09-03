@@ -103,10 +103,14 @@ def _plancher_arret_s() -> float:
 
     Un cycle deja commence n'est jamais tronque, et chaque lecture est bornee par
     le budget du sous-processus : le pire cas de la phase de lecture vaut donc
-    `nombre de mesures x read_timeout_s`. Si la surface grandit ou si le budget
-    par defaut augmente, ce plancher suit — et le test avec lui.
+    `nombre de COMMANDES DISTINCTES x read_timeout_s`. Distinctes, et non
+    nombre de mesures : le publieur memoise la lecture par cycle, donc deux
+    mesures partageant une commande (§4.3, le brulleur) n'en coutent qu'une. Si
+    la surface grandit ou si le budget par defaut augmente, ce plancher suit —
+    et le test avec lui.
     """
-    return len(V1_MEASUREMENTS) * VclientConfig(executable="x").read_timeout_s
+    distinctes = {spec.read for spec in V1_MEASUREMENTS}
+    return len(distinctes) * VclientConfig(executable="x").read_timeout_s
 
 
 # ---------------------------------------------------------------------------
@@ -308,8 +312,13 @@ def test_timeout_stop_strictement_superieur_au_plancher_calcule() -> None:
 
 
 def test_le_plancher_est_bien_celui_du_contrat() -> None:
-    """Verrouille le calcul lui-meme : 8 mesures x 5,0 s au moment de C12."""
-    assert _plancher_arret_s() == 40.0
+    """Verrouille le calcul : NEUF commandes distinctes x 5,0 s = 45 s.
+
+    C12 le calculait sur huit mesures (40 s). §4.3 en ajoute deux, qui partagent
+    une commande : le plancher passe donc a 45 s, non a 50 s. Il demeure sous le
+    `TimeoutStopSec` de l'unite, qui n'a pas a bouger.
+    """
+    assert _plancher_arret_s() == 45.0
 
 
 # ---------------------------------------------------------------------------

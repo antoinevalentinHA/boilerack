@@ -118,9 +118,10 @@ tableau.
 ### 4.1 Décompte
 
 Le pont historique publie **dix** topics de télémétrie : **neuf lectures
-directes** et **un état dérivé**. Le présent contrat retient **huit topics en
-v1** ; la mesure de modulation et l'état dérivé sont **tous deux reportés**
-(§4.3).
+directes** et **un état dérivé**. Le présent contrat en retient **dix en v1** —
+huit d'origine, plus la modulation et l'état dérivé, **réintégrés** par
+l'amendement du §4.3. La parité de lecture avec le pont historique est donc
+**complète**.
 
 ### 4.2 Table normative
 
@@ -137,9 +138,12 @@ de publication visée, non garantie (§7).
 | `heating_reduced_reference` | `getTempRaumRedSollM1` | `telemetry/heating/reduced_reference` | entier | °C | 60 s | identique | **oui** |
 | `heating_curve_slope` | `getNeigungM1` | `telemetry/heating/curve/slope` | decimal | sans unité | 60 s | identique | **oui** |
 | `heating_curve_shift` | `getNiveauM1` | `telemetry/heating/curve/shift` | entier | sans unité | 60 s | identique | **oui** |
+| `burner_modulation` | `getBrennerStatus` | `telemetry/burner/modulation` | decimal | non établie | 30 s | identique | **oui** |
+| `burner_state` | `getBrennerStatus` | `telemetry/burner/state` | decimal `0`/`1` | sans unité | 30 s | **projetée** | **oui** |
 
-Les deux mesures issues du brulleur — `burner_modulation` et `burner_state` —
-sont **reportées hors v1** (§4.3).
+Les deux mesures issues du brûleur sont **réintégrées en v1** par l'amendement
+du §4.3, sous une sémantique explicitement bornée. Elles partagent une commande,
+et n'en coûtent qu'une invocation par cycle.
 
 **Mesures sans consommateur connu.** `outdoor` et `reduced_reference` n'ont
 aucun consommateur identifié chez le consommateur d'origine.
@@ -157,42 +161,55 @@ est **accepté** en connaissance de cause ; les périodes cibles ne sont **pas
 garanties** (§7). Cet arbitrage **SHOULD** être réévalué après les premières
 mesures de durée de cycle du futur ordonnanceur.
 
-### 4.3 REPORTÉ HORS V1 — mesures du brulleur
+### 4.3 RÉINTÉGRÉES EN V1 — mesures du brûleur
 
-**`burner_modulation` et `burner_state` sont l'un et l'autre reportés.**
+> **Amendement.** Ces deux mesures étaient **reportées hors v1**. Elles sont
+> **réintégrées**, sous une sémantique explicitement bornée, au titre de la
+> **parité de remplacement** du pont historique : un consommateur qui perd son
+> capteur de brûleur ne peut pas basculer.
 
-Motifs, tous vérifiables dans le dépôt public :
+| Rôle | Commande source | Suffixe MQTT | Projection | Fréquence cible |
+|---|---|---|---|---|
+| `burner_modulation` | `getBrennerStatus` | `telemetry/burner/modulation` | **aucune** — la valeur lue | 30 s |
+| `burner_state` | `getBrennerStatus` | `telemetry/burner/state` | **`1` si la valeur lue est strictement positive, `0` sinon** | 30 s |
 
-1. `getBrennerStatus` est une **commande historique observée** — le pont
-   historique la lit et publie sa sortie — mais elle **n'est pas caractérisée
-   par C5** : aucune fixture ne la couvre. C5 porte sur le comportement de
-   transport et sur la lecture `getTempKist`.
-2. Le **type** et l'**unité** de sa valeur ne sont **pas établis** par le dépôt
-   public.
-3. `CommandSpec` **ne porte aucun champ d'unité** : le profil ne peut donc pas,
-   en l'état, porter cette information.
-4. Une dépendance de la sémantique à la régulation a été **alléguée à partir du
-   pont historique**, mais elle n'est **pas prouvée** dans le dépôt public. Elle
-   figure à ce titre parmi les inconnues (§15).
-5. Conserver le même topic avec une sémantique incertaine créerait un **risque
-   silencieux** : rien ne casserait visiblement, et un consommateur continuerait
-   d'interpréter la valeur selon son hypothèse antérieure.
+#### Ce que l'amendement tranche, et ce qu'il ne tranche pas
 
-> **Règle.** Aucun topic de brulleur ne doit être publié avant caractérisation
-> de la commande **et** existence d'une source de vérité contractuelle pour son
-> type et son unité.
+**Les motifs du report sont repris un par un, et leur sort est dit.**
 
-Le présent contrat **ne fixe ni type, ni unité, ni plage** pour ces mesures :
-ce serait décider sans preuve.
+| # | Motif du report | Sort |
+|---|---|---|
+| **1** | `getBrennerStatus` n'est **pas caractérisée par C5** | **SUBSISTE.** Aucune fixture ne la couvre, et le présent amendement n'en crée pas. La mesure est publiée **au même titre que les huit autres**, sans garantie de transport particulière |
+| **2** | **type** et **unité** non établis par le dépôt | **PARTIELLEMENT LEVÉ.** Le type est **numérique** : le pont historique en publie la sortie brute, et une valeur `0.000000` a été observée en service. **L'unité demeure NON ÉTABLIE** — le contrat n'en fixe aucune |
+| **3** | `CommandSpec` ne porte aucun champ d'unité | **SANS OBJET.** Ces mesures relèvent de la surface de **lecture**, dont `MeasurementSpec` ne porte pas davantage d'unité — comme les huit autres |
+| **4** | dépendance alléguée de la sémantique à la régulation | **SUBSISTE, et demeure aux inconnues (§15).** L'amendement ne l'affirme ni ne la nie |
+| **5** | risque silencieux d'un topic à sémantique incertaine | **TRAITÉ PAR LA PROJECTION.** `burner_state` ne reproduit pas la sémantique du pont : il publie un **binaire numérique**, dont la règle est écrite ici et vérifiable |
 
-Par ailleurs, le repli `off` en cas d'échec de parsing pratique par le pont
-historique ne doit pas être reproduit, quel que soit le sort futur de ces
-mesures.
+> **Règle — la projection est NUMÉRIQUE, et §4.5 n'est pas amendé.**
+>
+> `burner_state` vaut **`0`** ou **`1`**, jamais `on` ni `off`. Le payload de
+> §4.5 demeure *« une chaîne numérique décimale sans unité »*, sans exception ni
+> aménagement. **La dérivation d'un état métier textuel appartient au
+> consommateur aval**, qui seul connaît le vocabulaire de son domaine.
+>
+> **Le repli `off` en cas d'échec de parsing, pratiqué par le pont historique,
+> n'est pas reproduit** — et il ne peut pas l'être : §4.4 interdit toute valeur
+> sentinelle, et un échec de lecture ne publie **rien**.
 
-**Coût de compatibilité, assumé et signalé** : un consommateur historique perd
-deux entités, dont un capteur binaire de brulleur. Aucun contournement n'est
-proposé ici — le proposer supposerait la sémantique que ce contrat refuse
-précisément d'affirmer.
+> **Règle — une seule invocation pour deux mesures.**
+>
+> Les deux grandeurs partagent la commande `getBrennerStatus`. Le publieur
+> **MUST** mémoïser la lecture **à l'intérieur d'un cycle** : deux mesures qui
+> partagent une commande n'en coûtent **qu'une seule invocation**. Sans cette
+> règle, la parité de lecture augmenterait l'occupation de la liaison — laquelle
+> est bornée par le budget de sonde du superviseur.
+>
+> La mémoïsation est **locale au cycle** : rien n'est conservé d'un cycle à
+> l'autre, et la fraîcheur de chaque rôle reste celle de sa période.
+
+**Ce que l'amendement ne fait pas** : il ne fixe **aucune unité**, **aucune
+plage**, et n'affirme **aucune dépendance à la régulation**. Il déclare une
+grandeur numérique et une projection binaire, et rien de plus.
 
 ### 4.4 Publication scalaire
 
@@ -590,8 +607,12 @@ Suffixes contractuels, préfixe omis.
 | `bridge/telemetry_status` | 1 | ✔ | JSON, schema 1 |
 | `bridge/heartbeat` | 0 | ✖ | JSON `{"ts":…}` — `SHOULD`, compatibilité |
 
-**Onze topics** au total, dont **huit mesures**. Ils ne sont pas tous
-obligatoires : **dix topics requis** (**MUST**) et **un topic recommandé**
+Les deux topics du brûleur — `telemetry/burner/modulation` et
+`telemetry/burner/state` — s'ajoutent aux huit mesures ci-dessus, en QoS 1,
+retain `true`, comme toutes les autres (§4.3).
+
+**Treize topics** au total, dont **dix mesures**. Ils ne sont pas tous
+obligatoires : **douze topics requis** (**MUST**) et **un topic recommandé**
 (**SHOULD**), `bridge/heartbeat`, conservé au seul titre de la compatibilité
 historique et omissible par un producteur qui documente la rupture (§9).
 
@@ -709,7 +730,8 @@ La composition root publique dont §14 faisait la condition est celle du lot
 > | `<racine>/ack/<role>` | transactionnelle |
 
 **La surface de lecture n'est pas touchée.** La racine est celle qu'elle
-configure déjà, ses onze suffixes sont inchangés, et son défaut reste `boiler`.
+configure déjà, ses treize suffixes sont inchangés par la surface
+transactionnelle, et son défaut reste `boiler`.
 Ce sont les topics **transactionnels** qui en sont désormais dérivés :
 `boilerack/command` et `boilerack/ack` deviennent des défauts de bibliothèque —
 au sens où W1 §8.3 a qualifié `DEFAULT_ACK_TOPIC_PREFIX` — et cessent d'être

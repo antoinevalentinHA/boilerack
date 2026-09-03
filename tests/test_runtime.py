@@ -38,7 +38,21 @@ from boilerack.testing import FakeMqttClient, VirtualClock
 from boilerack.transport.vclient import ReadResult, TransportStatus
 
 _DEBUT = datetime(2026, 8, 6, 9, 0, 0, tzinfo=timezone.utc)
-_CMDS = [s.read for s in V1_MEASUREMENTS]
+def _distinctes(specs) -> list[str]:
+    """Commandes attendues d'un cycle : distinctes, ordre de premiere apparition.
+
+    Le publieur memoise la lecture par cycle : deux mesures partageant une
+    commande (§4.3) n'en provoquent qu'une seule.
+    """
+    vues: list[str] = []
+    for spec in specs:
+        if spec.read not in vues:
+            vues.append(spec.read)
+    return vues
+
+
+_CMDS = _distinctes(V1_MEASUREMENTS)
+_CMDS_30S = _distinctes([s for s in V1_MEASUREMENTS if s.period_s == 30])
 
 
 def _clock() -> VirtualClock:
@@ -638,21 +652,26 @@ def test_integration_hors_production() -> None:
     assert list(horloge.sleeps) == [30.0, 30.0]
     assert horloge.monotonic() == 1060.0
 
-    # t=1000 : les huit mesures ; t=1030 : les trois de periode 30 s ;
-    # t=1060 : ces trois-la de nouveau, plus les cinq de periode 60 s.
-    assert lecteur.appels[:8] == _CMDS
-    assert lecteur.appels[8:11] == _CMDS[:3]
-    assert lecteur.appels[11:] == _CMDS
-    assert len(lecteur.appels) == 19
+    # t=1000 : les neuf commandes distinctes ; t=1030 : les quatre distinctes de
+    # periode 30 s ; t=1060 : ces quatre-la de nouveau, plus les cinq de 60 s.
+    n = len(_CMDS)
+    m = len(_CMDS_30S)
+    assert lecteur.appels[:n] == _CMDS
+    assert lecteur.appels[n : n + m] == _CMDS_30S
+    assert lecteur.appels[n + m :] == _CMDS
+    assert len(lecteur.appels) == 2 * len(_CMDS) + len(_CMDS_30S)
 
     # -- publications scalaires : exactement une par lecture reussie -------
     for spec in V1_MEASUREMENTS:
         attendu = 3 if spec.period_s == 30 else 2
         assert comptes[f"boiler/{spec.suffix}"] == attendu, spec.role
-    assert sum(v for k, v in comptes.items() if "/telemetry/" in k) == 19
+    attendues = sum(3 if s.period_s == 30 else 2 for s in V1_MEASUREMENTS)
+    assert sum(v for k, v in comptes.items() if "/telemetry/" in k) == attendues
 
     # -- instantanes et battement ------------------------------------------
-    assert comptes["boiler/bridge/telemetry_status"] == 23
+    # Un instantane apres CHAQUE lecture reussie (§4.6), plus un de fin par
+    # cycle : le compte suit donc les mesures, sans etre recopie a la main.
+    assert comptes["boiler/bridge/telemetry_status"] == attendues + 4
     assert comptes["boiler/bridge/heartbeat"] == 2
 
     # -- aucun topic hors de la surface v1 ---------------------------------
