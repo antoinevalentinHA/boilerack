@@ -213,12 +213,12 @@ def test_suffixe_jamais_normalise() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_onze_suffixes_exactement() -> None:
-    assert len(V1_SUFFIXES) == 11
+def test_treize_suffixes_exactement() -> None:
+    assert len(V1_SUFFIXES) == 13
 
 
-def test_huit_mesures_de_telemetrie() -> None:
-    assert len(TELEMETRY_SUFFIXES) == 8
+def test_dix_mesures_de_telemetrie() -> None:
+    assert len(TELEMETRY_SUFFIXES) == 10
     assert all(s.startswith("telemetry/") for s in TELEMETRY_SUFFIXES)
 
 
@@ -241,6 +241,8 @@ def test_contenu_exact_de_la_surface_v1() -> None:
         "telemetry/heating/reduced_reference",
         "telemetry/heating/curve/slope",
         "telemetry/heating/curve/shift",
+        "telemetry/burner/modulation",
+        "telemetry/burner/state",
         "bridge/online",
         "bridge/telemetry_status",
         "bridge/heartbeat",
@@ -274,8 +276,6 @@ def test_battement_present_mais_recommande_seulement() -> None:
 @pytest.mark.parametrize(
     "absent",
     [
-        "telemetry/burner/modulation",
-        "telemetry/burner/state",
         "bridge/version",
         "error/last",
         "boilerack/command",
@@ -288,8 +288,16 @@ def test_topics_hors_surface_absents(absent: str) -> None:
     assert absent not in V1_SUFFIXES
 
 
-def test_aucun_topic_de_brulleur_ni_de_guard() -> None:
-    assert not any("burner" in s for s in V1_SUFFIXES)
+def test_les_deux_topics_de_brulleur_et_aucun_guard() -> None:
+    """§4.3 amende : le brulleur entre. `guard/*` reste hors perimetre.
+
+    Les topics du superviseur ne sont pas une dette de parite : ils sont publies
+    par le superviseur lui-meme, pas par un pont, et lui survivront.
+    """
+    assert [s for s in V1_SUFFIXES if "burner" in s] == [
+        "telemetry/burner/modulation",
+        "telemetry/burner/state",
+    ]
     assert not any(s.startswith("guard/") for s in V1_SUFFIXES)
 
 

@@ -50,14 +50,74 @@ def test_la_fabrique_ne_prend_aucun_parametre() -> None:
     assert inspect.signature(build_production_profile).parameters == {}
 
 
-def test_un_seul_role_et_c_est_celui_qui_a_ete_caracterise() -> None:
-    """W4-C n'a caracterise que `setNiveauM1`. Le profil n'en expose pas d'autre.
+def test_les_quatre_roles_du_pont_historique_et_pas_un_de_plus() -> None:
+    """Parite de remplacement : exactement les quatre roles que le pont ecrit.
 
-    Liste FERMEE : un role ajoute sans campagne fait echouer ce test, ce qui est
-    exactement l'effet recherche.
+    Liste FERMEE : un cinquieme role fait echouer ce test, ce qui est exactement
+    l'effet recherche. Le pont historique `boiler_mqtt.py` v0.5 en ecrit quatre,
+    tous reellement utilises par ses consommateurs aval ; en declarer moins
+    interdirait le remplacement, en declarer plus ouvrirait une surface que rien
+    n'appelle.
     """
     profile = build_production_profile()
-    assert sorted(profile.commands) == ["heating_curve_shift"]
+    assert sorted(profile.commands) == [
+        "dhw_setpoint",
+        "heating_curve_shift",
+        "heating_curve_slope",
+        "heating_setpoint",
+    ]
+
+
+def test_les_quatre_roles_sont_tous_inscriptibles() -> None:
+    """Aucun role du profil de production n'est en lecture seule."""
+    profile = build_production_profile()
+    assert all(spec.writable for spec in profile.commands.values())
+
+
+def test_seule_la_pente_est_flottante() -> None:
+    """Trois roles entiers a tolerance nulle, un seul flottant.
+
+    La tolerance de la pente est une tolerance de REPRESENTATION : elle vaut
+    `1e-9`, soit cent millions de fois moins qu'un cran de pente (`0.1`).
+    """
+    from boilerack.core.profile import ValueType
+
+    profile = build_production_profile()
+    flottants = {
+        role for role, spec in profile.commands.items() if spec.type is ValueType.FLOAT
+    }
+    assert flottants == {"heating_curve_slope"}
+
+    for role, spec in profile.commands.items():
+        if role == "heating_curve_slope":
+            assert spec.confirm_tolerance == 1e-9
+            assert spec.confirm_tolerance < spec.step / 1_000_000
+        else:
+            assert spec.confirm_tolerance == 0.0
+
+
+def test_les_bornes_sont_celles_du_pont_historique() -> None:
+    """Chaque borne est celle que le pont historique applique en production."""
+    profile = build_production_profile()
+    attendu = {
+        "dhw_setpoint": (10.0, 60.0, 1.0),
+        "heating_setpoint": (5.0, 30.0, 1.0),
+        "heating_curve_shift": (-13.0, 40.0, 1.0),
+        "heating_curve_slope": (0.2, 3.5, 0.1),
+    }
+    obtenu = {
+        role: (spec.min, spec.max, spec.step)
+        for role, spec in profile.commands.items()
+    }
+    assert obtenu == attendu
+
+
+def test_chaque_role_cite_sa_provenance_de_bornes() -> None:
+    """`bounds_source` non vide et DISTINCTE par role : aucune borne recopiee."""
+    profile = build_production_profile()
+    sources = [spec.bounds_source for spec in profile.commands.values()]
+    assert all(sources)
+    assert len(set(sources)) == len(sources)
 
 
 def test_les_commandes_sont_celles_de_l_autorite() -> None:
@@ -216,13 +276,68 @@ def test_une_valeur_hors_grille_est_rejetee_sans_arrondi() -> None:
 
 
 def test_un_role_inconnu_du_profil_est_rejete() -> None:
-    """La liste des roles etant fermee, tout le reste est `unsupported_role`."""
+    """La liste des roles etant fermee, tout le reste est `unsupported_role`.
+
+    Le role temoin est une grandeur que le pont historique NE publie ni n'ecrit :
+    la temperature de depart, qui est une mesure et non une consigne.
+    """
     resultat = validate(
-        payload(rid(1), "heating_curve_slope", 1.8),
+        payload(rid(1), "supply_temperature", 30.0),
         build_production_profile(),
         START,
     )
     assert resultat.reason.value == "unsupported_role"
+
+
+def test_la_pente_est_acceptee_sur_sa_grille_et_rejetee_hors_grille() -> None:
+    """La pente accepte les crans de 0.1 et rejette ce qui tombe entre eux."""
+    from boilerack.core.validation import ValidatedCommand
+
+    profile = build_production_profile()
+
+    accepte = validate(payload(rid(2), "heating_curve_slope", 1.8), profile, START)
+    assert isinstance(accepte, ValidatedCommand)
+    assert accepte.target == pytest.approx(1.8)
+
+    hors_grille = validate(payload(rid(3), "heating_curve_slope", 1.85), profile, START)
+    assert not isinstance(hors_grille, ValidatedCommand)
+
+    hors_borne = validate(payload(rid(4), "heating_curve_slope", 3.6), profile, START)
+    assert not isinstance(hors_borne, ValidatedCommand)
+
+
+def test_l_ecs_est_bornee_et_ne_descend_pas_sous_dix() -> None:
+    """`dhw_setpoint` refuse ce qui sort de [10 ; 60], sans jamais ramener.
+
+    REJECT, jamais clamp : `9` ne devient pas `10`, et `61` ne devient pas `60`.
+    """
+    from boilerack.core.validation import ValidatedCommand
+
+    profile = build_production_profile()
+
+    for valeur in (10, 60):
+        admise = validate(payload(rid(5), "dhw_setpoint", valeur), profile, START)
+        assert isinstance(admise, ValidatedCommand)
+        assert admise.target == valeur
+
+    for valeur in (9, 61):
+        refusee = validate(payload(rid(6), "dhw_setpoint", valeur), profile, START)
+        assert not isinstance(refusee, ValidatedCommand)
+
+
+def test_la_consigne_chauffage_est_bornee() -> None:
+    """`heating_setpoint` refuse ce qui sort de [5 ; 30]."""
+    from boilerack.core.validation import ValidatedCommand
+
+    profile = build_production_profile()
+
+    for valeur in (5, 30):
+        admise = validate(payload(rid(7), "heating_setpoint", valeur), profile, START)
+        assert isinstance(admise, ValidatedCommand)
+
+    for valeur in (4, 31):
+        refusee = validate(payload(rid(8), "heating_setpoint", valeur), profile, START)
+        assert not isinstance(refusee, ValidatedCommand)
 
 
 # --------------------------------------------------------------------------

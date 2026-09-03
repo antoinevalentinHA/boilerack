@@ -61,6 +61,7 @@ from boilerack.read_surface.measurements import (
     MeasurementSpec,
     check_snapshot_period,
 )
+from boilerack.read_surface.measurements import apply_projection
 from boilerack.read_surface.payload import format_scalar
 from boilerack.read_surface.snapshot import build_snapshot, snapshot_to_json
 from boilerack.read_surface.state import ReadSurfaceState, complete_cycle, record_result
@@ -441,9 +442,21 @@ class ReadSurfacePublisher:
         if self._connection.consume_recovery():
             self._tenter(erreurs, self._online_topic, _ONLINE)
 
+        # MEMOISATION PAR CYCLE — deux mesures peuvent partager une commande
+        # (§4.3 : les deux grandeurs du brulleur viennent de `getBrennerStatus`).
+        # Sans ce cache, chacune couterait une invocation distincte, alors que le
+        # contrat n'en exige qu'une seule pour une meme commande dans un meme
+        # cycle. Le cache est LOCAL au cycle : rien n'est conserve d'un cycle a
+        # l'autre, et la fraicheur de chaque role reste celle de sa periode.
+        lectures: dict[str, object] = {}
+
         for spec in dues:
             # Une exception inattendue du lecteur remonte ici, sans cloture.
-            resultat = self._reader_or_raise().read(spec.read)
+            if spec.read in lectures:
+                resultat = lectures[spec.read]  # type: ignore[assignment]
+            else:
+                resultat = self._reader_or_raise().read(spec.read)
+                lectures[spec.read] = resultat
 
             if resultat.status is TransportStatus.OK:
                 # §4.6 : scalaire, PUIS etat, PUIS instantane.
@@ -451,7 +464,7 @@ class ReadSurfacePublisher:
                 self._tenter(
                     erreurs,
                     self._scalar_topics[spec.role],
-                    format_scalar(resultat.value),
+                    format_scalar(apply_projection(spec.projection, resultat.value)),
                 )
                 self._state = record_result(
                     self._state, spec.role, TransportStatus.OK, self._clock

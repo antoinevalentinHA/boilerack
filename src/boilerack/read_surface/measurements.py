@@ -33,6 +33,7 @@ Module PUR : aucune horloge, aucun reseau, aucun processus, aucun etat.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Final, Sequence
 
 __all__ = [
@@ -72,6 +73,36 @@ def default_fresh_max(period_s: int) -> int:
     return _FRESH_FACTOR * _check_positive_int(period_s, "period_s")
 
 
+class Projection(str, Enum):
+    """Transformation PURE appliquee a la valeur lue avant serialisation.
+
+    Le contrat §4.5 impose un payload NUMERIQUE : « une chaine numerique
+    decimale sans unite […] analysable comme un nombre fini ». Une projection ne
+    l'entame pas — elle transforme un nombre en un autre nombre. Elle n'existe
+    que pour les grandeurs qu'une seule lecture de transport rend sous plusieurs
+    formes utiles.
+
+    - `IDENTITY`            : la valeur lue, telle quelle. Defaut de toute mesure ;
+    - `POSITIVE_TO_BINARY`  : `1.0` si la valeur lue est strictement positive,
+      `0.0` sinon. Projection BINAIRE NUMERIQUE, jamais textuelle : la surface de
+      lecture ne publie pas `on` / `off`, et §4.5 demeure inchange. La derivation
+      d'un etat metier textuel appartient au consommateur aval.
+
+    La liste est FERMEE. Une projection n'est pas un point d'extension libre :
+    chacune doit etre justifiable par le contrat, et testable sans horloge.
+    """
+
+    IDENTITY = "identity"
+    POSITIVE_TO_BINARY = "positive_to_binary"
+
+
+def apply_projection(projection: Projection, value: float) -> float:
+    """Applique une projection a une valeur lue. Fonction PURE et totale."""
+    if projection is Projection.POSITIVE_TO_BINARY:
+        return 1.0 if value > 0 else 0.0
+    return value
+
+
 @dataclass(frozen=True)
 class MeasurementSpec:
     """Declaration d'une mesure de la surface de lecture.
@@ -80,7 +111,9 @@ class MeasurementSpec:
     - `read`   : commande de transport, chaine opaque, jamais interpretee ici ;
     - `suffix` : suffixe contractuel MQTT (§11) ;
     - `period_s` : periode de publication visee, non garantie (§4.2, §7) ;
-    - `fresh_max_s` : seuil de fraicheur, en secondes (§7.2).
+    - `fresh_max_s` : seuil de fraicheur, en secondes (§7.2) ;
+    - `projection` : transformation pure appliquee a la valeur lue avant
+      serialisation. `IDENTITY` pour toute mesure qui publie ce qu'elle lit.
 
     `read` et `suffix` n'ont AUCUN consommateur d'execution dans ce lot : la
     transition d'etat ne depend que du statut, et l'instantane s'indexe par
@@ -95,6 +128,7 @@ class MeasurementSpec:
     suffix: str
     period_s: int
     fresh_max_s: int
+    projection: Projection = Projection.IDENTITY
 
     def __post_init__(self) -> None:
         _check_non_empty(self.role, "role")
@@ -180,21 +214,42 @@ def _v1() -> tuple[MeasurementSpec, ...]:
         ),
         ("heating_curve_slope", "getNeigungM1", "telemetry/heating/curve/slope", 60),
         ("heating_curve_shift", "getNiveauM1", "telemetry/heating/curve/shift", 60),
+        (
+            "burner_modulation",
+            "getBrennerStatus",
+            "telemetry/burner/modulation",
+            30,
+            Projection.IDENTITY,
+        ),
+        (
+            "burner_state",
+            "getBrennerStatus",
+            "telemetry/burner/state",
+            30,
+            Projection.POSITIVE_TO_BINARY,
+        ),
     )
     specs = tuple(
         MeasurementSpec(
-            role=role,
-            read=read,
-            suffix=suffix,
-            period_s=period,
-            fresh_max_s=default_fresh_max(period),
+            role=entree[0],
+            read=entree[1],
+            suffix=entree[2],
+            period_s=entree[3],
+            fresh_max_s=default_fresh_max(entree[3]),
+            projection=entree[4] if len(entree) > 4 else Projection.IDENTITY,
         )
-        for role, read, suffix, period in brut
+        for entree in brut
     )
     _check_collection(specs)
     return specs
 
 
-#: Les HUIT mesures de la v1 (§4.2), dans l'ordre de la table normative — le
+#: Les DIX mesures de la v1 (§4.2), dans l'ordre de la table normative — le
 #: meme que celui de `TELEMETRY_SUFFIXES` (§11), ce qu'un test croise verifie.
+#:
+#: Les deux dernieres partagent la commande `getBrennerStatus` : §4.3 les
+#: reintegre, l'une brute et l'autre projetee en binaire numerique. Le partage
+#: de commande est licite — `_check_collection` ne l'interdit pas —, et le
+#: publieur memoise la lecture par cycle pour qu'il n'en coute pas une seconde
+#: invocation.
 V1_MEASUREMENTS: Final[tuple[MeasurementSpec, ...]] = _v1()

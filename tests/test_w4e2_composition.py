@@ -772,7 +772,12 @@ def test_b10_le_profil_compose_est_celui_de_production(paho_double) -> None:
     attendu = build_production_profile()
     obtenu = runtime.transaction.core._profile
     assert obtenu.name == attendu.name
-    assert sorted(obtenu.commands) == sorted(attendu.commands) == ["heating_curve_shift"]
+    assert sorted(obtenu.commands) == sorted(attendu.commands) == [
+        "dhw_setpoint",
+        "heating_curve_shift",
+        "heating_curve_slope",
+        "heating_setpoint",
+    ]
 
 
 def test_b18_une_seule_construction_de_paho_dans_tout_le_source() -> None:
