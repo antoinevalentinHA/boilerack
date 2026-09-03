@@ -1,5 +1,38 @@
 # `W4-R` — lot borné en lecture stricte : attribution de l'instance `A-5`
 
+> **Version 11 — après réaudit.** Aucun terrain. **`P-A5` demeure
+> `NON PRONONCÉE`. `P-9` demeure `NON DONNÉE`. `G3` demeure fermé.**
+>
+> | | Correction |
+> |---|---|
+> | **V11 · 1** | **La liste `MUST` du §10 portait un test PLUS FAIBLE que le §14.1** : *« postérieure à l'audit »* au lieu de *« postérieure aux deux »*, et *« nommer `W4-R` »* sans sa **version**, sans **audit du delta**, sans **intégration**, sans **rejeu unique**. Elle porte désormais **les QUATRE conditions, mot pour mot**, et conserve ses exigences de périmètre |
+> | **V11 · 2** | **La formule *« et à aucune autre »* neutralisait les garde-fous complémentaires.** Elle est **supprimée partout**. Les quatre conditions sont désormais le **NOYAU COMMUN**, et **les `MUST` comme les `MUST NOT` du §10 demeurent pleinement opposables** |
+> | **V11 · 3** | **Le §14.1 citait le §8 entre guillemets dans une rédaction qu'il ne porte plus.** La **fausse citation est retirée** ; le renvoi vise le **texte actuel** du §8, sans guillemets, et **aucun retour à un test « autorisation humaine nouvelle » seul** n'est possible |
+>
+> **Version 10 — après réaudit du correctif de rejeu.** Aucun terrain.
+>
+> | | Correction |
+> |---|---|
+> | **V10 · B1-B4** | **Le traitement de `/var/log/wtmp.db` était incohérent.** L'objet de `L5` le couvre désormais **explicitement**, aux côtés de `/var/log/wtmp` et de ses rotations. **Aucun quatrième lecteur n'est inventé** : les trois du §5.3 demeurent seuls licites. **Deux régimes de validation sont séparés** — conteneur plat et base de données —, les critères **`a`** et **`b`** cessant d'être opposés à une base pour laquelle ils n'ont pas de sens. À défaut de lecteur licite, l'objet est **constaté PRÉSENT mais INEXPLOITABLE sous ce lot**, sans improvisation. Le §11 rend désormais ses sorties **PAR OBJET** |
+> | **V10 · B5-B6** | **Le §14 se contredisait.** Il déclarait les deux prononcés sans effet **et** renvoyait leur portée à un arbitrage. Les deux prononcés sont **SANS EFFET**, **`P-A5` demeure `NON PRONONCÉE`**, et **aucune « portée à arbitrer » ne subsiste**. Les blocs périmés et dupliqués sont **fusionnés ou supprimés**, et les renvois de rejeu pointent le **§14.1** |
+> | **V10 · B7-B8** | **Trois sections portaient trois tests d'admissibilité divergents.** Le **§8**, le **§10** et le **§14.1** énoncent désormais les **MÊMES quatre conditions cumulatives**, et consignent que **les DEUX autorisations du 2026-09-03 sont consommées** |
+> | **V10 · B9** | **Le §6.3 avait été inséré au milieu du §6.2**, coupant deux clauses qui lui appartiennent. Il est **replacé après la fin réelle du §6.2** ; les clauses **« rang 7 »** et **« `A₁` non établi rend sans objet »** **demeurent dans le §6.2** |
+>
+> **Version 9 — lot CORRECTIF de REJEU, après la seconde exécution non close.**
+> Aucun terrain.
+>
+> **Deux exécutions sont désormais NON CLOSES**, et le §14 les consigne l'une et
+> l'autre. Le présent lot corrige **uniquement** les défauts qu'elles ont
+> révélés.
+>
+> | | Correction |
+> |---|---|
+> | **V9 · C1** | **`/var/log/wtmp.db` entre dans le périmètre licite de `L5`**, sous la **même discipline** que les autres sources : **présence constatée**, **lecture seulement si le lot la prévoit**, **aucune extrapolation**. La seconde exécution l'a découvert et **s'est correctement abstenue** de le lire, faute d'un acte le prévoyant — §5.3, §5 |
+> | **V9 · C2** | **La clôture n'était pas verrouillée.** Le rang 13 est désormais **le dernier acte, sans exception** : empreintes finales, analyse hors ligne, prononcé. **La clôture n'existe qu'après le prononcé**, et **après elle : aucune lecture de l'hôte, aucune corroboration, aucun acte supplémentaire** — §6.2, §6.3 |
+> | **V9 · C3** | **`RE-4` n'appelle AUCUNE corroboration.** Elle est satisfaite **par construction**, et **cela suffit**. Toute vérification sur l'hôte à son sujet est un **acte hors liste close** — c'est ce qui a rendu la seconde exécution non close — §9 |
+> | **V9 · C4** | **Historique** : la **première** exécution demeure non close (`RA-1` sur `who -b`) ; la **seconde** l'est aussi, sur **`RA-1`**, **`RA-8`** et, **subsidiairement**, **`RA-6`**. **Aucun de leurs prononcés n'est retenu**, et **`P-A5` n'est réputée prononcée en aucune branche** — §14 |
+> | **V9 · C5** | **Ce qu'un nouveau rejeu exigera** est énoncé : **audit du delta**, **intégration**, **autorisation humaine propre et nouvelle**, et **rejeu UNIQUE** — §14.1 |
+>
 > **Version 8 — lot CORRECTIF, après réaudit.** Aucun terrain.
 > **L'autorisation demeure `NON DONNÉE`. L'exécution du 2026-09-03 demeure
 > `NON CLOSE`. `P-A5` n'est pas prononcée. `G3` n'est pas rouvert.**
@@ -342,7 +375,7 @@ L'ordre du §6 est opposable.
 | **`L2`** | **relevé d'état des QUATRE unités** — `<unité-superviseur>`, `<unité-pont>`, `<unité-démon>`, `<timer-guard>`. **Propriétés relevées, nommément** : **état d'activité** · **sous-état** · **résultat** · **identifiant d'invocation** · **`ActiveEnterTimestamp`** · **compteur de relances, pour les seules unités de service** — la propriété est **inapplicable à `<timer-guard>`** | lecture | **`RE-2a`**, **`RE-2b`**, **`RE-2c`**, **`RE-5a`**, **`RE-5b`**, **`RA-3`** |
 | **`L3`** | lire la **configuration de journalisation du système** — le ou les fichiers qui décident de la **persistance** du journal | lecture de fichier | `S4` |
 | **`L4`** | **énumérer les démarrages** connus du journal | lecture | `S4` |
-| **`L5`** | lire les **enregistrements PERSISTANTS de démarrage et d'arrêt** — `/var/log/wtmp` et ses rotations, **et eux seuls** —, pour en tirer le **CARACTÈRE** du redémarrage : **commandé** ou non. Lecteurs, repli et caractérisation : **§5.3** | lecture | **le CARACTÈRE de `A`** — `S3` |
+| **`L5`** | lire les **enregistrements PERSISTANTS de démarrage et d'arrêt** — les **TROIS objets** du §5.3 : **`O-a`** `/var/log/wtmp` · **`O-b`** ses rotations · **`O-c`** `/var/log/wtmp.db`, **et eux seuls** —, pour en tirer le **CARACTÈRE** du redémarrage : **commandé** ou non. Objet, lecteurs, repli, régimes de validation et exploitabilité : **§5.3** | lecture | **le CARACTÈRE de `A`** — `S3` |
 | **`L6`** | lire **`<script-superviseur>`**, aux seules fins de déterminer : **(i)** le **puits de journalisation** de ses chemins terminaux · **(ii)** la **forme exacte de la commande de redémarrage machine** · **(iii)** la **forme exacte de la commande de redémarrage du pont** | lecture de fichier | `S2` |
 | **`L7`** | **si et seulement si `L6` établit un puits FICHIER** : **empreinte de ce puits prise AVANT de le lire**, puis lecture **bornée** à la fenêtre du §6.1 | lecture de fichier | `B`, `C` — `S2`, **`RE-1 bis`** |
 | **`L8`** | lire les **définitions d'unité** des **quatre** unités — pour établir **(i)** **qui peut commander** un redémarrage machine · **(ii)** **quelles dépendances propagent** un redémarrage · **(iii)** sur `<timer-guard>`, les **DIRECTIVES TEMPORELLES** qui gouvernent son échéance : `OnBootSec`, `OnStartupSec`, `OnActiveSec`, `OnUnitActiveSec`, `OnUnitInactiveSec`, `OnCalendar`, ainsi que l'**unité déclenchée** et son **type de service** | lecture de fichier | `B`, §7.1.1 — `S5` · **`RE-5b`** et **`RA-3`**, §9.2 |
@@ -450,13 +483,74 @@ L'ordre du §6 est opposable.
 
 #### L'objet, et lui seul
 
-`L5` porte sur **`/var/log/wtmp` et ses rotations** — les enregistrements
-**persistants** de démarrage et d'arrêt. **Et sur rien d'autre.**
+**`L5` porte sur TROIS objets, et sur eux seuls** — les enregistrements
+**persistants** de démarrage et d'arrêt.
+
+| | Objet | Nature |
+|---|---|---|
+| **O-a** | **`/var/log/wtmp`** | **conteneur plat** d'enregistrements de taille fixe |
+| **O-b** | **`/var/log/wtmp.1`** et rotations ultérieures | **conteneur plat**, même nature que `O-a` |
+| **O-c** | **`/var/log/wtmp.db`** | **base de données** — magasin persistant des implémentations récentes |
 
 | | |
 |---|---|
-| **DANS l'objet** | `/var/log/wtmp`, `/var/log/wtmp.1` et rotations ultérieures |
 | **HORS de l'objet** | `/var/run/utmp` — table **courante** des sessions —, et tout lecteur qui l'interroge, **`who` compris** — §4 |
+
+> **`O-c` est entré dans l'objet pour un motif de fait.** La seconde exécution
+> l'a **découvert** en énumérant les rotations, et **s'est correctement abstenue
+> de le lire** : aucun acte ne le prévoyait alors. **Son abstention était juste ;
+> l'exclusion, elle, ne l'était pas** — ce fichier est, sur les implémentations
+> qui l'emploient, **le magasin persistant des enregistrements de démarrage**,
+> c'est-à-dire l'objet même que `L5` cherche.
+
+> **Clause — discipline commune aux trois objets, sans allègement.**
+>
+> | | |
+> |---|---|
+> | **présence CONSTATÉE d'abord** | l'existence, la taille et la date de **chacun** des trois sont **constatées avant toute lecture** |
+> | **lecture SEULEMENT si le lot la prévoit** | elle relève de **`L5`**, à son rang, et d'aucun autre acte. **Aucun acte nouveau n'est créé** |
+> | **lecteurs** | **les TROIS du présent §5.3, et EUX SEULS.** **Aucun quatrième lecteur n'est admis**, sous quelque forme et pour quelque objet que ce soit |
+> | **AUCUNE extrapolation** | ce qu'un objet ne porte pas **ne prouve rien**. **Aucune attribution ne MAY être tirée d'une absence** — §7.3 |
+> | **absence de l'objet** | `L5` la **constate** et poursuit. Elle **n'est pas un manquement**, et **ne fonde aucun constat** |
+
+#### Deux régimes de validation, selon la NATURE de l'objet
+
+> **Les critères `a` et `b` supposent un conteneur plat d'enregistrements de
+> taille fixe.** Les opposer à une base de données n'aurait **aucun sens** : une
+> base ne se découpe pas en tranches égales, et sa « taille minimale
+> d'enregistrement » n'existe pas.
+
+| | **O-a / O-b** — conteneur plat | **O-c** — base de données |
+|---|---|---|
+| **critère `a`** couverture intégrale | **APPLICABLE** | **NON APPLICABLE** |
+| **critère `b`** minimalité | **APPLICABLE** | **NON APPLICABLE** |
+| **critère `c`** champ temporel | **APPLICABLE** | applicable **seulement** si un lecteur licite en rend des enregistrements |
+| **critère `d`** témoin indépendant | **APPLICABLE** | **APPLICABLE**, dès lors que des enregistrements sont rendus |
+| **opération 2** — constat d'absence | **séparée**, sur parse validé | **séparée**, et **conditionnée à l'exploitabilité** |
+
+> **Clause — `O-c` PRÉSENT mais INEXPLOITABLE, et la conduite qui s'ensuit.**
+>
+> Si **aucun** des trois lecteurs licites — **`last`**, **`utmpdump`**, ou le
+> **repli 3** — ne rend d'enregistrement à partir de `O-c`, alors :
+>
+> 1. `O-c` est consigné **PRÉSENT**, avec sa **taille**, sa **date** et son
+>    **empreinte** ;
+> 2. il est consigné **INEXPLOITABLE SOUS CE LOT** ;
+> 3. **aucune improvisation** : ni lecteur ajouté, ni format supposé, ni contenu
+>    inféré ;
+> 4. **aucun constat, positif ou négatif, n'en est tiré** — ni sur `A₂`, ni sur
+>    quoi que ce soit.
+>
+> **Le repli 3, tel que le présent § le définit, analyse un conteneur plat.**
+> S'il ne peut pas rendre `O-c` — les critères `a` et `c` n'admettant aucune
+> taille —, il **ne s'applique pas** à cet objet, et **`O-c` est inexploitable**.
+> **Ce n'est pas un échec du lot : c'est sa borne.**
+>
+> **Ce que cette inexploitabilité laisse ouvert**, et qu'elle **ne comble pas** :
+> `O-c` pourrait porter les enregistrements de démarrage que `O-a` ne porte pas.
+> **Le lot ne le suppose pas**, **ne l'exclut pas**, et **n'ajoute aucun lecteur
+> pour le savoir**. **Ajouter un lecteur relèverait d'un arbitrage humain et
+> d'une correction du lot**, non de l'exécutant.
 
 > **La distinction n'est pas formelle.** `who -b` lit la table **courante**, non
 > le fichier persistant. Ce sont **deux fichiers différents**, et les confondre
@@ -622,7 +716,7 @@ L'ordre du §6 est opposable.
 | **10** | **`L7`** — *si et seulement si* `L6` a établi un puits fichier | empreinte prise **avant lecture**, puis lignes de la fenêtre | `L7` sans objet |
 | **11** | **`L9`**, puis **`L10`**, puis **`L11`** si non fait au rang 1 | rétention établie puis événements · lignes de la fenêtre · pièces de préflight | consigner |
 | **12** | **`L2`** et **`L0`** — **répétition finale** | état et démarrage **inchangés** | un écart est **`RA-3`** ou **`RA-4`** |
-| **13** | **`L12`** — empreintes finales, puis **analyse hors ligne** et **prononcé** | empreintes **identiques** · l'un des deux verdicts du §2.2 | un écart d'empreinte est **`RA-2`** |
+| **13** | **`L12`** — empreintes finales, puis **analyse hors ligne**, puis **PRONONCÉ**. **C'est le DERNIER acte du lot, sans exception** — §6.3 | empreintes **identiques** · l'un des deux verdicts du §2.2 | un écart d'empreinte est **`RA-2`** |
 
 > **Un acte ne se déplace pas.** Un acte exécuté hors de son rang est un acte
 > hors liste close — **`RA-1`**.
@@ -659,6 +753,42 @@ L'ordre du §6 est opposable.
 > **trois preuves de non-mutation sur cinq**, et rendait la restauration du §9
 > **indémontrable** — alors même que le lot n'a rien muté. **Un lot qui ne peut
 > pas prouver sa propre innocuité est un lot non clos.**
+
+### 6.3 Verrou de clôture
+
+> **La seconde exécution est devenue non close APRÈS son prononcé**, pour avoir
+> lu l'hôte une fois de plus. Le lot n'interdisait pas explicitement cette
+> lecture ; **il l'interdit désormais**.
+
+> **Clause — la clôture, et ce qu'elle ferme.**
+>
+> **Le rang 13 comporte trois opérations, dans cet ordre, et rien d'autre :**
+>
+> | | Opération |
+> |---|---|
+> | **1** | **`L12`** — empreintes finales |
+> | **2** | **analyse hors ligne**, sur la matière déjà figée |
+> | **3** | **PRONONCÉ** — l'un des deux verdicts du §2.2 |
+>
+> **La CLÔTURE n'existe qu'après le prononcé.** Un lot arrêté avant lui est
+> **non clos**, quelle qu'en soit la raison — §8.
+>
+> **À compter du prononcé, et sans exception :**
+>
+> | | |
+> |---|---|
+> | **aucune lecture de l'hôte** | quelle qu'en soit la nature, quelle qu'en soit la brièveté |
+> | **aucune corroboration** | d'un verdict, d'une preuve `RE`, d'un critère `RA`, ni de quoi que ce soit |
+> | **aucun acte supplémentaire** | y compris un acte de la liste close, qui serait alors **hors de son rang** |
+>
+> **Le franchissement est `RA-1`** — acte hors liste close ou hors de son rang —
+> **et `RA-8`** — franchissement d'une frontière du §4. **Il rend le lot NON
+> CLOS, alors même que le prononcé a eu lieu** : un prononcé suivi d'un acte
+> illicite ne clôt rien.
+>
+> **Ce qui demeure licite après le prononcé** : l'**analyse hors ligne** de la
+> matière **déjà figée**, et la **rédaction du rapport**. Ni l'une ni l'autre ne
+> touche l'installation.
 
 ---
 
@@ -1019,8 +1149,27 @@ Et le corpus porte, sur **cette source précise**, un fait qui l'aggrave.
 > d'état ou de date de démarrage de `<unité-superviseur>` n'est PAS une
 > divergence. C'est le phénomène observé. »*
 
-> **Aucune seconde tentative dans la même fenêtre**, et **aucun rejeu** : le lot
-> ne se rejoue pas après un `STOP` sans une **autorisation humaine nouvelle**.
+> **Aucune seconde tentative dans la même fenêtre**, et **aucun rejeu.**
+>
+> **Un rejeu n'est admissible qu'aux QUATRE conditions CUMULATIVES suivantes**,
+> détaillées au §14.1 :
+>
+> | # | Condition |
+> |---|---|
+> | **1** | **AUDIT INDÉPENDANT DU DELTA** |
+> | **2** | **INTÉGRATION** |
+> | **3** | **AUTORISATION HUMAINE PROPRE ET NOUVELLE**, **postérieure aux DEUX** — l'audit et l'intégration —, **nommant explicitement `W4-R` ET sa version** |
+> | **4** | **REJEU UNIQUE** — **une exécution par autorisation**, et une seule |
+>
+> **Ces quatre conditions sont le NOYAU COMMUN d'admissibilité, et non la
+> totalité des exigences.** Elles **ne dispensent d'AUCUNE autre obligation du
+> présent document**, et les **`MUST`** comme les **`MUST NOT`** du §10 demeurent
+> **pleinement opposables** — notamment l'interdiction de déduire une
+> autorisation de l'audit, de l'intégration ou du merge, et l'interdiction
+> d'excéder le périmètre autorisé.
+>
+> **Le §8, le §10 et le §14.1 portent le MÊME noyau, mot pour mot.** Aucun d'eux
+> ne l'allège, et aucun n'en énonce un divergent.
 
 ---
 
@@ -1044,7 +1193,7 @@ inexécutables sans franchir `RA-1`.
 | **`RE-2b`** | **`<unité-superviseur>`**, dont le **cycle périodique est nominal et attendu** : **aucun acte du lot ne l'a modifiée, démarrée, arrêtée ni redémarrée**, et son **compteur de relances demeure nul**. **Son identifiant d'invocation et son état CHANGENT à chaque cycle : ce n'est PAS une divergence** | **`L2`**, répété | 4 et 12 |
 | **`RE-2c`** | **`<timer-guard>`** : **actif** au début et à la fin, **`ActiveEnterTimestamp` inchangé**, et **alternance `running` / `waiting` admise**. **Aucun compteur de relances n'est exigé** — la propriété est **inapplicable à une unité `.timer`** | **`L2`**, répété | 4 et 12 |
 | **`RE-3`** | **identifiant du démarrage courant** — **inchangé** en fin de lot ; sa modification est **`RA-4`** | **`L0`**, répété | 2 et 12 |
-| **`RE-4`** | **aucun fichier créé, modifié ou supprimé sur l'hôte** — les sorties sont **rapatriées et figées hors de l'installation** ; aucun acte de la liste close n'écrit | par construction — §5 | tous |
+| **`RE-4`** | **aucun fichier créé, modifié ou supprimé sur l'hôte** — les sorties sont **rapatriées et figées hors de l'installation** ; aucun acte de la liste close n'écrit. **Elle est satisfaite PAR CONSTRUCTION, et cela SUFFIT** — §9.3 | par construction — §5 | tous |
 | **`RE-5a`** | **état de `<unité-pont>` et de `<unité-démon>`** en fin de lot, **identique** à celui du début | **`L2`**, répété | 4 et 12 |
 | **`RE-5b`** | **régime de `<unité-superviseur>` et de `<timer-guard>` demeuré NOMINAL**, établi **avec les seules prises de `L2`** : **`Result` = succès** aux deux prises pour les deux unités · **compteur de relances nul** aux deux prises pour l'unité de service · **`<timer-guard>` actif** aux deux prises, **`ActiveEnterTimestamp` inchangé** · **et, si une activation est ÉTABLIE DUE au sens du §9.2 : `InvocationID` du superviseur CHANGÉ** ; **sinon, le cycle n'est pas certifié, et `RE-5b` le déclare**. **L'état instantané du superviseur n'est PAS comparé**, il varie par construction | **`L2`**, répété | 4 et 12 |
 
@@ -1095,6 +1244,27 @@ inexécutables sans franchir `RA-1`.
 > *« depuis le rang 3 »* — **une promesse que le §9.1 contredisait dans le même
 > document**. Les deux preuves sont désormais **distinctes**, avec des
 > **couvertures distinctes**, et **le rapport ne peut plus les confondre**.
+
+### 9.3 `RE-4` — aucune corroboration, et le motif
+
+> **Clause — `RE-4` n'appelle AUCUN acte de vérification.**
+>
+> Elle est satisfaite **par construction** : **aucun acte de `L0` à `L12`
+> n'écrit sur l'hôte**, et les sorties sont **rapatriées et figées hors de
+> l'installation**. **Cela suffit, et rien de plus n'est requis.**
+>
+> **Aucune corroboration sur l'hôte ne MAY être entreprise à son sujet** — ni
+> avant le rang 13, ni après.
+>
+> **Une telle corroboration serait un acte hors liste close**, donc **`RA-1`** ;
+> conduite après le prononcé, elle serait **de surcroît `RA-8`**, par le verrou
+> du §6.3.
+
+> **C'est exactement ce qui a rendu la seconde exécution non close**, et le §14
+> le consigne. **Une preuve établie par construction ne se vérifie pas : elle se
+> déduit de la liste close elle-même.** Aller la constater sur l'installation,
+> c'est sortir de cette liste — donc détruire la preuve qu'on croyait
+> renforcer.
 
 ### 9.2 `RE-5b` — le cycle doit avoir EU LIEU, et non seulement être possible
 
@@ -1204,23 +1374,47 @@ inexécutables sans franchir `RA-1`.
 **Le présent document ne l'accorde pas, ne la sollicite pas implicitement, et
 n'en préjuge pas.**
 
-> **Clause — l'autorisation du 2026-09-03 est CONSOMMÉE.** Elle a permis
-> l'exécution consignée au §14, laquelle est **NON CLOSE**. **Elle ne couvre
-> aucune réexécution**, ni en tout ni en partie.
+> **Clause — les DEUX autorisations du 2026-09-03 sont CONSOMMÉES.**
 >
-> **Toute nouvelle tentative exige une AUTORISATION HUMAINE NOUVELLE**,
-> explicite, distincte, et **postérieure à l'audit de la présente version**.
-> Elle **MUST NOT** être déduite de l'autorisation consommée, ni de
-> l'intégration du présent correctif.
+> | Autorisation | Exécution qu'elle a permise | État |
+> |---|---|---|
+> | celle du **matin** | `07:49:10Z` → `07:59:41Z`, sous V4 | **NON CLOSE** — §14 |
+> | celle de **`10:0x`** | `10:06:53Z` → `10:11:05Z`, sous V8 | **NON CLOSE** — §14 |
+>
+> **Ni l'une ni l'autre ne couvre une réexécution**, ni en tout ni en partie.
+>
+> **Toute nouvelle tentative est soumise aux QUATRE conditions CUMULATIVES
+> suivantes**, détaillées au §14.1 :
+>
+> | # | Condition |
+> |---|---|
+> | **1** | **AUDIT INDÉPENDANT DU DELTA** |
+> | **2** | **INTÉGRATION** |
+> | **3** | **AUTORISATION HUMAINE PROPRE ET NOUVELLE**, **postérieure aux DEUX** — l'audit et l'intégration —, **nommant explicitement `W4-R` ET sa version** |
+> | **4** | **REJEU UNIQUE** — **une exécution par autorisation**, et une seule |
+>
+> **Ces quatre conditions sont le NOYAU COMMUN d'admissibilité, et non la
+> totalité des exigences.** Elles **ne dispensent d'AUCUNE autre obligation du
+> présent document**, et les **`MUST`** comme les **`MUST NOT`** du §10 demeurent
+> **pleinement opposables** — notamment l'interdiction de déduire une
+> autorisation de l'audit, de l'intégration ou du merge, et l'interdiction
+> d'excéder le périmètre autorisé.
+>
+> **Le §8, le §10 et le §14.1 portent le MÊME noyau, mot pour mot.**
 
 **L'autorisation, si elle est donnée, MUST :**
 
+**Les quatre premières lignes sont le noyau commun du §8 et du §14.1, mot pour
+mot. Les deux dernières sont les exigences de périmètre propres au présent §.**
+
 | # | |
 |---|---|
-| **1** | être **explicite, distincte et postérieure à l'audit** du présent document |
-| **2** | **nommer `W4-R`** |
-| **3** | ne porter que sur les **TREIZE actes** de la liste close du §5 — **`L0` à `L12`** —, **dans l'ordre du §6**, et sur aucun autre |
-| **4** | **ne porter aucune mutation**, d'aucune nature |
+| **1** | être précédée d'un **AUDIT INDÉPENDANT DU DELTA** |
+| **2** | être précédée de l'**INTÉGRATION** de la version auditée |
+| **3** | être **explicite, distincte**, **postérieure aux DEUX** — l'audit et l'intégration —, et **nommer explicitement `W4-R` ET sa version** |
+| **4** | ne permettre qu'un **REJEU UNIQUE** — **une exécution par autorisation**, et une seule |
+| **5** | ne porter que sur les **TREIZE actes** de la liste close du §5 — **`L0` à `L12`** —, **dans l'ordre du §6**, et sur aucun autre |
+| **6** | **ne porter aucune mutation**, d'aucune nature |
 
 **Elle MUST NOT :**
 
@@ -1251,7 +1445,7 @@ n'en préjuge pas.**
 | **8** | les preuves **`RE-1`**, **`RE-1 bis`**, **`RE-2a`**, **`RE-2b`**, **`RE-2c`**, **`RE-3`**, **`RE-4`**, **`RE-5a`** et **`RE-5b`**, avec l'acte et le rang qui les ont produites |
 | **8 ter** | pour **`RE-1 bis`** : l'état du puits — **découvert** ou **inexistant**. S'il a été découvert, les **deux empreintes** (rangs 10 et 13) **et la réserve de couverture partielle du §9.1, nommément** : la couverture court **de la découverte à la fin du lot**, et **jamais rétroactivement** |
 | **8 bis** | la liste des **répétitions structurées** de `L0` et `L2` effectivement exécutées, avec leur horodatage et leur motif |
-| **8 quater** | pour **`L5`** : le **lecteur employé** parmi les trois du §5.3, le **motif** du repli s'il a été employé, la **concordance d'empreinte** avant et après rapatriement, et — si un format a été découvert — le **témoin retenu, son type, ce qui le rend indépendant**, les **éléments de cohérence structurelle**, et **tout parse écarté**. **La validation structurelle et le constat d'absence de `BOOT_TIME`/`RUN_LVL` sont rapportés SÉPARÉMENT** |
+| **8 quater** | pour **`L5`**, et **OBJET PAR OBJET** — `O-a`, `O-b`, `O-c` — : **présence ou absence** · **taille, date et empreinte** si présent · **lecteur réellement employé** parmi les trois du §5.3, ou le constat qu'**aucun n'a rendu d'enregistrement** · le **motif** du repli s'il a été employé · la **concordance d'empreinte** avant et après rapatriement · la **validation applicable à sa nature** — quatre critères pour un conteneur plat, `c` et `d` seuls pour une base —, **satisfaite un par un**, dont la **taille écartée au titre de la minimalité** s'il y en a une · le **témoin retenu, son type, ce qui le rend indépendant** · et enfin **EXPLOITABLE ou INEXPLOITABLE sous ce lot**. **La validation de format et le constat d'absence de `BOOT_TIME`/`RUN_LVL` sont rapportés SÉPARÉMENT, pour chaque objet** |
 | **9** | tout **`RA`** atteint, **prononcé ou non**, et le fait qu'il l'ait été ou non |
 | **10** | ce qui **demeure non établi** |
 
@@ -1335,33 +1529,109 @@ Il borne un acte de lecture, le referme, et s'arrête là.
 
 ---
 
-## 14. Statut de l'exécution du 2026-09-03
+## 14. Statut des exécutions du 2026-09-03 — **DEUX, toutes deux NON CLOSES**
 
-> **Elle est NON CLOSE.** `RA-1` a été **atteint et prononcé à
-> l'homologation** : `who -b` a été employé au titre de `L5`, alors qu'il lit
-> `/var/run/utmp` — la table **courante** — et non `/var/log/wtmp`. **Ce sont
-> deux objets distincts**, et l'acte était donc **hors liste close**.
+> **Aucune des deux n'a valablement prononcé.** Leurs verdicts respectifs **ne
+> sont pas retenus**, et **`P-A5` demeure `NON PRONONCÉE`** — ni en branche
+> **(a)**, ni en branche **(b)**.
 
-**Ce que le présent correctif fait, et ne fait pas :**
+### Première exécution — `07:49:10Z` → `07:59:41Z`, sous `W4-R` V4
+
+> **NON CLOSE.** `RA-1` **atteint et prononcé à l'homologation** : **`who -b`** a
+> été employé au titre de `L5`, alors qu'il lit `/var/run/utmp` — la table
+> **courante** — et non `/var/log/wtmp`. **Ce sont deux objets distincts**, et
+> l'acte était donc **hors liste close**.
+
+### Seconde exécution — `10:06:53Z` → `10:11:05Z`, sous `W4-R` V8
+
+> **NON CLOSE.** Un **acte de lecture sur l'hôte a été exécuté APRÈS le rang 13**
+> — une énumération des fichiers récemment modifiés, destinée à **corroborer
+> `RE-4`**. **Aucun acte de `L0` à `L12` ne la prévoit**, le §9 produisant `RE-4`
+> **par construction**.
+
+**Trois critères sont consignés à ce titre, dans cet ordre :**
+
+| Réf | Qualification | Motif |
+|---|---|---|
+| **`RA-1`** | **atteint** | *« un acte **hors liste close** du §5, ou hors de son rang au §6 »*. L'acte n'est prescrit par aucun des treize |
+| **`RA-8`** | **atteint** | *« une frontière du §4 est franchie »* — le §4 interdit d'*« exécuter un acte **hors de la liste close du §5** »* |
+| **`RA-6`** | **atteint, à titre SUBSIDIAIRE** | *« son périmètre serait excédé »*. L'autorisation portait *« exactement les actes `L0…L12` »* et *« aucun acte supplémentaire »*. Subsidiaire : il n'ajoute rien à `RA-1` et `RA-8`, mais il est **dû**, et l'omettre serait incomplet |
+
+> **La sortie brute de l'acte litigieux est MANQUANTE** — elle n'a pas été figée.
+> **Elle n'est pas recréée** : la recréer exigerait une nouvelle lecture de
+> l'hôte.
+
+> **Le prononcé de cette seconde exécution n'est PAS retenu.** Un `STOP` n'est
+> pas un verdict — §8 —, et **un prononcé suivi d'un acte illicite ne clôt rien**
+> — §6.3. **Le verdict n'est réécrit ni en branche (a), ni en branche (b) : il
+> est SANS EFFET.**
+
+### Portée des deux prononcés — **SANS EFFET**, sans réserve
+
+> **Les deux prononcés sont SANS EFFET.** Un `STOP` n'est pas un verdict — §8 —,
+> et un prononcé suivi d'un acte illicite ne clôt rien — §6.3. **Une exécution
+> non close n'a pas prononcé valablement.**
+>
+> **`P-A5` demeure `NON PRONONCÉE`** — ni en branche **(a)**, ni en branche
+> **(b)**.
+>
+> **Aucune « portée à arbitrer » ne subsiste.** Les versions antérieures
+> renvoyaient la portée de ces verdicts à un arbitrage humain : **cette réserve
+> est retirée**, car elle contredisait le constat d'absence d'effet. **Un verdict
+> sans effet n'a pas de portée à arbitrer.**
+
+**Ce que le présent lot fait, et ne fait pas :**
 
 | | |
 |---|---|
-| il **corrige le lot** pour les tentatives **futures** | §5.3, §9, §8 |
-| il **ne corrige pas le rapport terrain passé** | ce rapport demeure **la consignation d'une exécution NON CLOSE**, et **MUST NOT** être réécrit |
-| il **ne rejoue rien** | aucune réexécution n'est autorisée — §10 |
-| il **ne prononce pas `P-A5`** | le verdict `INSTANCE NON ATTRIBUABLE` du 2026-09-03 appartient à une exécution non close ; **sa portée relève de l'arbitrage humain**, non du présent document |
+| il **corrige le lot** pour les tentatives **futures** | §5.3, §6.3, §9.3, §14.1 |
+| il **ne corrige aucun des deux rapports terrain** | ils demeurent la **consignation d'exécutions NON CLOSES**, et **MUST NOT** être réécrits |
+| il **ne rejoue rien** | aucune réexécution n'est autorisée — §14.1 |
+| il **ne prononce pas `P-A5`** | et **ne réécrit aucun des deux verdicts**, ni en branche (a), ni en branche (b) |
 | il **ne rouvre pas `G3`** | et **n'ouvre aucune `P-9`** |
 
-> **Un `STOP` n'est pas un verdict** — §8. Une exécution arrêtée sur `RA-1`
-> **n'a pas prononcé valablement** : le dire est préférable à laisser croire le
-> contraire.
+> **Ce que les deux exécutions ont néanmoins produit, et qui demeure au
+> dossier.** Leurs pièces figées — empreintes, relevés d'état, script du
+> superviseur, définitions d'unité, `wtmp` — sont **conservées telles quelles**,
+> et **ne sont ni détruites ni complétées**. Ce sont elles qui ont révélé les
+> défauts que les versions V5 à V10 corrigent. **Une exécution non close peut
+> instruire son propre lot ; elle ne peut pas prononcer à sa place.**
 
-> **Ce que l'exécution a néanmoins établi, et qui demeure au dossier.** Les
-> pièces figées — empreintes, relevés d'état, script du superviseur,
-> définitions d'unité, `wtmp` — sont **conservées telles quelles**, et **ne sont
-> ni détruites ni complétées**. Ce sont elles qui ont révélé les deux défauts
-> que la présente version corrige. **Une exécution non close peut instruire son
-> propre lot** ; elle ne peut pas prononcer à sa place.
+### 14.1 Ce qu'un NOUVEAU REJEU exigera
+
+> **Aucun rejeu n'est autorisé par le présent document.** Ce qui suit énonce les
+> conditions, il ne les remplit pas.
+
+| # | Condition | Portée |
+|---|---|---|
+| **1** | **AUDIT DU DELTA** — la présente version, et **elle seule**, doit être auditée. L'audit porte sur **ce qui change depuis la V8**, non sur l'ensemble du lot | indépendant ; **l'exécutant ne peut pas auditer ce qu'il a produit** |
+| **2** | **INTÉGRATION** — la version auditée doit être **intégrée au dépôt**, sur branche dédiée, avec fidélité byte-à-byte vérifiée | le merge demeure **humain** |
+| **3** | **AUTORISATION HUMAINE PROPRE ET NOUVELLE** — explicite, distincte, **postérieure aux DEUX précédentes**, c'est-à-dire à l'**audit** et à l'**intégration**, **nommant explicitement `W4-R` ET sa version** | elle **MUST NOT** être déduite des **deux autorisations consommées du 2026-09-03** — §10, ni de l'audit, ni de l'intégration, ni du merge |
+| **4** | **REJEU UNIQUE** — **une exécution par autorisation**, et une seule | un `STOP` **n'ouvre pas** un essai suivant : il exige **une nouvelle boucle complète**, des conditions 1 à 4. **Deux `STOP` ont déjà eu lieu** — §14 |
+
+> **Les deux autorisations du 2026-09-03 sont CONSOMMÉES** — le §10 les
+> énumère. **Aucune ne couvre un rejeu**, ni en tout ni en partie.
+>
+> **Ces quatre conditions sont le NOYAU COMMUN d'admissibilité, et non la
+> totalité des exigences.** Elles **ne dispensent d'AUCUNE autre obligation du
+> présent document**, et les **`MUST`** comme les **`MUST NOT`** du §10 demeurent
+> **pleinement opposables** — notamment l'interdiction de déduire une
+> autorisation de l'audit, de l'intégration ou du merge, et l'interdiction
+> d'excéder le périmètre autorisé.
+>
+> **Le §8 et le §10 portent ce même noyau, mot pour mot**, et **aucun des trois
+> ne l'allège**.
+
+> **L'arbitrage humain qui avait levé la clause de rejeu du §8 était borné à la
+> seconde exécution**, et **il est épuisé**. La clause de rejeu du §8 **reprend
+> son plein effet, dans sa rédaction ACTUELLE** — c'est-à-dire les **quatre
+> conditions cumulatives** ci-dessus, et non le seul test d'une *autorisation
+> humaine nouvelle*, que les versions antérieures portaient et qui **n'est plus
+> le texte du §8**.
+>
+> **Aucun retour à ce test isolé n'est possible.** Une autorisation nouvelle,
+> **seule**, ne rend aucun rejeu admissible : les conditions **1**, **2** et
+> **4** demeurent exigibles.
 
 ---
 
@@ -1377,3 +1647,6 @@ Il borne un acte de lecture, le referme, et s'arrête là.
 | **6** | Après réaudit du correctif. Aucun terrain. `B1` : **la V5 laissait un démarrage ultérieur devenir silencieusement `A₁`** — nouveau **§7.1.0** : `L0` ne rend qu'un **instant candidat**, et une **clause d'identité à deux constats** vérifie qu'il correspond au redémarrage **étudié** du préflight `G.2` ; le constat (ii) est **positif**, fondé sur la continuité du temps de fonctionnement ; **à défaut, `A₁` demeure non établi** et **ne définit aucune fenêtre**. `B2` : **le motif témoin était circulaire** — il exigeait un `BOOT_TIME` pour valider un format dont l'objet peut n'en porter aucun ; le témoin **MAY être d'un autre type du même objet**, et la **validation structurelle** est **séparée** du **constat d'absence de `BOOT_TIME`/`RUN_LVL`**, qu'un parse structurellement validé **peut établir sans présupposer** que ces types existent. `B3` : **`L2` est étendue nommément** — état, sous-état, résultat, invocation, **`ActiveEnterTimestamp`**, relances pour les seules unités de service —, **`RE-5b` est réénoncée sur ce que les deux prises rendent réellement**, la **« cadence tenue » cesse d'être exigée**, et **`RA-3` ne s'oppose plus que sur les propriétés que `L2` relève**. `B4` : nouveau **§5.4** — **règle positive de bornage de l'exploitation** autour de la date du préflight, la caractérisation du §5.3 n'étant autorisée **que comme instrumentation** et **ne levant pas** ce bornage. **Propagations** : **`S3`** ne porte plus l'instant, seulement le **caractère / `A₂`** ; le **rang 4** nomme `RE-2a`, `RE-2b` et `RE-2c`. **Autorisation toujours `NON DONNÉE`. Exécution du 2026-09-03 toujours `NON CLOSE`. `P-A5` non prononcée. `G3` non rouvert.** |
 | **7** | Après réaudit du correctif. Aucun terrain. `B1-a` : **le constat (ii) de la V6 était TAUTOLOGIQUE** — l'instant candidat étant dérivé du temps de fonctionnement, la vérification ne pouvait pas échouer ; **retiré**. Il est reconnu que **`L0` ne rend que le dernier démarrage**, et `A₁` n'est acquis que si celui-ci est rattaché **de façon univoque** au redémarrage étudié, par **`L4` ou `L5`** et **par aucune source ajoutée** ; **deux cas laissant `A₁` non établi sont nommés**, dont celui de **plusieurs redémarrages possibles dans le préflight**. `B1-b` : le §6.2, rang 7, **n'écrit plus que `A₁` est acquis au rang 2** — le rang 2 ne rend qu'un **candidat**, et la fenêtre n'existe qu'après la clause d'identité. `B2-a` : la **« séquence chronologique cohérente » est SUPPRIMÉE** comme critère — les enregistrements `utmp` étant **mis à jour en place**, le conteneur n'est pas ordonné, et ce critère aurait **rejeté le format réel** ; **aucun critère d'ordre n'est opposable**. `B2-b` : la validation structurelle repose sur **quatre critères cumulatifs** — **couverture intégrale**, **minimalité**, champ temporel, témoin indépendant — ; **un parse sautant un enregistrement sur deux MUST NOT être retenu**, et **aucun constat d'absence ne peut être fondé sur un parse partiel**. `B3` : nouveau **§9.2** — pour un lot couvrant **au moins une période du timer**, `RE-5b` exige un **changement positif de l'`InvocationID`** du superviseur ; **à défaut, `RA-3` se déclenche** ; les autres protections sont conservées et **aucune cadence n'est prétendue**. **`B4` non touché. Autorisation toujours `NON DONNÉE`. Exécution du 2026-09-03 toujours `NON CLOSE`. `P-A5` non prononcée. `G3` non rouvert.** |
 | **8** | Après réaudit du correctif. Aucun terrain. **Blocage 1** : **`T` n'avait aucune source** — le §9.2 invoquait une *« période déclarée lue par `L8` »* que **`L8` ne lisait pas**, et la notion était **ambiguë**. **`L8` est étendu nommément** aux directives temporelles de `<timer-guard>` — `OnBootSec`, `OnStartupSec`, `OnActiveSec`, `OnUnitActiveSec`, `OnUnitInactiveSec`, `OnCalendar`, unité déclenchée et type de service —, sa colonne `Sert` propagée vers **`RE-5b`** et **`RA-3`**, et la **condition d'activation due est définie PAR MODE**. **Blocage 2** : **la V7 rendait à `L5` la capacité de porter des instants de démarrage**, que la V6 lui avait retirée — **contradiction interne** ; la condition (ii) du §7.1.0 **repose désormais sur `L4` SEUL**, ses **deux causes d'échec** sont nommées, **`L4` est propagé comme porteur de l'unicité de `A₁`**, et **`L5` ne porte aucun instant de démarrage, en aucune circonstance**. **Non bloquant** : la formule `Δ ≥ T` produisait un **faux positif sur un `oneshot`** — sous `OnUnitInactiveSec`, **l'échéance repart à la fin de l'exécution**, l'intervalle valant `durée + T_i` et la durée n'étant **pas dans l'objet de `L2`** ; la condition est réénoncée par mode, et **si une activation n'est pas établie due, `RE-5b` MUST NOT certifier le cycle et `RA-3` MUST NOT se déclencher sur ce seul motif**. **Autorisation toujours `NON DONNÉE`. Exécution du 2026-09-03 toujours `NON CLOSE`. `P-A5` non prononcée. `G3` non rouvert.** |
+| **9** | **Lot correctif de REJEU**, après la **seconde exécution non close**. Aucun terrain. `C1` : **`/var/log/wtmp.db` entre dans le périmètre licite de `L5`**, sous la **même discipline** que les autres sources — présence **constatée** d'abord, lecture **seulement si le lot la prévoit** et **au seul titre de `L5`**, quatre critères et opération 2 séparée, **aucune extrapolation**, et son **absence ne fonde aucun constat**. La seconde exécution l'avait découvert et **s'était correctement abstenue** de le lire : **son abstention était juste, l'exclusion ne l'était pas**. `C2` : nouveau **§6.3, verrou de clôture** — le rang 13 comporte **trois opérations** et **c'est le dernier acte, sans exception** ; **la clôture n'existe qu'après le prononcé** ; **après elle, aucune lecture de l'hôte, aucune corroboration, aucun acte supplémentaire**, sous peine de **`RA-1` et `RA-8`** ; seules demeurent licites l'**analyse hors ligne** de la matière figée et la **rédaction du rapport**. `C3` : nouveau **§9.3** — **`RE-4` est satisfaite par construction, et cela SUFFIT** ; **aucune corroboration sur l'hôte** ne peut être entreprise à son sujet, *« une preuve établie par construction ne se vérifie pas »*. `C4` : le **§14 consigne DEUX exécutions non closes** — la première sur **`RA-1`** (`who -b`), la seconde sur **`RA-1`**, **`RA-8`** et, **subsidiairement**, **`RA-6`** ; **aucun de leurs prononcés n'est retenu**, et **leurs verdicts ne sont réécrits ni en branche (a) ni en branche (b)**. `C5` : nouveau **§14.1** — un rejeu exigera **audit du delta**, **intégration**, **autorisation humaine propre et nouvelle**, et **rejeu UNIQUE** ; les deux autorisations du 2026-09-03 sont **consommées**, et **l'arbitrage qui avait levé la clause de rejeu est épuisé**. **`P-A5` demeure `NON PRONONCÉE`. `P-9` demeure `NON DONNÉE`. `G3` demeure fermé.** |
+| **10** | Après réaudit du correctif de rejeu. Aucun terrain. `B1-B4` : **le traitement de `/var/log/wtmp.db` était incohérent**. L'objet de `L5` est réénoncé en **trois objets nommés** — **`O-a`** `/var/log/wtmp`, **`O-b`** ses rotations, **`O-c`** `/var/log/wtmp.db` — sous une **discipline commune**, avec **les TROIS lecteurs du §5.3 et eux seuls** : **aucun quatrième lecteur n'est admis**. **Deux régimes de validation sont séparés** selon la **nature** de l'objet — les critères **`a`** et **`b`** sont **NON APPLICABLES** à une base de données, où ils n'ont pas de sens. À défaut de lecteur licite rendant des enregistrements, `O-c` est consigné **PRÉSENT mais INEXPLOITABLE SOUS CE LOT**, **sans improvisation**, et **aucun constat n'en est tiré** ; ce que cela laisse ouvert est **nommé sans être comblé**. Le **§11, sortie 8 quater**, rend désormais **OBJET PAR OBJET** : présence ou absence, taille, date, empreinte, **lecteur réellement employé**, validation applicable à la nature, et **EXPLOITABLE ou INEXPLOITABLE**. `B5-B6` : le **§14 se contredisait** — il déclarait les prononcés sans effet **et** renvoyait leur portée à un arbitrage ; les **deux prononcés sont SANS EFFET**, **`P-A5` demeure `NON PRONONCÉE`**, **aucune « portée à arbitrer » ne subsiste**, et les blocs **périmés et dupliqués sont fusionnés ou supprimés**. `B7-B8` : le **§8**, le **§10** et le **§14.1** portent désormais **le MÊME test d'admissibilité** — les **quatre conditions cumulatives** —, et les **DEUX autorisations du 2026-09-03 sont énumérées comme consommées**. `B9` : le **§6.3 est replacé après la fin réelle du §6.2**, les clauses **« rang 7 »** et **« `A₁` non établi rend sans objet »** y demeurant. **`P-A5` = `NON PRONONCÉE`. `P-9` = `NON DONNÉE`. `G3` inchangé.** |
+| **11** | Après réaudit. Aucun terrain. **Trois blocages résiduels sur l'alignement du régime de rejeu.** **1** : la liste `MUST` du **§10** portait un test **plus faible** que le §14.1 — *« postérieure à l'audit »* au lieu de *« postérieure aux deux »*, *« nommer `W4-R` »* **sans sa version**, et **ni audit du delta, ni intégration, ni rejeu unique** ; elle porte désormais **les quatre conditions mot pour mot**, suivies de ses **deux exigences de périmètre**. **2** : la formule **« et à aucune autre »** neutralisait les garde-fous complémentaires ; elle est **supprimée partout**, les quatre conditions devenant le **NOYAU COMMUN** qui **ne dispense d'aucune autre obligation**, les **`MUST` et `MUST NOT` du §10 demeurant pleinement opposables** — notamment l'interdiction de déduire une autorisation de l'audit, de l'intégration ou du merge, et celle d'excéder le périmètre. **3** : le **§14.1 citait le §8 entre guillemets dans une rédaction qu'il ne porte plus** ; la **fausse citation est retirée**, le renvoi vise le **texte actuel**, et il est dit expressément qu'**aucun retour au test isolé de la seule « autorisation humaine nouvelle » n'est possible**. **Le §8, le §10 et le §14.1 portent désormais le même noyau, mot pour mot. `P-A5` = `NON PRONONCÉE`. `P-9` = `NON DONNÉE`. `G3` inchangé.** |
