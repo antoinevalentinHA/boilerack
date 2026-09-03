@@ -194,16 +194,49 @@ derrière**.
 > **Clause — `P-UFS`, précondition BLOQUANTE.**
 >
 > **Avant le temps 1**, l'**état d'activation au démarrage** — `UnitFileState`
-> — **MUST** être relevé et consigné pour les **trois unités historiques** :
-> **`<unité-pont>`**, **`<unité-démon>`**, **`<timer-guard>`**.
+> — **MUST** être relevé, et **déposé en PIÈCE DÉDIÉE**, pour les **QUATRE**
+> unités suivantes, **nommées ici et non ailleurs** :
 >
-> **La précondition est satisfaite si et seulement si les TROIS sont
-> `enabled`.** À défaut, **la campagne MUST NOT être engagée**.
+> | # | Unité | Valeur exigée |
+> |---|---|---|
+> | **1** | **`<unité-pont>`** | **`enabled`** |
+> | **2** | **`<unité-démon>`** | **`enabled`** |
+> | **3** | **`<timer-guard>`** | **`enabled`** |
+> | **4** | **`<unité-superviseur>`** | **relevée, AUCUNE valeur exigée** |
 >
-> **`<unité-superviseur>` est relevée aussi, et son état ne conditionne rien** :
-> elle est déclenchée par `<timer-guard>`, et n'a pas à être activée au
-> démarrage. **Exiger d'elle `enabled` serait exiger une propriété que son mode
-> de déclenchement ne comporte pas.**
+> **La précondition est satisfaite si et seulement si les unités 1, 2 et 3 sont
+> `enabled`.** À défaut, **la campagne MUST NOT être engagée**, et **aucun acte
+> du §9 ne MAY être entrepris** — pas même le temps 1.
+>
+> **La quatrième est relevée, et son état ne conditionne rien** : elle est
+> déclenchée par `<timer-guard>`, et n'a pas à être activée au démarrage.
+> **Exiger d'elle `enabled` serait exiger une propriété que son mode de
+> déclenchement ne comporte pas.** Mais **son relevé est OBLIGATOIRE** : les
+> quatre valeurs figurent à la pièce, ou la précondition n'est pas satisfaite.
+
+> **Clause — la PIÈCE `P-UFS`, et pourquoi elle manquait.**
+>
+> **L'exécution du 2026-09-03 a satisfait `P-UFS` en fait, et ne l'a prouvée par
+> aucune pièce** — §17.1. La cause est **structurelle, et elle est dans le
+> présent document** : `P-UFS` se prend **avant le temps 1**, alors que
+> l'atelier n'était créé **qu'au temps 1**. **Il n'existait aucun endroit où
+> déposer la pièce.**
+>
+> **Correction, opposable :**
+>
+> | | |
+> |---|---|
+> | **l'atelier est créé AVANT `P-UFS`** | il est créé **vide**, et **`P-UFS` y est la PREMIÈRE pièce déposée** |
+> | **pièce dédiée** | **un fichier propre à `P-UFS`**, et à elle seule. **Elle MUST NOT** être fondue dans un relevé d'état plus large, ni dans une pièce servant `G-a` |
+> | **contenu** | les **QUATRE** noms d'unité **et leurs quatre valeurs**, plus l'**horodatage `UTC` de la prise** |
+> | **antériorité prouvée par la pièce elle-même** | l'horodatage qu'elle porte **MUST** être **antérieur** à celui du temps 1 |
+> | **empreinte et manifeste** | elle est **hachée** et **portée au manifeste**, comme toute autre pièce |
+> | **exigée en sortie** | **§16, sortie 1** — le rapport **MUST** la citer par son nom |
+>
+> **Aucune reconstruction n'est admise.** Une pièce `P-UFS` produite **après**
+> le temps 1, ou dérivée d'un relevé pris à une autre fin, **MUST NOT** être
+> présentée comme satisfaisant la précondition. **Un état d'activation se
+> constate à son heure, ou il n'est pas constaté.**
 
 > **Ce que `P-UFS` établit**, et c'est tout ce qu'elle prétend : **un
 > redémarrage machine en fenêtre RAMÈNE le dispositif historique en service par
@@ -363,7 +396,7 @@ commandé. **Il est porté par `R-1`**, et couvert par **`P-UFS`**, **`AB-5`**,
 | **`EI-1`** | **circuit au repos, hors saison de chauffe** — **brûleur à `0,0 %`**, M1 au repos ; relevé **avant** l'acte | `W4-C` §9 (1), `C5` §12.1, `W4-C` §16.1 |
 | **`EI-2`** | **exploitant physiquement devant la machine**, du début à la fin. *« “Joignable à distance” ne satisfait pas cette condition, et une session distante encore moins »* | `W4-C` §9 (2) |
 | **`EI-3`** | **plan de reprise physique connu et accepté** — la campagne neutralise le superviseur, *« donc aussi la remise en état automatique dont il est porteur »* | `W4-C` §9 (3) |
-| **`EI-4`** | **atelier** créé, vide, sur stockage persistant, **hors de tout dépôt versionné** | `W4-C` §9 (4), §16.1 |
+| **`EI-4`** | **atelier** sur stockage persistant, **hors de tout dépôt versionné**, ne contenant **QUE la pièce `P-UFS`** — §6.1. Il a été créé **vide** avant elle, et **rien d'autre n'y a été déposé** avant le temps 1 | `W4-C` §9 (4), §16.1 |
 | **`EI-5`** | **`PR-1`** — superviseur neutralisé : timer `inactive`/`dead` **prochain tir vide** · unité d'exécution `inactive`/`dead`, **sortie constatée** · **aucun processus du superviseur vivant** | `W4-C` §9 (5), §8.1, §16.1 |
 | **`EI-6`** | **`PR-2`** — pont arrêté : unité `inactive`/`dead`, `Result=success`, **aucun redémarrage automatique** · **zéro nouvelle connexion au démon en 25 s** | `W4-C` §9 (6), §9.1, §16.1 |
 | **`EI-7`** | **démon actif et jamais touché** — `active`/`running`, confirmé par une **lecture nue de code retour `0`** | `W4-C` §9 (7), §16.1 |
@@ -583,7 +616,7 @@ qu'après l'étape 5.** »*
 | **`P-6`** | **trace côté broker** disponible et lisible | à établir le jour |
 | **`P-7`** | **consommateur aval** disponible pour observer la télémétrie | à établir le jour |
 | **`P-8`** | exploitant **physiquement présent**, plan de reprise physique connu | déclaration |
-| **`P-UFS`** | **`UnitFileState` des TROIS unités historiques relevé, et les trois `enabled`** | **à établir avant le temps 1** — §6.1 |
+| **`P-UFS`** | **`UnitFileState` des QUATRE unités relevé en PIÈCE DÉDIÉE, hachée et manifestée ; les unités 1 à 3 `enabled`** | **à établir avant le temps 1**, et **prouvé par cette pièce** — §6.1 |
 | **`P-A1`** | **dépôt de captures en écriture unique** en place, **compteur d'`ACK` armé** | à mettre en place — §6.3 |
 | **`P-SPT`** | **réarmement PRÉPARÉ, non accompli** : procédure écrite, capture *« avant »* **montrant la variable ABSENTE**, prise **avant le temps 1** | à faire — §6.3 |
 | **`P-9`** | **autorisation humaine explicite et distincte** — §15 | **NON DONNÉE** |
@@ -673,7 +706,7 @@ n'en préjuge pas.**
 
 | # | Sortie |
 |---|---|
-| **1** | les **préconditions**, une par une, dont **`P-UFS`** avec les **quatre** `UnitFileState` relevés |
+| **1** | les **préconditions**, une par une, dont **`P-UFS`** : la **pièce dédiée citée PAR SON NOM**, son **empreinte**, son **horodatage** — **antérieur au temps 1** —, et les **quatre** `UnitFileState` qu'elle porte. **À défaut de cette pièce, la campagne n'est pas homologable** |
 | **2** | les **treize preuves `EI`**, dans l'ordre du §9 |
 | **3** | **`PR-1` et `PR-2` REDOUBLÉES** — comment l'arrêt a été établi, **et comment la reprise l'a été** |
 | **4** | la **ligne d'invocation réelle**, `stdout` et `stderr` **intégralement et séparément**, **code retour** et **durée mesurée** — par le puits réarmé |
@@ -707,6 +740,41 @@ souveraineté · n'amende aucun contrat hors le séquencement nominal du §4 et
 l'extension nominale du §6.3, **toutes deux à extinction**.
 
 **Il définit une campagne, la referme, et s'arrête là.**
+
+---
+
+## 17.1 Statut de l'exécution du 2026-09-03
+
+> **`W4-S CONFIRMÉ` a été prononcé en fin de campagne. L'audit indépendant a
+> conclu `NON HOMOLOGUÉE`.** Les deux énoncés coexistent, et le présent § les
+> tient l'un et l'autre.
+
+| | |
+|---|---|
+| **matériellement instructive** | deux écritures réelles émises et confirmées, cardinalité tenue, restauration acquise, dispositif historique rendu, **et la répétabilité démontrée** — quatre `.out`/`.err` **byte à byte identiques** à ceux de `G.2` |
+| **NON HOMOLOGUÉE** | **aucune des 80 pièces ne prouve `P-UFS`.** Les quatre occurrences de `UnitFileState` qu'elles portent valent toutes `disabled`, concernent toutes `<unité-boilerack>`, servent **`G-a`**, et sont **postérieures au temps 1** |
+
+> **La preuve manquante n'est PAS reconstruite.** Elle ne l'a pas été, elle ne
+> le sera pas, et **aucune déduction après coup n'en tient lieu**.
+>
+> **Un fait est déclaré pour que l'auditeur en dispose, et il n'est PAS
+> exploité** : un relevé de session horodaté `16:08:02Z` — antérieur au temps 1
+> — existe hors de l'atelier et hors des 80 pièces. **Il n'a pas été versé au
+> dossier, et il ne l'est pas ici.** Le verser reviendrait à produire après coup
+> la pièce que le protocole exigeait sur le moment. **L'exécution demeure non
+> homologuée.**
+
+> **Les deux écarts formels du rapport terrain §12 demeurent CONSERVÉS et NON
+> BLOQUANTS**, tels que l'audit les a qualifiés — la pose fautive puis réparée
+> de la variable du puits, et le compteur `P-A1` appliqué par commande. **Ils ne
+> sont ni corrigés, ni rouverts, ni requalifiés**, et le reste de l'audit n'est
+> pas rouvert.
+
+> **Ce que l'exécution n'a PAS consommé.** `P-9` visait *« une exécution, et une
+> seule »* : **elle est consommée**, et **ne couvre aucun rejeu**. Un rejeu
+> exigera l'**audit du présent delta**, son **intégration**, et une
+> **autorisation humaine nouvelle, explicite et distincte** — §15, dont aucune
+> ligne n'est allégée.
 
 ---
 
