@@ -59,9 +59,9 @@ from boilerack.read_surface.config import ReadSurfaceConfig
 from boilerack.read_surface.measurements import (
     V1_MEASUREMENTS,
     MeasurementSpec,
+    apply_projection,
     check_snapshot_period,
 )
-from boilerack.read_surface.measurements import apply_projection
 from boilerack.read_surface.payload import format_scalar
 from boilerack.read_surface.snapshot import build_snapshot, snapshot_to_json
 from boilerack.read_surface.state import ReadSurfaceState, complete_cycle, record_result
@@ -448,15 +448,16 @@ class ReadSurfacePublisher:
         # contrat n'en exige qu'une seule pour une meme commande dans un meme
         # cycle. Le cache est LOCAL au cycle : rien n'est conserve d'un cycle a
         # l'autre, et la fraicheur de chaque role reste celle de sa periode.
-        lectures: dict[str, object] = {}
+        lectures: dict[str, ReadResult] = {}
 
         for spec in dues:
             # Une exception inattendue du lecteur remonte ici, sans cloture.
-            if spec.read in lectures:
-                resultat = lectures[spec.read]  # type: ignore[assignment]
-            else:
+            memoisee = lectures.get(spec.read)
+            if memoisee is None:
                 resultat = self._reader_or_raise().read(spec.read)
                 lectures[spec.read] = resultat
+            else:
+                resultat = memoisee
 
             if resultat.status is TransportStatus.OK:
                 # §4.6 : scalaire, PUIS etat, PUIS instantane.
