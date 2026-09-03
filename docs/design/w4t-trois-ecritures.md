@@ -1,5 +1,17 @@
 # `W4-T` — caractérisation groupée des trois écritures non caractérisées
 
+> **Version 2 — après l'abandon de la V1.** Une **précondition** est ajoutée,
+> et **rien d'autre**.
+>
+> **La V1 a été exécutée le 2026-09-03 et ABANDONNÉE au rang 1**, sur un `ACK`
+> `rejected` / `unsupported_role`. **Zéro écriture chaudière.** Le motif était
+> que **le build DÉPLOYÉ n'était pas celui du dépôt** : il ne déclarait qu'un
+> rôle sur quatre. Aucune précondition n'exigeait que le service qui allait
+> tourner porte le profil audité — `P-1` demandait Boilerack *« déployé et
+> fonctionnel en lecture »*, ce qu'il était, **sans exiger qu'il fût à jour**.
+>
+> **La V2 ferme exactement ce trou, et ne touche à rien d'autre** — §8.2.
+>
 > **Version 1.** Ouverture **et** bornage. Le document définit **une seule
 > campagne** couvrant les **trois rôles** que Boilerack déclare depuis le Lot 1
 > mais n'a **jamais émis**, la referme, et **ne l'autorise pas**.
@@ -256,10 +268,54 @@ détail, il les rend opposables :
 - la **restauration du dispositif historique en cinq étapes**, avec les **trois
   faits `A`, `B`, `C` établis séparément** et le **cycle nominal** du
   superviseur ;
-- **`P-A1`** dépôt en écriture unique, **`P-SPT`** réarmement du puits.
+- **`P-A1`** dépôt en écriture unique, **`P-SPT`** réarmement du puits ;
+- **`P-DEP`** — **profil déployé = profil audité** — §8.2.
 
 > **Une seule différence avec `W4-S`, et elle est de cardinalité** : le puits
 > portera **jusqu'à six rangs** au lieu de deux.
+
+### 8.2 `P-DEP` — le profil déployé EST le profil audité
+
+> **Précondition BLOQUANTE, ajoutée par la V2.** Elle naît d'un défaut réel :
+> la V1 a émis une commande sur un rôle que **le service en place ne
+> connaissait pas**, et l'a apprise par un rejet.
+
+> **Clause.** **Avant le temps 1**, une **pièce dédiée** MUST établir que le
+> service qui sera lancé porte **le profil audité**, et non un profil antérieur.
+>
+> | | Ce que la pièce MUST porter |
+> |---|---|
+> | **1** | les **QUATRE rôles** du profil de production, avec pour chacun sa commande de lecture, sa commande d'écriture, ses bornes et son pas |
+> | **2** | **explicitement, les TROIS rôles de `W4-T`** — leur absence est ce qui a fait échouer la V1 |
+> | **3** | l'**identité du code déployé** : l'**empreinte des fichiers installés** confrontée à celle des mêmes fichiers **au dépôt intégré**, et leur **concordance** |
+>
+> **La précondition est satisfaite si et seulement si les trois points le sont.**
+> À défaut, **la campagne MUST NOT être engagée**, et **aucun acte du §6 ne MAY
+> être entrepris** — pas même le rang 1.
+
+> **Pourquoi l'empreinte, et non le numéro de version.** Le paquet déployé porte
+> une version qui **ne distingue pas deux builds** : elle vaudrait la même avant
+> et après une mise à jour. **Un numéro qui ne change pas ne prouve rien.**
+> L'empreinte des fichiers, elle, change dès qu'une ligne change.
+>
+> **Les fichiers confrontés MUST au moins être ceux qui portent le profil et la
+> surface de lecture.** Les nommer ici serait figer une arborescence ; le
+> principe suffit : **ce qui décide du comportement écrit doit être identique de
+> part et d'autre.**
+
+> **La pièce est produite par LECTURE du service installé** — interrogation du
+> profil qu'il expose et empreintes de ses fichiers. **Elle ne le démarre pas,
+> ne le modifie pas, et n'écrit rien.**
+>
+> **Aucune reconstruction n'est admise.** Une pièce `P-DEP` produite **après** le
+> rang 1, ou dérivée du dépôt plutôt que de l'installation, **MUST NOT** être
+> présentée comme satisfaisant la précondition : elle prouverait ce que le
+> dépôt contient, non ce que la machine exécute.
+
+> **Ce que `P-DEP` ne fait pas.** Elle **n'autorise aucun déploiement** : mettre
+> le service à jour est un acte **hors périmètre de `W4-T`**, antérieur à la
+> campagne et relevant d'une décision propre. `P-DEP` **constate**, elle
+> n'accomplit pas.
 
 ### 8.1 Une conséquence à déclarer avant le terrain
 
@@ -285,6 +341,7 @@ surface **ne seront ni reçues ni acquittées**.
 
 | # | Sortie |
 |---|---|
+| **0** | **`P-DEP`** — pièce dédiée : les **quatre rôles** exposés par le service installé, les **trois rôles `W4-T`** nommément, et la **concordance d'empreinte** entre fichiers installés et fichiers du dépôt intégré. Horodatage **antérieur au temps 1** |
 | **1** | **`P-UFS`** — pièce dédiée, quatre `UnitFileState`, horodatage antérieur au temps 1 |
 | **2** | les **treize `EI`**, dans l'ordre, avec `PR-1` et `PR-2` **redoublées** |
 | **3** | **par rôle** : `V_brut`, `V_initiale`, cible, et le calcul qui la produit |
@@ -309,7 +366,7 @@ surface **ne seront ni reçues ni acquittées**.
 
 **Exige, cumulativement :**
 
-1. les **treize `EI`** établies, `P-UFS` prouvée par pièce dédiée ;
+1. les **treize `EI`** établies, **`P-DEP`** et **`P-UFS`** prouvées par pièces dédiées ;
 2. les **trois rôles** écrits, chacun **`applied`** et **confirmé par
    relecture** ;
 3. les **trois restaurations** exécutées, chacune ramenant la valeur à
@@ -363,6 +420,7 @@ surface **ne seront ni reçues ni acquittées**.
 
 | | Question | Où elle se tranche |
 |---|---|---|
+| **0** | le **service qui va tourner** porte-t-il le profil audité, et la preuve vient-elle de l'installation plutôt que du dépôt ? | §8.2, `P-DEP` |
 | **1** | les **cibles** sont-elles minimales, bornées, et calculées sans arbitraire ? | §3, règle `V_initiale + 1 pas` |
 | **2** | l'**ordre** des trois rôles est-il justifié par la sûreté ? | §3.1 |
 | **3** | la **cardinalité** est-elle close et vérifiable sur un artefact ? | §5, six rangs du puits |
@@ -403,3 +461,10 @@ pas la bascule · ne révise **aucune tolérance** · ne lève aucune inconnue.
    proposer un supposerait de modifier Arsenal.
 6. **Le régime permanent, le re-pointage du superviseur et la bascule demeurent
    entiers**, et relèvent des sous-objectifs 2 et 3 du Lot 2.
+7. **`P-DEP` ne couvre que le profil et la surface de lecture.** Elle n'établit
+   pas que **tout** le code déployé soit celui du dépôt, ni que les dépendances
+   du service le soient. **Elle ferme le trou qui a fait échouer la V1, et pas
+   davantage** — l'étendre serait une autre décision.
+8. **La V1 demeure une exécution ABANDONNÉE**, consignée telle quelle. Son
+   autorisation est **consommée**, et la V2 **ne s'en réclame pas** : un rejeu
+   exigera une **autorisation nouvelle**.
