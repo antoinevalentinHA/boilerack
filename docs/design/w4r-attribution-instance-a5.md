@@ -1,7 +1,50 @@
 # `W4-R` — lot borné en lecture stricte : attribution de l'instance `A-5`
 
+> **Version 8 — lot CORRECTIF, après réaudit.** Aucun terrain.
+> **L'autorisation demeure `NON DONNÉE`. L'exécution du 2026-09-03 demeure
+> `NON CLOSE`. `P-A5` n'est pas prononcée. `G3` n'est pas rouvert.**
+>
+> | | Correction |
+> |---|---|
+> | **V8 · blocage 1** | **`T` n'avait aucune source.** Le §9.2 invoquait une *« période déclarée lue par `L8` »* que **`L8` ne lisait pas**, et la notion était **ambiguë** : un `.timer` peut porter `OnBootSec`, `OnUnitActiveSec`, `OnUnitInactiveSec` ou `OnCalendar`, **dont les sémantiques diffèrent**. `L8` est **étendu nommément** aux directives temporelles de `<timer-guard>`, sa colonne `Sert` propagée vers **`RE-5b`** et **`RA-3`**, et la **condition d'activation due** est définie **par mode** — §5, §9.2 |
+> | **V8 · blocage 2** | **La V7 rendait à `L5` la capacité de porter des instants de démarrage**, que la V6 lui avait retirée : sa condition (ii) admettait *« des enregistrements persistants lus par `L5` portant la séquence des démarrages »*. **Contradiction interne.** La condition (ii) **repose désormais sur `L4` SEUL**, `L4` est propagé comme **porteur potentiel de `A₁`**, et **`L5` ne porte plus aucun instant de démarrage** — §7.1.0, §7.1 |
+> | **V8 · non bloquant** | **La formule `Δ ≥ T` produisait un faux positif sur un `oneshot`.** Avec `OnUnitInactiveSec`, **l'échéance repart à la FIN de l'exécution** : l'intervalle vaut `durée d'exécution + OnUnitInactiveSec`, et **la durée n'est pas dans l'objet de `L2`**. La condition est réénoncée **par mode**, et si une activation due **n'est pas établissable**, **`RE-5b` MUST NOT certifier le cycle** et **`RA-3` MUST NOT se déclencher sur ce seul motif** — §9.2, §8 |
+>
+> **Version 7 — lot CORRECTIF, après réaudit.** Aucun terrain.
+>
+> | | Correction |
+> |---|---|
+> | **V7 · B1-a** | **Le constat (ii) de la V6 était TAUTOLOGIQUE** : l'instant candidat étant **dérivé** du temps de fonctionnement, vérifier que celui-ci le couvre ne pouvait pas échouer. **Il est retiré.** `L0` ne rend que le **dernier** démarrage ; `A₁` n'est acquis que si ce démarrage est **rattaché de façon UNIVOQUE** au redémarrage étudié, par une source de la liste close. **Le cas de plusieurs redémarrages dans le préflight est nommé** — §7.1.0 |
+> | **V7 · B1-b** | Le §6.2, rang 7, écrivait que **`A₁` était « acquis au rang 2 »**. **Le rang 2 ne rend qu'un candidat** ; la fenêtre n'existe qu'après satisfaction de la clause d'identité |
+> | **V7 · B2-a** | **La « séquence chronologique cohérente » est SUPPRIMÉE comme critère.** Les enregistrements `utmp` sont **mis à jour EN PLACE** : le conteneur **n'est pas ordonné chronologiquement**, et ce critère aurait **rejeté le format réel** — §5.3 |
+> | **V7 · B2-b** | **Le choix entre tailles harmoniques était ambigu**, et c'est grave : `89 600` se divise par **400 et par 800**. Deux critères le lèvent — **couverture intégrale** de chaque enregistrement élémentaire, et **minimalité** : si un diviseur propre valide aussi, **c'est lui qui est retenu**. **Un parse qui sauterait un enregistrement sur deux MUST NOT être retenu**, et **aucun constat d'absence ne MAY être fondé sur un parse partiel** |
+> | **V7 · B3** | **`RE-5b` certifiait « nominal » sans que le superviseur ait cyclé.** Pour un lot couvrant **au moins une période du timer**, un **changement POSITIF de l'identifiant d'invocation** est désormais exigé ; **s'il demeure inchangé alors qu'une activation devait avoir lieu, `RA-3` se déclenche**. Les autres protections sont conservées, et **aucune cadence complète n'est prétendue** — §8, §9 |
+>
+> **Version 6 — lot CORRECTIF, après réaudit.** Aucun terrain.
+>
+> | | Correction |
+> |---|---|
+> | **V6 · B1** | **La V5 laissait un démarrage ULTÉRIEUR devenir silencieusement `A₁`.** L'ancrage sur l'**événement historique** du préflight `G.2` est rétabli : `L0` ne fournit qu'un **instant CANDIDAT**, et une **clause d'identité** vérifie qu'il correspond bien au redémarrage étudié. **À défaut, `A₁` demeure NON ÉTABLI** — §7.1.0 |
+> | **V6 · B2** | **Le motif témoin de la V5 était circulaire** : il exigeait un `BOOT_TIME` de `L0` pour valider un format dont l'objet peut n'en porter aucun. Le témoin **MAY désormais être d'un autre type** présent dans le même objet, et la **validation structurelle du format** est **séparée** du **constat d'absence de `BOOT_TIME`/`RUN_LVL`**. **Un parse structurellement valide établit cette absence sans exiger que ces types existent** — §5.3 |
+> | **V6 · B3** | **`L2` ne produisait pas les propriétés que `RE` et `RA-3` exigeaient.** Elle est **étendue nommément** — `ActiveEnterTimestamp`, `ActiveState`, `SubState`, `Result` —, **`RE-5b` est reformulée pour être décidable avec les deux prises prévues**, et **la « cadence tenue » cesse d'être exigée** : deux relevés ponctuels ne l'établissent pas — §5, §9 |
+> | **V6 · B4** | **Le bornage de l'exploitation avait disparu.** Une **règle positive** est réénoncée au §5 : l'exploitation de `L5` au soutien de la règle de décision demeure **bornée autour de la date du préflight `G.2`**, et la caractérisation du §5.3 n'est autorisée **que comme instrumentation nécessaire** — elle **ne lève pas** ce bornage |
+> | **V6 · propagations** | **`S3`** ne porte plus l'instant, seulement le **caractère / `A₂`** · le **rang 4** nomme **`RE-2a`**, **`RE-2b`** et **`RE-2c`** parmi les preuves qu'il conditionne |
+>
+> **Version 5 — lot CORRECTIF, après audit d'homologation de l'exécution du
+> 2026-09-03.** Aucun terrain.
+>
+> **L'exécution du 2026-09-03 est NON CLOSE** — `RA-1` atteint. Le présent lot
+> **ne la corrige pas** et **ne la rejoue pas** : il rend `W4-R` **réellement
+> exécutable et homologable** avant toute nouvelle tentative. Voir le §14.
+>
+> | | Correction |
+> |---|---|
+> | **V5 · C1** | **`L5` était inexécutable comme écrit, et l'exécution l'a franchi.** L'instant de démarrage est **rattaché à `L0`**, qui le porte déjà ; `L5` est **strictement recentré sur les enregistrements PERSISTANTS** ; ses **lecteurs licites et son repli sont nommés** ; et la **caractérisation complète du même objet**, que le §5.1 rend nécessaire, y est **expressément autorisée**. `/var/run/utmp` et `who -b` deviennent **interdits hors acte prévu** — §4, §5, §5.3 |
+> | **V5 · C2** | **`RE-2` et `RE-5` étaient défectueuses par construction** : elles exigeaient « inchangé » d'une unité **cycliquement déclenchée**. Le modèle `R2a`/`R2b` de `w4p1-lot-terrain-borne.md` V3 est **transposé** — unités invariantes, unité superviseur cyclique, timer à phases nominales —, et l'exigence de **compteur de relances est retirée pour les `.timer`**, où elle est **inapplicable** — §9 |
+> | **V5 · C3** | **`RA-3` ne distinguait pas le cycle nominal d'une dérive.** Le **cycle attendu du superviseur et de son timer MUST NOT déclencher `RA-3`** ; toute variation **non expliquée par ce cycle** demeure déclencheur — §8 |
+> | **V5 · C4** | **Le rejeu est borné** : une **nouvelle autorisation humaine** est exigée avant toute réexécution, et le présent lot **ne prononce pas `P-A5`**, **ne rouvre pas `G3`**, **n'ouvre aucune `P-9`** — §10, §15 |
+>
 > **Version 4**, après réaudit. **Quatre blocages fermés.** Aucun terrain.
-> **L'autorisation demeure `NON DONNÉE`.**
 >
 > | | Correction |
 > |---|---|
@@ -177,7 +220,7 @@ déclarée perdue.
 |---|---|---|---|
 | **S1** | **journal systemd du boot précédant le redémarrage** | la chaîne `F-12` entière | **DÉCLARÉE NON SURVIVANTE** — `G2-C` §6 |
 | **S2** | **puits de journalisation propre de `<script-superviseur>`**, s'il écrit **hors** journald | la ligne du chemin correctif | **À ÉTABLIR** — `W4-P1` a lu le script, mais **son puits n'est pas consigné** |
-| **S3** | **enregistrements persistants de démarrage / arrêt** | l'**instant** du redémarrage et son **type** | probable — fichier, indépendant du journal |
+| **S3** | **enregistrements persistants de démarrage / arrêt** | le **CARACTÈRE** du redémarrage — `A₂`. **Elle ne porte PAS l'instant** : celui-ci relève de `L0`, sous la clause d'identité du §7.1.0 | probable — fichier, indépendant du journal |
 | **S4** | **énumération des démarrages** connus du journal | quels boots subsistent | **conditionnée à la persistance du journal**, à établir |
 | **S5** | **définitions d'unité** déjà lues sous `W4-P1` | **qui** peut commander un redémarrage machine | acquise, à reconstater |
 | **S6** | **artefact terrain `G.2`** — rapport, bundle de 56 pièces, manifeste | des captures de préflight **encadrant** le redémarrage | **existe** (`G2-C` §4), **localisation à établir** — §3.1 |
@@ -258,7 +301,18 @@ les ouvertures de connexion, **sans clôture ni attribution par client** »*.
 >   simuler une indisponibilité, ni fabriquer la condition qu'il observe ;
 > - **extrapoler** : conclure au-delà de ce que les pièces portent, dans un sens
 >   ou dans l'autre ;
+> - **lire `/var/run/utmp`**, ni aucune table de sessions **courante** : ce n'est
+>   **pas** l'objet de `L5`, qui porte sur les enregistrements **persistants** ;
+> - employer **`who`**, sous quelque forme que ce soit, **hors d'un acte qui le
+>   prévoit nommément** — aucun acte de la liste close ne le prévoit ;
 > - exécuter un acte **hors de la liste close du §5**.
+
+> **Les deux interdictions ci-dessus sont ajoutées par la V5, et elles portent
+> sur un franchissement réel.** L'exécution du 2026-09-03 a employé **`who -b`**
+> au titre de `L5`, en le croyant lecteur du même objet. **Il ne l'est pas** :
+> `who -b` lit la table **courante** — `/var/run/utmp` —, tandis que `L5` porte
+> sur `/var/log/wtmp`, **fichier distinct**. **`RA-1` était dû, et il a été
+> prononcé à l'homologation.** Le §14 en tire les conséquences.
 
 > **Le franchissement de l'une quelconque de ces frontières est un motif de
 > `STOP` immédiat** — §8.
@@ -283,19 +337,29 @@ L'ordre du §6 est opposable.
 
 | Réf | Acte | Nature | Sert |
 |---|---|---|---|
-| **`L0`** | relever la **joignabilité**, l'**horodatage de l'hôte**, l'**identifiant du démarrage courant** et le **temps de fonctionnement** | lecture | `RE-3` |
+| **`L0`** | relever la **joignabilité**, l'**horodatage de l'hôte**, l'**identifiant du démarrage courant** et le **temps de fonctionnement** — **et en dériver l'INSTANT DU DÉMARRAGE COURANT**, par soustraction du temps de fonctionnement à l'horodatage | lecture | `RE-3` — **et l'INSTANT de `A`**, §7.1 |
 | **`L1`** | **empreintes de RÉFÉRENCE** des fichiers à lire, prises **avant toute lecture de contenu** : `<script-superviseur>`, les **quatre** définitions d'unité, la configuration de journalisation | lecture | **`RE-1`** |
-| **`L2`** | **relevé d'état des QUATRE unités** — `<unité-superviseur>`, `<unité-pont>`, `<unité-démon>`, `<timer-guard>` : **état**, **identifiant d'invocation**, **compteur de relances** | lecture | **`RE-2`**, **`RE-5`**, **`RA-3`** |
+| **`L2`** | **relevé d'état des QUATRE unités** — `<unité-superviseur>`, `<unité-pont>`, `<unité-démon>`, `<timer-guard>`. **Propriétés relevées, nommément** : **état d'activité** · **sous-état** · **résultat** · **identifiant d'invocation** · **`ActiveEnterTimestamp`** · **compteur de relances, pour les seules unités de service** — la propriété est **inapplicable à `<timer-guard>`** | lecture | **`RE-2a`**, **`RE-2b`**, **`RE-2c`**, **`RE-5a`**, **`RE-5b`**, **`RA-3`** |
 | **`L3`** | lire la **configuration de journalisation du système** — le ou les fichiers qui décident de la **persistance** du journal | lecture de fichier | `S4` |
 | **`L4`** | **énumérer les démarrages** connus du journal | lecture | `S4` |
-| **`L5`** | lire les **enregistrements persistants de démarrage et d'arrêt**, bornés aux entrées encadrant la date du préflight `G.2` | lecture | **`A`** — `S3` |
+| **`L5`** | lire les **enregistrements PERSISTANTS de démarrage et d'arrêt** — `/var/log/wtmp` et ses rotations, **et eux seuls** —, pour en tirer le **CARACTÈRE** du redémarrage : **commandé** ou non. Lecteurs, repli et caractérisation : **§5.3** | lecture | **le CARACTÈRE de `A`** — `S3` |
 | **`L6`** | lire **`<script-superviseur>`**, aux seules fins de déterminer : **(i)** le **puits de journalisation** de ses chemins terminaux · **(ii)** la **forme exacte de la commande de redémarrage machine** · **(iii)** la **forme exacte de la commande de redémarrage du pont** | lecture de fichier | `S2` |
 | **`L7`** | **si et seulement si `L6` établit un puits FICHIER** : **empreinte de ce puits prise AVANT de le lire**, puis lecture **bornée** à la fenêtre du §6.1 | lecture de fichier | `B`, `C` — `S2`, **`RE-1 bis`** |
-| **`L8`** | lire les **définitions d'unité** des **quatre** unités — pour établir **qui peut commander** un redémarrage machine, **et quelles dépendances propagent un redémarrage** | lecture de fichier | `B`, §7.1.1 — `S5` |
+| **`L8`** | lire les **définitions d'unité** des **quatre** unités — pour établir **(i)** **qui peut commander** un redémarrage machine · **(ii)** **quelles dépendances propagent** un redémarrage · **(iii)** sur `<timer-guard>`, les **DIRECTIVES TEMPORELLES** qui gouvernent son échéance : `OnBootSec`, `OnStartupSec`, `OnActiveSec`, `OnUnitActiveSec`, `OnUnitInactiveSec`, `OnCalendar`, ainsi que l'**unité déclenchée** et son **type de service** | lecture de fichier | `B`, §7.1.1 — `S5` · **`RE-5b`** et **`RA-3`**, §9.2 |
 | **`L9`** | **`<journal-démon>`** : **d'abord établir la RÉTENTION** — que la source couvre effectivement la date visée —, **puis seulement** lire les événements bornés à la fenêtre du §6.1 | lecture | `A` — `S7` |
 | **`L10`** | lire le **journal des démarrages survivants**, borné à la fenêtre du §6.1 | lecture | `B`, `C` — `S1` |
 | **`L11`** | **inventorier et vérifier** l'artefact terrain `G.2` contre ses **trois empreintes**, puis en **lire** les pièces de préflight | lecture, **hors ligne** | `A`, `B`, `C` — `S6` |
 | **`L12`** | **empreintes FINALES** — même ensemble que `L1` pour **`RE-1`**, **plus** le puits de `L7` s'il existe pour **`RE-1 bis`** | lecture | **`RE-1`** et **`RE-1 bis`** |
+
+> **Clause — `L2` produit exactement ce que les preuves exigent, et rien de
+> plus.** La liste des propriétés ci-dessus est **close**. **Aucune preuve `RE`
+> et aucun critère `RA` ne MAY exiger une propriété qui n'y figure pas** : la V5
+> réclamait un `ActiveEnterTimestamp` de timer que `L2` ne relevait pas, et une
+> *« cadence tenue »* qu'aucune de ses deux prises ne peut établir.
+>
+> **`ActiveEnterTimestamp` est ajouté parce que `RE-2c` en dépend.** Il est la
+> seule propriété qui distingue, pour `<timer-guard>`, une **alternance nominale**
+> — timestamp inchangé — d'un **réarmement** — timestamp modifié.
 
 > **`L0` figure dans la liste close, et c'est délibéré.** `P1-H` §2 consigne que
 > ce relevé exact a été exécuté **hors liste close** sous `W4-P1`, et que
@@ -310,7 +374,7 @@ L'ordre du §6 est opposable.
 > | | Quand | Pourquoi |
 > |---|---|---|
 > | 1 | **au début**, avant toute lecture de contenu | établir l'état initial |
-> | 2 | **à la fin**, après la dernière lecture | établir `RE-2`, `RE-3`, `RE-5` |
+> | 2 | **à la fin**, après la dernière lecture | établir `RE-2a`, `RE-2b`, `RE-2c`, `RE-3`, `RE-5a`, `RE-5b` |
 > | 3 | **entre deux actes de lecture**, si l'exploitant conçoit un doute sur la stabilité de l'installation | rendre **`RA-3`** et **`RA-4`** détectables **pendant** le lot, et non seulement après |
 >
 > **Chaque répétition est consignée avec son horodatage.** Une répétition n'est
@@ -322,6 +386,33 @@ L'ordre du §6 est opposable.
 
 > **Aucun acte ne produit de fichier sur l'hôte.** Les sorties sont **rapatriées
 > et figées hors de l'installation** ; l'hôte n'en garde rien.
+
+### 5.4 Bornage de l'exploitation — règle positive
+
+> **Clause — opposable à tout acte de lecture du présent lot.**
+>
+> **Ce qui est EXPLOITÉ au soutien de `A`, `B`, `C` ou d'une origine concurrente
+> `O1` à `O4` MUST être borné** à la **fenêtre du §6.1** — l'intervalle précédant
+> l'instant du redémarrage étudié, d'une étendue d'au moins `380 s` — élargie au
+> plus à la **journée du préflight `G.2`** lorsque la granularité de la source
+> l'impose.
+>
+> **Est HORS de ce bornage, et MUST NOT fonder un élément de la règle de
+> décision** : tout enregistrement, toute ligne, toute pièce **datée hors de cet
+> intervalle**.
+>
+> **Ce bornage porte sur l'EXPLOITATION, non sur la lecture technique.** Établir
+> qu'une source **couvre** ou **ne couvre pas** une période, et rendre un fichier
+> **lisible**, sont des actes d'**instrumentation** : ils sont régis par le §5.3,
+> et ils **ne lèvent pas** la présente règle.
+>
+> **La distinction est la suivante, et elle est opposable :**
+>
+> | | Régime |
+> |---|---|
+> | *« ce fichier porte 224 enregistrements, du 2024-03-24 au 2026-08-27 »* | **instrumentation** — licite, §5.3 |
+> | *« aucun `BOOT_TIME` n'y figure »* | **instrumentation** — licite, §5.3 |
+> | *« un enregistrement du 2024-05-12 montre que… »* | **exploitation hors bornage** — **INTERDIT** |
 
 ### 5.1 Règle de méthode — analyse hors ligne obligatoire
 
@@ -353,6 +444,138 @@ L'ordre du §6 est opposable.
 > d'événement dans cette source** — ni à `F-12`, ni à un client, ni à quiconque.
 > Voir §7.3.
 
+### 5.3 `L5` — objet, lecteurs licites, repli, et caractérisation autorisée
+
+> **Cette section est créée par la V5. Elle répare une clause inexécutable.**
+
+#### L'objet, et lui seul
+
+`L5` porte sur **`/var/log/wtmp` et ses rotations** — les enregistrements
+**persistants** de démarrage et d'arrêt. **Et sur rien d'autre.**
+
+| | |
+|---|---|
+| **DANS l'objet** | `/var/log/wtmp`, `/var/log/wtmp.1` et rotations ultérieures |
+| **HORS de l'objet** | `/var/run/utmp` — table **courante** des sessions —, et tout lecteur qui l'interroge, **`who` compris** — §4 |
+
+> **La distinction n'est pas formelle.** `who -b` lit la table **courante**, non
+> le fichier persistant. Ce sont **deux fichiers différents**, et les confondre
+> a coûté un `RA-1` à l'exécution du 2026-09-03.
+
+#### Ce que `L5` établit — et ce qu'il n'établit plus
+
+| | |
+|---|---|
+| **`L5` établit** | le **CARACTÈRE** du redémarrage : **commandé** — enregistrement d'arrêt ordonné —, ou **non commandé** |
+| **`L5` n'établit plus l'INSTANT** | il est porté par **`L0`**, rang 2, qui lit déjà l'horodatage de l'hôte et le temps de fonctionnement. **L'instant s'en dérive par soustraction**, sans lecture supplémentaire |
+
+> **Pourquoi ce déplacement.** La V4 faisait de `L5` le seul porteur de `A`, ce
+> qui obligeait à lui faire rendre l'instant — alors que `L0` le portait déjà, et
+> que la source persistante peut fort bien **ne porter aucun enregistrement de
+> démarrage**. **C'est exactement ce que l'exécution a constaté**, et elle a dû
+> franchir la liste close pour y suppléer.
+
+#### Lecteurs licites, et repli
+
+> **Clause.** `L5` **MAY** employer, dans cet ordre de préférence, **et
+> exclusivement** :
+>
+> | | Lecteur | Condition |
+> |---|---|---|
+> | **1** | **`last`** — avec sélection explicite du fichier persistant | s'il est présent sur l'hôte |
+> | **2** | **`utmpdump`** — sur le fichier persistant | s'il est présent |
+> | **3** | **repli : figement du fichier hors installation, puis analyse hors ligne** | **si et seulement si** ni 1 ni 2 n'est disponible |
+>
+> **Le repli 3 est un acte de `L5`, non un acte nouveau.** Il consiste à
+> **rapatrier le fichier tel quel** — l'empreinte étant relevée sur l'hôte avant
+> rapatriement et vérifiée après —, puis à l'analyser **hors installation**,
+> conformément au §5.1.
+>
+> **Aucun autre lecteur n'est licite.** En particulier, aucun lecteur
+> interrogeant la table courante — §4.
+
+#### Caractérisation complète du même objet — expressément autorisée
+
+> **Clause.** Lorsque le repli 3 est employé, `L5` **MAY** procéder, **sur le
+> fichier figé et sur lui seul**, à la **caractérisation complète nécessaire à
+> son exploitation** :
+>
+> - **découverte du format** d'enregistrement, lorsque le format supposé est
+>   **invalidé par un motif témoin** ;
+> - **couverture de la source** — instant le plus ancien, instant le plus
+>   récent, décompte des enregistrements et des types présents ;
+> - **inventaire des types** d'enregistrement portés, ou de leur absence.
+>
+> **Cette caractérisation est une INSTRUMENTATION, et rien d'autre.** Elle est
+> autorisée **uniquement** en tant qu'elle est **nécessaire** pour rendre le
+> fichier lisible et pour établir ce qu'il porte.
+>
+> **Elle NE LÈVE PAS le bornage de l'exploitation du §5.4.** Ce qui est
+> **exploité au soutien de `A`, `B`, `C` ou d'une origine concurrente** demeure
+> borné à la fenêtre, quelle qu'ait été l'étendue de l'instrumentation.
+>
+> **La règle en une phrase** : on **balaie** tout le fichier pour savoir le lire
+> et savoir ce qu'il contient ; on **n'exploite** que ce qui tombe dans la
+> fenêtre.
+>
+> **Sans cette autorisation, la clause est inexécutable** : un format inconnu ne
+> se déchiffre pas en ne regardant que six minutes de données.
+
+> **Motif témoin — obligatoire, et NON circulaire.**
+>
+> **La V5 était circulaire** : elle exigeait de valider le format contre
+> l'instant de `L0`, c'est-à-dire contre un enregistrement de démarrage — alors
+> que **l'objet peut n'en porter aucun**, et que c'est précisément ce que `L5`
+> doit pouvoir constater.
+>
+> **Deux opérations DISTINCTES, à ne jamais confondre :**
+>
+> | | Opération | Ce qu'elle exige |
+> |---|---|---|
+> | **1** | **VALIDATION STRUCTURELLE du format** | les **quatre critères cumulatifs** ci-dessous, **et eux seuls** |
+> | **2** | **CONSTAT d'absence de `BOOT_TIME` / `RUN_LVL`** | **rien de plus qu'un parse structurellement validé**. Il ne présuppose **pas** que ces types existent |
+>
+> **Clause.** Un parse **structurellement validé** au sens de l'opération 1
+> **PEUT établir l'absence** de `BOOT_TIME` et de `RUN_LVL` dans l'objet. **Cette
+> absence est un constat sur la COUVERTURE de la source**, non une inférence sur
+> les faits — la distinction du §7.3 demeure entière.
+>
+> **Clause.** Un parse dont la **validation structurelle échoue** **MUST NOT**
+> fonder le moindre constat, et sa sortie **MUST** être conservée comme preuve
+> qu'il a été écarté.
+>
+> **Les quatre critères de la validation structurelle — cumulatifs.**
+>
+> | | Critère |
+> |---|---|
+> | **a · COUVERTURE INTÉGRALE** | la taille d'enregistrement retenue **divise exactement** le conteneur, et **chaque octet appartient à un enregistrement**. Le parse **couvre chaque enregistrement élémentaire** |
+> | **b · MINIMALITÉ** | **aucun diviseur propre** de la taille retenue ne satisfait également les critères **a**, **c** et **d**. **Si une taille moitié les satisfait, c'est ELLE qui est retenue** |
+> | **c · CHAMP TEMPOREL** | un champ temporel **plausible** à un **offset interne constant**, sur la **quasi-totalité** des enregistrements non vides |
+> | **d · TÉMOIN INDÉPENDANT** | au moins un enregistrement dont l'**instant ou le contenu** est **vérifiable par ailleurs**, de **n'importe quel type présent dans le même objet** |
+
+> **Le critère `b` n'est pas théorique, et il est décisif.** Un conteneur de
+> `n` enregistrements de taille `t` se divise **aussi** par `2t`. Un parse à
+> `2t` **saute systématiquement un enregistrement sur deux** — il peut paraître
+> cohérent, et **manquer la moitié du contenu**, `BOOT_TIME` compris.
+>
+> **Un tel parse MUST NOT être retenu.** Il est **PARTIEL**, et
+> **aucun constat d'absence ne MAY être fondé sur un parse partiel** :
+> l'opération 2 exige un parse satisfaisant **les quatre critères**.
+
+> **Ce qui n'est PAS un critère de validité — et la V6 se trompait.**
+>
+> **La séquence chronologique est SUPPRIMÉE.** Les enregistrements `utmp` sont
+> **mis à jour EN PLACE** : un emplacement de session est **réécrit** lorsque la
+> session change d'état. **Le conteneur n'est donc PAS ordonné
+> chronologiquement**, et exiger un ordre aurait **rejeté le format réel**.
+>
+> **Aucun critère d'ordre, d'aucune sorte, ne MAY être opposé au format.**
+
+> **Ce qui MUST être rapporté** : le témoin retenu, son type, ce qui le rend
+> indépendant, **les quatre critères et leur satisfaction un par un** — dont la
+> **taille écartée au titre de la minimalité**, s'il y en a une — §11,
+> sortie 8 quater.
+
 ---
 
 ## 6. Ordre d'exécution, et la fenêtre d'analyse
@@ -367,22 +590,33 @@ L'ordre du §6 est opposable.
 > indépendant par l'écart des instants de démarrage, 380 s = 2 × 190 s »* —,
 > soit **au moins 380 s**.
 >
-> **L'instant du redémarrage est établi par `L5`**, et par lui seul —
-> corroborable par `L9` et `L11`, jamais remplaçable par eux. **Tant qu'il n'est
-> pas établi, aucune fenêtre n'existe**, et les actes `L7`, `L9` et `L10` sont
-> **sans objet** pour ce qui est de la fenêtre.
+> **L'instant du redémarrage est établi par `L0`**, au rang 2, par soustraction
+> du temps de fonctionnement à l'horodatage de l'hôte — **et seulement sous la
+> clause d'identité du §7.1.0**, qui vérifie qu'il s'agit bien du redémarrage
+> **étudié**. Corroborable par `L9` et `L11`, jamais remplaçable par eux.
+> **La V4 l'attribuait à `L5`** ; c'était une erreur de typage, `L0` le portant
+> déjà. **La V5 omettait la vérification d'identité** ; c'en était une autre.
+>
+> **Un instant CANDIDAT ne définit aucune fenêtre.** Tant que le §7.1.0 n'a pas
+> été satisfait, la fenêtre n'existe pas.
+>
+> **Tant qu'il n'est pas établi, aucune fenêtre n'existe**, et les actes `L7`,
+> `L9` et `L10` sont **sans objet** pour ce qui est de la fenêtre.
+>
+> **Le CARACTÈRE du redémarrage est établi par `L5`**, au rang 7 — §5.3. Son
+> absence ne supprime pas la fenêtre : elle laisse **`A` incomplet**.
 
 ### 6.2 L'ordre
 
 | # | Acte | Sortie attendue | Si elle manque |
 |---|---|---|---|
 | **1** | **`L11`** — artefact `G.2`, **si accessible hors installation** | trois empreintes vérifiées ; inventaire des pièces de préflight | poursuivre ; `L11` est repris au rang 11 |
-| **2** | **`L0`** | hôte joignable, horodatage, démarrage courant, temps de fonctionnement | **`STOP`** — sans hôte, aucun acte |
+| **2** | **`L0`** | hôte joignable, horodatage, démarrage courant, temps de fonctionnement — **et un INSTANT CANDIDAT**, par soustraction. **Il ne devient `A₁` qu'après la clause d'identité du §7.1.0** | **`STOP`** — sans hôte, aucun acte. **Sans `A₁` acquis, aucune fenêtre n'existe** — §6.1 |
 | **3** | **`L1`** — **empreintes de référence, avant toute lecture de contenu** | empreintes des fichiers de la liste | **`STOP`** — sans référence, `RE-1` est inatteignable |
-| **4** | **`L2`** — état initial des **quatre** unités | état, invocation, relances | **`STOP`** — sans état initial, `RA-3` et `RE-5` sont sans moyen |
+| **4** | **`L2`** — état initial des **quatre** unités | état, sous-état, résultat, invocation, `ActiveEnterTimestamp`, relances *(unités de service seules)* | **`STOP`** — sans état initial, **`RE-2a`**, **`RE-2b`**, **`RE-2c`**, **`RE-5a`**, **`RE-5b`** et **`RA-3`** sont sans moyen |
 | **5** | **`L3`** | le journal est **persistant** ou **volatil** — fait établi, non supposé | consigner *« non établi »* ; `L4` et `L10` deviennent douteux |
 | **6** | **`L4`** | liste des démarrages connus | consigner ; **ne pas conclure** |
-| **7** | **`L5`** | **instant** du redémarrage et son **type** — l'élément **`A`** | **`A` est NON ÉTABLI.** Consigner. **L'instruction se POURSUIT** — voir la clause ci-dessous : seuls les actes **réellement dépendants de la fenêtre** deviennent sans objet, et **les rangs 12 et 13 demeurent OBLIGATOIRES**. Le prononcé a lieu au rang 13, sous le **§7.4** |
+| **7** | **`L5`** | le **CARACTÈRE** du redémarrage — l'élément **`A₂`** — par les enregistrements **persistants**, selon les lecteurs et le repli du **§5.3** | **`A₂` est NON ÉTABLI**, donc **`A` est incomplet**. Consigner. **L'instruction se POURSUIT** : la fenêtre subsiste **si et seulement si `A₁` a été ACQUIS** sous la clause d'identité du §7.1.0 — **le rang 2 n'a rendu qu'un CANDIDAT**, jamais `A₁` ; **aucun rang ne devient sans objet du seul fait que `A₂` manque**, et **les rangs 12 et 13 demeurent OBLIGATOIRES**. Le prononcé a lieu au rang 13, sous le **§7.4** |
 | **8** | **`L6`** | puits de journalisation · forme des deux commandes | consigner ; `L7` sans objet |
 | **9** | **`L8`** — définitions des **quatre** unités | qui peut commander un redémarrage · **quelles dépendances le propagent** (**§7.1.1**) | consigner ; **`B` devient inqualifiable** — **§7.1.1** |
 | **10** | **`L7`** — *si et seulement si* `L6` a établi un puits fichier | empreinte prise **avant lecture**, puis lignes de la fenêtre | `L7` sans objet |
@@ -403,10 +637,14 @@ L'ordre du §6 est opposable.
 > non-mutation. **Un verdict rendu là aurait laissé le lot ouvert.** Le prononcé
 > a lieu **au rang 13, et nulle part ailleurs**.
 
-> **Clause — ce que `A` non établi rend sans objet, et ce qu'il ne rend PAS sans
-> objet.** La V2 se trompait ici, et l'erreur était grave.
+> **Clause — ce que `A₁` non établi rend sans objet, et ce qu'il ne rend PAS
+> sans objet.** La V2 se trompait ici, et l'erreur était grave.
 >
-> | Rang | Sort si `A` n'est pas établi | Motif |
+> **Depuis la V5, cette clause porte sur `A₁` — l'INSTANT — et sur lui seul** :
+> c'est lui qui définit la fenêtre. **`A₂` non établi ne rend aucun rang sans
+> objet** ; il laisse `A` incomplet, et rien de plus.
+>
+> | Rang | Sort si **`A₁`** n'est pas établi | Motif |
 > |---|---|---|
 > | **8** — `L6` | **exécuté** | ne dépend pas de la fenêtre |
 > | **9** — `L8` | **exécuté** | ne dépend pas de la fenêtre |
@@ -414,7 +652,7 @@ L'ordre du §6 est opposable.
 > | **11** — `L9` | **la rétention est établie** ; la **lecture bornée** devient sans objet | idem |
 > | **11** — `L10` | **sans objet** | entièrement défini par la fenêtre |
 > | **11** — `L11` | **exécuté** | l'artefact ne dépend pas de la fenêtre |
-> | **12** — `L2` et `L0`, répétition finale | **OBLIGATOIRE, en toute hypothèse** | il porte **`RE-2`**, **`RE-3`** et **`RE-5`** |
+> | **12** — `L2` et `L0`, répétition finale | **OBLIGATOIRE, en toute hypothèse** | il porte **`RE-2a`**, **`RE-2b`**, **`RE-2c`**, **`RE-3`**, **`RE-5a`** et **`RE-5b`** |
 > | **13** — `L12`, puis prononcé | **OBLIGATOIRE, en toute hypothèse** | il porte **`RE-1`**, et **le verdict** |
 >
 > **La V2 déclarait le rang 12 « sans objet ».** Elle privait ainsi le lot de
@@ -426,13 +664,95 @@ L'ordre du §6 est opposable.
 
 ## 7. Règle de décision
 
+### 7.1.0 `A₁` — l'ancrage sur l'ÉVÉNEMENT ÉTUDIÉ, et la clause d'identité
+
+> **La V5 laissait un démarrage ULTÉRIEUR devenir silencieusement `A₁`.** Elle
+> écrivait que l'instant *« est établi par `L0` »*, sans vérifier que le
+> démarrage courant est bien **celui qui a suivi le redémarrage étudié**.
+> **Sur une installation qui redémarre entre-temps, `L0` désigne un autre
+> événement**, et le lot aurait attribué une instance qui n'est pas la sienne.
+
+**L'événement étudié est fixé par le corpus, et par lui seul** — `G2-C` §6,
+réserve `A-5` : le redémarrage machine survenu **pendant le préflight de la
+campagne `G.2`**, *« hors campagne »*. `G2-C` §1 situe la campagne elle-même.
+
+> **Ce que `L0` donne, et ce qu'il ne donne pas.**
+>
+> **`L0` ne rend QUE le DERNIER démarrage** — le démarrage **courant**. Il ne dit
+> rien de ceux qui l'ont précédé, ni de leur nombre, ni de leurs instants.
+>
+> **Le constat (ii) de la V6 était TAUTOLOGIQUE, et il est retiré.** Il exigeait
+> que le temps de fonctionnement *« couvre sans interruption l'intervalle depuis
+> l'instant candidat »* — or **l'instant candidat est dérivé de ce temps de
+> fonctionnement**. La vérification ne pouvait pas échouer : elle ne vérifiait
+> rien.
+
+> **Clause d'identité — `A₁` exige un rattachement UNIVOQUE.**
+>
+> L'instant dérivé de `L0` est un **instant candidat**. Il ne devient `A₁` que si
+> le **démarrage courant** est rattaché de façon **univoque** au redémarrage
+> étudié, par la conjonction des deux conditions suivantes :
+>
+> | | Condition |
+> |---|---|
+> | **(i)** | l'instant candidat tombe **avant l'ouverture de la campagne `G.2`** et **après le début de son préflight**, tels que le corpus les situe |
+> | **(ii)** | une **source de la liste close** établit **POSITIVEMENT** que le démarrage courant est **celui qui a immédiatement suivi** le redémarrage étudié — c'est-à-dire qu'**aucun autre démarrage ne s'est intercalé** entre eux |
+>
+> **Ce qui peut satisfaire (ii) — `L4` SEUL.** Une **énumération des
+> démarrages** par `L4` qui **couvre la période** allant de l'événement étudié à
+> l'exécution du lot, et qui n'y montre **qu'un seul** démarrage.
+>
+> **`L5` NE PEUT PAS satisfaire (ii)**, et la V7 se contredisait en le
+> permettant. Le §5 et la source `S3` posent que **`L5` ne porte pas l'instant du
+> redémarrage** — seulement son **caractère**, `A₂`. **Lui rendre ici la capacité
+> de porter une séquence de démarrages serait lui rendre l'instant**, que la V6
+> lui avait retiré. **`L5` ne porte aucun instant de démarrage, en aucune
+> circonstance.**
+>
+> **Aucun observable n'est ajouté par la présente clause.** Si `L4` ne rend pas
+> cela, **(ii) n'est pas satisfaite** — et le lot **ne va pas en chercher
+> ailleurs**.
+
+> **Deux causes d'échec de (ii), par `L4`, et elles suffisent chacune :**
+>
+> | | Cause | Conséquence |
+> |---|---|---|
+> | **1** | `L4` **ne couvre pas** la période nécessaire — l'énumération commence **après** l'événement étudié | l'unicité n'est **pas établissable** |
+> | **2** | `L4` couvre la période mais **n'y montre pas un démarrage unique** | l'unicité est **contredite** |
+>
+> **Dans l'un et l'autre cas, `A₁` demeure NON ÉTABLI.**
+
+> **Deux cas laissent `A₁` NON ÉTABLI, et tous deux doivent être nommés :**
+>
+> | | Cas | Pourquoi |
+> |---|---|---|
+> | **1** | l'installation a **redémarré depuis** l'événement étudié | `L0` désigne alors un **autre** démarrage. L'instant candidat n'est pas celui de `A-5` |
+> | **2** | **plusieurs redémarrages demeurent possibles dans le préflight** | `G2-C` §6 mentionne *« un redémarrage machine »* **sans exclure qu'il y en ait eu d'autres**. **Localiser un démarrage dans la fenêtre du préflight ne l'identifie pas à celui que `A-5` consigne** |
+>
+> **Dans l'un et l'autre cas, `A₁` demeure NON ÉTABLI.** L'instant candidat est
+> **consigné comme candidat**, et **MUST NOT** être employé — ni comme `A₁`, ni
+> pour définir la fenêtre du §6.1.
+>
+> **Le lot ne dispose alors d'aucune autre source pour l'instant** : `L5` ne le
+> porte plus — §5, `S3` —, et `L9` comme `L11` ne font que **corroborer**.
+> **Le verdict est alors `INSTANCE NON ATTRIBUABLE`**, par le §7.4.
+
 ### 7.1 Ce qui doit être établi pour `INSTANCE ATTRIBUÉE`
 
-**Trois éléments, CUMULATIFS.** L'absence d'un seul suffit à écarter le verdict.
+**Trois éléments, CUMULATIFS** — dont le premier se dédouble depuis la V5.
+**L'absence d'un seul suffit à écarter le verdict.**
+
+> **`A` est acquis si et seulement si `A₁` ET `A₂` le sont.** La V4 confondait
+> les deux sous un porteur unique, et rendait `A` inatteignable dès que la source
+> persistante ne portait aucun enregistrement de démarrage.
+>
+> **Et `A₁` n'est acquis que sous la clause d'identité du §7.1.0** : un instant
+> candidat n'est pas `A₁`.
 
 | # | Élément | Établi par | Corroborable par |
 |---|---|---|---|
-| **A** | l'**instant** du redémarrage machine, et son caractère de **redémarrage commandé** — non une coupure, non un arrêt matériel | **`L5`**, et par lui seul | `L9` (encadrement de l'interruption) · `L11` |
+| **A₁** | l'**INSTANT** du redémarrage machine **étudié** — celui du préflight `G.2` | **`L0`** rend l'instant candidat, rang 2 · **`L4`** établit l'unicité, rang 6 — **les DEUX sont requis**, sous la clause d'identité du §7.1.0 | `L9` (encadrement de l'interruption) · `L11` |
+| **A₂** | son **CARACTÈRE de redémarrage COMMANDÉ** — non une coupure, non un arrêt matériel | **`L5`**, rang 7 — §5.3 | `L9` · `L11` |
 | **B** | un **redémarrage de `<unité-pont>` commandé par le superviseur**, **dans la fenêtre** précédant cet instant | **`L7`** *(puits du superviseur, s'il existe)* · **`L10`** *(journal survivant)* · **`L11`** *(pièces du préflight)* | — |
 | **C** | **au moins un** corroborant : l'**intervalle d'environ 90 s** entre `B` et le redémarrage · **ou** la trace d'une **seconde sonde** dans cet intervalle · **ou** une **ligne propre du superviseur** nommant son chemin correctif | **`L7`** · **`L10`** · **`L11`** | — |
 
@@ -642,8 +962,8 @@ Et le corpus porte, sur **cette source précise**, un fait qui l'aggrave.
 
 ### 7.4 Matière insuffisante — conduite exacte
 
-> **Clause.** Si, après les actes du §6 exécutés dans l'ordre, **`A` ou `B` n'est
-> pas établi**, l'instruction **S'ARRÊTE** : **aucun acte supplémentaire n'est
+> **Clause.** Si, après les actes du §6 exécutés dans l'ordre, **`A` — c'est-à-dire
+> `A₁` ET `A₂` — ou `B` n'est pas établi**, l'instruction **S'ARRÊTE** : **aucun acte supplémentaire n'est
 > improvisé**, aucune source nouvelle n'est cherchée, aucune extrapolation n'est
 > tentée.
 >
@@ -665,12 +985,39 @@ Et le corpus porte, sur **cette source précise**, un fait qui l'aggrave.
 |---|---|---|
 | **`RA-1`** | un acte **hors liste close** du §5, ou hors de son rang au §6 | **`STOP`** immédiat ; consigner le fait, sans l'effacer ni l'ajouter à la liste |
 | **`RA-2`** | une **mutation** est constatée, commandée, ou sur le point de l'être — service, timer, unité, configuration, fichier | **`STOP`** immédiat |
-| **`RA-3`** | l'**état d'une unité change** pendant le lot — `<unité-pont>`, `<unité-superviseur>`, `<unité-démon>`, `<timer-guard>` | **`STOP`** ; le lot n'a pas à s'exécuter sur une installation qui bouge |
+| **`RA-3`** | l'**état d'une unité change** pendant le lot — `<unité-pont>`, `<unité-superviseur>`, `<unité-démon>`, `<timer-guard>` —, **hors le cycle nominal défini ci-dessous** | **`STOP`** ; le lot n'a pas à s'exécuter sur une installation qui bouge |
 | **`RA-4`** | **redémarrage machine** pendant le lot, quelle qu'en soit la cause | **`STOP`** immédiat |
 | **`RA-5`** | un acte exigerait d'**écrire sur l'hôte** | **`STOP`** ; l'acte n'est pas exécuté |
 | **`RA-6`** | l'**autorisation humaine du §10 est absente**, dépassée, ou son périmètre serait excédé | **`STOP`** ; la demander, ou renoncer |
 | **`RA-7`** | **doute de l'exploitant**, sans justification à fournir | **`STOP`** |
 | **`RA-8`** | une frontière du **§4** est franchie ou sur le point de l'être | **`STOP`** immédiat |
+
+> **Clause — le CYCLE NOMINAL ne déclenche PAS `RA-3`.** Ajoutée par la V5.
+>
+> `<unité-superviseur>` est **déclenchée périodiquement** par `<timer-guard>`.
+> Son passage par `activating` → `active` → `inactive`/`dead`, et le changement
+> de son **identifiant d'invocation** à chaque cycle, **sont le phénomène
+> observé**, non une dérive. Il en va de même de l'alternance
+> `running` / `waiting` de `<timer-guard>`.
+>
+> | | Déclenche `RA-3` ? |
+> |---|---|
+> | `<unité-superviseur>` change d'état ou d'identifiant d'invocation **selon sa cadence déclarée** | **NON** |
+> | `<timer-guard>` alterne `running` / `waiting`, `ActiveEnterTimestamp` **inchangé** | **NON** |
+> | **toute variation NON expliquée par ce cycle**, **constatée sur les propriétés que `L2` relève** — `ActiveEnterTimestamp` du timer **modifié**, compteur de relances **non nul**, `Result` **autre que succès**, `<timer-guard>` **inactif** | **OUI** |
+> | **l'`InvocationID` du superviseur demeure INCHANGÉ alors qu'une activation est ÉTABLIE DUE** au sens du §9.2 — mode à échéance indépendante de la durée d'exécution, et `Δ` la dépassant | **OUI** : une activation **due** n'a pas eu lieu |
+> | l'`InvocationID` demeure inchangé **sans qu'une activation soit établie due** — `OnUnitInactiveSec` seul, `OnBootSec` seul, ou mode indéterminé | **NON** — §9.2. Le déclencher serait un `STOP` injustifié |
+> | **`<unité-pont>` ou `<unité-démon>` change d'identifiant d'invocation ou d'état**, à quelque titre que ce soit | **OUI** |
+>
+> **`RA-3` ne s'oppose que sur ce que `L2` relève.** La V5 mentionnait une
+> *« cadence rompue »* : **`L2` ne la produit pas**, et un critère qu'aucun acte
+> n'alimente n'est pas opposable. Les quatre déclencheurs ci-dessus sont **tous
+> décidables sur les propriétés de `L2`**, aux rangs 4 et 12 — et à toute
+> répétition du cas 3.
+>
+> **Le registre est celui de `w4p1-lot-terrain-borne.md` V3** : *« Un changement
+> d'état ou de date de démarrage de `<unité-superviseur>` n'est PAS une
+> divergence. C'est le phénomène observé. »*
 
 > **Aucune seconde tentative dans la même fenêtre**, et **aucun rejeu** : le lot
 > ne se rejoue pas après un `STOP` sans une **autorisation humaine nouvelle**.
@@ -693,15 +1040,50 @@ inexécutables sans franchir `RA-1`.
 |---|---|---|---|
 | **`RE-1`** | **empreintes des fichiers de la liste de référence**, relevées **avant** la première lecture de contenu et **après** la dernière — `<script-superviseur>`, les **quatre** définitions d'unité, la configuration de journalisation. **Identiques**. **Le puits de `L7` n'en fait PAS partie** : il relève de `RE-1 bis` | **`L1`** et **`L12`** | 3 et 13 |
 | **`RE-1 bis`** | **empreinte du puits de journalisation**, **si et seulement si `L6` en a établi un** : prise **au rang 10, avant d'en lire une ligne**, reprise au rang 13. **Identiques**. **La couverture court de la DÉCOUVERTE à la fin du lot**, et **pas avant** — la réserve est **déclarée** au §9.1 | **`L7`** et **`L12`** | 10 et 13 |
-| **`RE-2`** | **identifiant d'invocation** et **compteur de relances** des **quatre** unités — `<unité-superviseur>`, `<unité-pont>`, **`<unité-démon>`**, `<timer-guard>` —, relevés au début et à la fin : **inchangés** | **`L2`**, répété | 4 et 12 |
+| **`RE-2a`** | **unités INVARIANTES** — `<unité-pont>` et **`<unité-démon>`** : **identifiant d'invocation** et **compteur de relances** relevés au début et à la fin, **inchangés** | **`L2`**, répété | 4 et 12 |
+| **`RE-2b`** | **`<unité-superviseur>`**, dont le **cycle périodique est nominal et attendu** : **aucun acte du lot ne l'a modifiée, démarrée, arrêtée ni redémarrée**, et son **compteur de relances demeure nul**. **Son identifiant d'invocation et son état CHANGENT à chaque cycle : ce n'est PAS une divergence** | **`L2`**, répété | 4 et 12 |
+| **`RE-2c`** | **`<timer-guard>`** : **actif** au début et à la fin, **`ActiveEnterTimestamp` inchangé**, et **alternance `running` / `waiting` admise**. **Aucun compteur de relances n'est exigé** — la propriété est **inapplicable à une unité `.timer`** | **`L2`**, répété | 4 et 12 |
 | **`RE-3`** | **identifiant du démarrage courant** — **inchangé** en fin de lot ; sa modification est **`RA-4`** | **`L0`**, répété | 2 et 12 |
 | **`RE-4`** | **aucun fichier créé, modifié ou supprimé sur l'hôte** — les sorties sont **rapatriées et figées hors de l'installation** ; aucun acte de la liste close n'écrit | par construction — §5 | tous |
-| **`RE-5`** | **état des quatre unités** en fin de lot, **identique** à celui du début | **`L2`**, répété | 4 et 12 |
+| **`RE-5a`** | **état de `<unité-pont>` et de `<unité-démon>`** en fin de lot, **identique** à celui du début | **`L2`**, répété | 4 et 12 |
+| **`RE-5b`** | **régime de `<unité-superviseur>` et de `<timer-guard>` demeuré NOMINAL**, établi **avec les seules prises de `L2`** : **`Result` = succès** aux deux prises pour les deux unités · **compteur de relances nul** aux deux prises pour l'unité de service · **`<timer-guard>` actif** aux deux prises, **`ActiveEnterTimestamp` inchangé** · **et, si une activation est ÉTABLIE DUE au sens du §9.2 : `InvocationID` du superviseur CHANGÉ** ; **sinon, le cycle n'est pas certifié, et `RE-5b` le déclare**. **L'état instantané du superviseur n'est PAS comparé**, il varie par construction | **`L2`**, répété | 4 et 12 |
 
-> **`RE-2` et `RE-5` couvrent `<unité-démon>`, et la V1 l'omettait.** `L2` porte
-> les **quatre** unités, et non trois : le démon est celui dont un redémarrage
-> **propagerait** au pont — `F-13`, §7.1.1 —, et l'omettre aurait laissé `O1`
-> sans moyen de constat pendant le lot.
+> **`RE-2a` et `RE-5a` couvrent `<unité-démon>`, et la V1 l'omettait.** `L2`
+> porte les **quatre** unités, et non trois : le démon est celui dont un
+> redémarrage **propagerait** au pont — `F-13`, §7.1.1 —, et l'omettre aurait
+> laissé `O1` sans moyen de constat pendant le lot.
+
+> **Pourquoi `RE-2` et `RE-5` ont été dédoublées — et c'est un défaut réel de la
+> V4.** Elles exigeaient *« inchangés »* des **quatre** unités, alors que
+> `<unité-superviseur>` est **déclenchée périodiquement** : son identifiant
+> d'invocation et son état **changent par construction**, à chaque cycle.
+>
+> **Lues à la lettre, ces deux preuves étaient INSATISFIABLES** dès que le lot
+> dure plus d'un cycle — c'est-à-dire toujours. **L'exécution du 2026-09-03 l'a
+> établi sur pièces** : `<unité-superviseur>` est passée de
+> `activating`/`start` à `inactive`/`dead`, identifiant d'invocation changé,
+> pendant que les deux unités invariantes demeuraient identiques en tous points.
+>
+> **Le corpus avait déjà résolu ce cas, et la V4 ne l'avait pas repris.**
+> `w4p1-lot-terrain-borne.md` V3, correction `D1`, a scindé `R2` en **`R2a`** —
+> unités invariantes — et **`R2b`** — *« unité cyclique dont le cycle n'est pas
+> une divergence »*. **La V5 transpose ce modèle**, et lui ajoute `RE-2c` pour le
+> timer.
+>
+> **Et la « cadence tenue » cesse d'être exigée.** La V5 la réclamait de
+> `RE-5b`. **Deux relevés ponctuels ne l'établissent pas** : une cadence se
+> constate sur une **suite** d'instants de déclenchement, que `L2` ne produit
+> pas. `RE-5b` est réénoncée sur ce que les **deux prises rendent réellement** —
+> résultat, compteur de relances, activité du timer, `ActiveEnterTimestamp`.
+>
+> **Exiger d'une preuve ce que son acte ne produit pas est le même défaut que
+> celui de la V1**, corrigé en `B2` : une preuve sans acte est inexécutable.
+
+> **Et une exigence inapplicable est retirée.** `RE-2` réclamait un **compteur de
+> relances** pour `<timer-guard>` : **une unité `.timer` n'en porte pas.**
+> L'exécution du 2026-09-03 l'a constaté — la propriété est **absente de la
+> sortie**, pour cette unité et pour elle seule. **Exiger une propriété qui
+> n'existe pas est un défaut de conception**, non un manquement de l'exécutant.
 
 > **Une limite héritée est corrigée.** `P1-H` §5 consigne que sous `W4-P1`,
 > quatre fichiers avaient été lus **avant** la prise d'empreinte de référence,
@@ -713,6 +1095,68 @@ inexécutables sans franchir `RA-1`.
 > *« depuis le rang 3 »* — **une promesse que le §9.1 contredisait dans le même
 > document**. Les deux preuves sont désormais **distinctes**, avec des
 > **couvertures distinctes**, et **le rapport ne peut plus les confondre**.
+
+### 9.2 `RE-5b` — le cycle doit avoir EU LIEU, et non seulement être possible
+
+> **La V6 certifiait « régime nominal » sans que le superviseur ait cyclé.**
+> Ses quatre constats — résultat, relances, timer actif, `ActiveEnterTimestamp`
+> — sont **tous compatibles avec un superviseur qui ne se déclenche plus**.
+> **Un superviseur qui a cessé de cycler n'est pas nominal**, et le lot doit
+> pouvoir le voir.
+
+> **La V7 invoquait une « période déclarée » que rien ne fournissait, et dont la
+> notion était ambiguë.** `L8` ne lisait pas les directives temporelles, et un
+> `.timer` peut en porter plusieurs, **de sémantiques différentes**. La V8
+> étend `L8` (§5) et définit la condition **par mode**.
+
+> **Clause — l'ACTIVATION DUE, définie par mode.**
+>
+> Soit `Δ` l'**intervalle entre les deux prises de `L2`** — rangs 4 et 12, établi
+> par les horodatages de `L0` —, et les **directives temporelles de
+> `<timer-guard>`** lues par **`L8`** au rang 9.
+>
+> **Une activation est réputée DUE entre les deux prises si et seulement si le
+> mode applicable donne une échéance INDÉPENDANTE de la durée d'exécution de
+> l'unité déclenchée, et que `Δ` excède strictement l'intervalle correspondant :**
+>
+> | Directive lue par `L8` | Une activation est-elle établissable comme DUE ? |
+> |---|---|
+> | **`OnCalendar`** | **OUI**, si `Δ` couvre strictement au moins une échéance du calendrier : l'échéance est **fixe**, indépendante de toute durée d'exécution |
+> | **`OnUnitActiveSec = T_a`** | **OUI**, si `Δ > T_a` : l'échéance court depuis l'**activation** précédente, non depuis sa fin |
+> | **`OnUnitInactiveSec = T_i`** | **NON, JAMAIS sur ce seul fondement** — voir ci-dessous |
+> | **`OnBootSec` / `OnStartupSec` seuls** | **NON** : ils ne produisent **qu'une seule échéance par démarrage**. **Aucune activation périodique n'est due** pendant le lot |
+>
+> **Pourquoi `OnUnitInactiveSec` ne suffit jamais.** Son échéance **repart à la
+> FIN de l'exécution** de l'unité déclenchée. L'intervalle entre deux activations
+> vaut donc **`durée d'exécution + T_i`** — et la **durée d'exécution n'est pas
+> dans l'objet de `L2`**. **`Δ ≥ T_i` n'implique donc PAS qu'une activation était
+> due**, et le conclure serait un **faux positif** sur une unité `oneshot`.
+>
+> **Si plusieurs directives coexistent**, la condition n'est établie que si
+> **l'une au moins** de celles marquées **OUI** la satisfait à elle seule.
+
+> **Ce que `RE-5b` exige, et ce qu'elle certifie :**
+>
+> | Cas | Exigence | Ce qui est certifié |
+> |---|---|---|
+> | une activation est **établie DUE** | l'**`InvocationID` de `<unité-superviseur>` MUST avoir CHANGÉ** entre les deux prises | le régime **et le cycle** |
+> | une activation **n'est PAS établie due** — quelle qu'en soit la raison | **aucun changement n'est exigé** | les **quatre premiers constats seulement**. **`RE-5b` MUST NOT certifier le cycle**, et **MUST le déclarer** |
+>
+> **Ce que cette clause NE prétend PAS.** Elle n'établit **aucune cadence** : un
+> changement d'identifiant d'invocation atteste **qu'au moins une activation a
+> eu lieu**, non qu'elles se sont succédé au rythme déclaré. **Deux prises ne
+> rendent pas une cadence**, et la V6 avait déjà retiré cette prétention.
+
+> **Corollaire opposable, porté par `RA-3`, et strictement borné.**
+>
+> **`RA-3` se déclenche** si une activation est **établie DUE** au sens
+> ci-dessus **et** que l'`InvocationID` demeure **INCHANGÉ** : une activation qui
+> devait avoir lieu n'a pas eu lieu.
+>
+> **`RA-3` MUST NOT se déclencher sur ce seul motif** lorsque l'activation
+> **n'est pas établie due** — notamment sous `OnUnitInactiveSec` seul, ou sous
+> `OnBootSec` seul. **Un identifiant d'invocation inchangé n'est alors pas une
+> anomalie**, et le traiter comme telle produirait un `STOP` injustifié.
 
 ### 9.1 Le puits de `L7` — couverture partielle, déclarée
 
@@ -760,6 +1204,15 @@ inexécutables sans franchir `RA-1`.
 **Le présent document ne l'accorde pas, ne la sollicite pas implicitement, et
 n'en préjuge pas.**
 
+> **Clause — l'autorisation du 2026-09-03 est CONSOMMÉE.** Elle a permis
+> l'exécution consignée au §14, laquelle est **NON CLOSE**. **Elle ne couvre
+> aucune réexécution**, ni en tout ni en partie.
+>
+> **Toute nouvelle tentative exige une AUTORISATION HUMAINE NOUVELLE**,
+> explicite, distincte, et **postérieure à l'audit de la présente version**.
+> Elle **MUST NOT** être déduite de l'autorisation consommée, ni de
+> l'intégration du présent correctif.
+
 **L'autorisation, si elle est donnée, MUST :**
 
 | # | |
@@ -795,9 +1248,10 @@ n'en préjuge pas.**
 | **5 bis** | pour **`B`** : l'examen des **quatre origines concurrentes** `O1` à `O4` du §7.1.1, **une par une**, avec ce qui a écarté chacune — ou le constat qu'elle demeure ouverte |
 | **6** | l'examen de la **clause d'exclusion concurrente** du §7.2 |
 | **7** | le **verdict** — `INSTANCE ATTRIBUÉE` ou `INSTANCE NON ATTRIBUABLE` — avec ce qui l'a établi |
-| **8** | les preuves **`RE-1`**, **`RE-1 bis`**, **`RE-2`**, **`RE-3`**, **`RE-4`** et **`RE-5`**, avec l'acte et le rang qui les ont produites |
+| **8** | les preuves **`RE-1`**, **`RE-1 bis`**, **`RE-2a`**, **`RE-2b`**, **`RE-2c`**, **`RE-3`**, **`RE-4`**, **`RE-5a`** et **`RE-5b`**, avec l'acte et le rang qui les ont produites |
 | **8 ter** | pour **`RE-1 bis`** : l'état du puits — **découvert** ou **inexistant**. S'il a été découvert, les **deux empreintes** (rangs 10 et 13) **et la réserve de couverture partielle du §9.1, nommément** : la couverture court **de la découverte à la fin du lot**, et **jamais rétroactivement** |
 | **8 bis** | la liste des **répétitions structurées** de `L0` et `L2` effectivement exécutées, avec leur horodatage et leur motif |
+| **8 quater** | pour **`L5`** : le **lecteur employé** parmi les trois du §5.3, le **motif** du repli s'il a été employé, la **concordance d'empreinte** avant et après rapatriement, et — si un format a été découvert — le **témoin retenu, son type, ce qui le rend indépendant**, les **éléments de cohérence structurelle**, et **tout parse écarté**. **La validation structurelle et le constat d'absence de `BOOT_TIME`/`RUN_LVL` sont rapportés SÉPARÉMENT** |
 | **9** | tout **`RA`** atteint, **prononcé ou non**, et le fait qu'il l'ait été ou non |
 | **10** | ce qui **demeure non établi** |
 
@@ -881,7 +1335,37 @@ Il borne un acte de lecture, le referme, et s'arrête là.
 
 ---
 
-## 14. Historique de révision
+## 14. Statut de l'exécution du 2026-09-03
+
+> **Elle est NON CLOSE.** `RA-1` a été **atteint et prononcé à
+> l'homologation** : `who -b` a été employé au titre de `L5`, alors qu'il lit
+> `/var/run/utmp` — la table **courante** — et non `/var/log/wtmp`. **Ce sont
+> deux objets distincts**, et l'acte était donc **hors liste close**.
+
+**Ce que le présent correctif fait, et ne fait pas :**
+
+| | |
+|---|---|
+| il **corrige le lot** pour les tentatives **futures** | §5.3, §9, §8 |
+| il **ne corrige pas le rapport terrain passé** | ce rapport demeure **la consignation d'une exécution NON CLOSE**, et **MUST NOT** être réécrit |
+| il **ne rejoue rien** | aucune réexécution n'est autorisée — §10 |
+| il **ne prononce pas `P-A5`** | le verdict `INSTANCE NON ATTRIBUABLE` du 2026-09-03 appartient à une exécution non close ; **sa portée relève de l'arbitrage humain**, non du présent document |
+| il **ne rouvre pas `G3`** | et **n'ouvre aucune `P-9`** |
+
+> **Un `STOP` n'est pas un verdict** — §8. Une exécution arrêtée sur `RA-1`
+> **n'a pas prononcé valablement** : le dire est préférable à laisser croire le
+> contraire.
+
+> **Ce que l'exécution a néanmoins établi, et qui demeure au dossier.** Les
+> pièces figées — empreintes, relevés d'état, script du superviseur,
+> définitions d'unité, `wtmp` — sont **conservées telles quelles**, et **ne sont
+> ni détruites ni complétées**. Ce sont elles qui ont révélé les deux défauts
+> que la présente version corrige. **Une exécution non close peut instruire son
+> propre lot** ; elle ne peut pas prononcer à sa place.
+
+---
+
+## 15. Historique de révision
 
 | Version | Objet |
 |---|---|
@@ -889,3 +1373,7 @@ Il borne un acte de lecture, le referme, et s'arrête là.
 | **2** | Après audit. Six blocages fermés et une règle de désambiguïsation ajoutée, sans terrain. `B1` : **`<journal-démon>`** entre comme source **`S7`** (§3.2) et comme acte **`L9`**, avec **rétention vérifiée avant exploitation**, conclusion **`SOURCE NON DISCRIMINANTE`** licite, et **interdiction d'attribuer par absence** — `U-3` demeure ouverte. `B2` : les preuves de non-mutation deviennent **exécutables** — trois actes les portent (`L1` empreintes de référence, `L2` état des **quatre** unités dont `<unité-démon>`, `L12` empreintes finales), et les **répétitions structurées** de `L0` et `L2` sont **explicitement autorisées**, sans quoi `RA-3` et `RA-4` étaient des critères sans moyen. `B3` : le **resserrement volontaire** par rapport à `G3` §6.1 (a) est **déclaré** — `B` demeure pivot obligatoire, et ce choix **peut produire `INSTANCE NON ATTRIBUABLE`** malgré une voie théoriquement suffisante. `B4` : nouveau **§7.1.1** — quatre origines concurrentes du redémarrage du pont, `F-13` en tête ; **`B` n'est qualifié que si les quatre sont exclues par preuve**, et **jamais par proximité temporelle**. `B5` : nouveau **§9.1** — la couverture d'empreinte du puits est **prouvée depuis sa découverte** et **déclarée ne pas couvrir ce qui précède**. `B6` : renvois et citations corrigés — autorisation **§10**, rang de l'instant **sans anticipation du verdict**, cadence sourcée sur **`P1-H` §4**, `W4-C` §9.1 **cité mot pour mot**. **Désambiguïsation `G.n`** posée au §0 et appliquée. **Autorisation toujours `NON DONNÉE`.** |
 | **3** | Après réaudit. Sept blocages fermés, sans terrain. `R1` : la renumérotation de la V2 est **propagée au §7.1** — `A` sur **`L5`**, `B` et `C` sur **`L7`, `L10`, `L11`** seuls, et **`L9` expressément exclu** de `B` et de `C`, sa seule contribution licite étant de corroborer `A`. `R2` : le §6.2 déclarait le **rang 12 « sans objet »** quand `A` manque — **faux et grave**, ce rang portant `RE-2`, `RE-3` et `RE-5` ; une clause distingue désormais ce que l absence de fenêtre rend sans objet de ce qui **demeure obligatoire**, rangs **12 et 13** compris. `R3` : nouveau **§7.1.2** — `O1` ne s exclut **que par un enregistrement POSITIF** de l état de `<unité-démon>` ; **aucun observable n est inventé** ; si aucune voie licite n aboutit, **`O1` demeure ouverte, `B` est inqualifiable, le verdict est `INSTANCE NON ATTRIBUABLE`**, et les formules d atténuation sont nommément interdites. `R4` : décomptes corrigés — **treize actes `L0` à `L12`**, et le §10 les autorise **exactement**. `R5` : quatre renvois faux corrigés — **§7.1.1** (deux occurrences), **réserve n° 10**, **autorisation §10**, et **`G3` §6.1 (a)** cité avec son document. `R6` : **`RE-1 bis`** créée — le puits de `L7` sort de `RE-1`, avec sa **propre empreinte** et une **couverture depuis la découverte seulement**, alignée sur le §9.1. `R7` : les deux formulations fautives passent en **`MUST NOT`**. **Autorisation toujours `NON DONNÉE`.** |
 | **4** | Après réaudit. Quatre blocages fermés, sans terrain. `RR1` : **`O3` était encore excluable par une absence** — le défaut que la V3 venait de corriger sur `O1`. Nouveau **§7.1.3** : `O3` ne s exclut que par un **enregistrement POSITIF daté dans la fenêtre**, portant l état de l installation ou les commandes de l exploitant ; à défaut **`O3` demeure ouverte, `B` est inqualifiable, le verdict est `INSTANCE NON ATTRIBUABLE`**. Le motif est sourcé : le dossier `G.2` est **démontrablement non exhaustif** — `A-5` place la fenêtre *hors campagne*, `A-1` consigne une **capture écrasée et non recréée** ; **un dossier qui a perdu une pièce ne prouve aucune absence**. `RR2` : **double négation supprimée au §5.2** — la formule disait le contraire de ce qu il fallait. `RR3` : **réserve 8 alignée sur le §7.1.2** — constat positif seul, `L9` sans contribution à `B`/`C`, `L10` adossée à une source non survivante, **seule `L11` peut potentiellement fermer `O1`** ; réserve **8 bis** ajoutée pour `O3`. `RR4` : **`RE-1 bis` propagée** — `L7`, `L12`, et sortie **8 ter** au §11 ; **clause de non-rétroactivité** ajoutée au §9.1, sans exception. **Autorisation toujours `NON DONNÉE`.** |
+| **5** | **Lot CORRECTIF**, après audit d'homologation de l'exécution du 2026-09-03 — laquelle est **NON CLOSE**, `RA-1` atteint. Aucun terrain. `C1` : **`L5` était inexécutable comme écrit** ; l'**instant** est rattaché à **`L0`** — dédoublement de `A` en **`A₁`** instant et **`A₂`** caractère —, `L5` est recentré sur les enregistrements **persistants** et sur eux seuls, ses **lecteurs licites** et son **repli** sont nommés au nouveau **§5.3**, la **caractérisation complète du même objet** y est expressément autorisée avec **motif témoin obligatoire**, et `/var/run/utmp` comme `who` deviennent **interdits hors acte prévu** (§4). `C2` : **`RE-2` et `RE-5` étaient insatisfiables par construction** ; le modèle `R2a`/`R2b` de `w4p1-lot-terrain-borne.md` V3 est **transposé** en **`RE-2a`/`RE-2b`/`RE-2c`** et **`RE-5a`/`RE-5b`**, et l'exigence de **compteur de relances est retirée pour `<timer-guard>`**, où elle est **inapplicable**. `C3` : **`RA-3`** exclut désormais le **cycle nominal** du superviseur et de son timer, **toute variation non expliquée par ce cycle demeurant déclencheur**. `C4` : l'autorisation du 2026-09-03 est déclarée **CONSOMMÉE**, une **autorisation nouvelle** est exigée avant toute réexécution, et le nouveau **§14** consigne le statut de l'exécution passée **sans la réécrire**. **`P-A5` n'est pas prononcée. `G3` n'est pas rouvert. Aucune `P-9`.** |
+| **6** | Après réaudit du correctif. Aucun terrain. `B1` : **la V5 laissait un démarrage ultérieur devenir silencieusement `A₁`** — nouveau **§7.1.0** : `L0` ne rend qu'un **instant candidat**, et une **clause d'identité à deux constats** vérifie qu'il correspond au redémarrage **étudié** du préflight `G.2` ; le constat (ii) est **positif**, fondé sur la continuité du temps de fonctionnement ; **à défaut, `A₁` demeure non établi** et **ne définit aucune fenêtre**. `B2` : **le motif témoin était circulaire** — il exigeait un `BOOT_TIME` pour valider un format dont l'objet peut n'en porter aucun ; le témoin **MAY être d'un autre type du même objet**, et la **validation structurelle** est **séparée** du **constat d'absence de `BOOT_TIME`/`RUN_LVL`**, qu'un parse structurellement validé **peut établir sans présupposer** que ces types existent. `B3` : **`L2` est étendue nommément** — état, sous-état, résultat, invocation, **`ActiveEnterTimestamp`**, relances pour les seules unités de service —, **`RE-5b` est réénoncée sur ce que les deux prises rendent réellement**, la **« cadence tenue » cesse d'être exigée**, et **`RA-3` ne s'oppose plus que sur les propriétés que `L2` relève**. `B4` : nouveau **§5.4** — **règle positive de bornage de l'exploitation** autour de la date du préflight, la caractérisation du §5.3 n'étant autorisée **que comme instrumentation** et **ne levant pas** ce bornage. **Propagations** : **`S3`** ne porte plus l'instant, seulement le **caractère / `A₂`** ; le **rang 4** nomme `RE-2a`, `RE-2b` et `RE-2c`. **Autorisation toujours `NON DONNÉE`. Exécution du 2026-09-03 toujours `NON CLOSE`. `P-A5` non prononcée. `G3` non rouvert.** |
+| **7** | Après réaudit du correctif. Aucun terrain. `B1-a` : **le constat (ii) de la V6 était TAUTOLOGIQUE** — l'instant candidat étant dérivé du temps de fonctionnement, la vérification ne pouvait pas échouer ; **retiré**. Il est reconnu que **`L0` ne rend que le dernier démarrage**, et `A₁` n'est acquis que si celui-ci est rattaché **de façon univoque** au redémarrage étudié, par **`L4` ou `L5`** et **par aucune source ajoutée** ; **deux cas laissant `A₁` non établi sont nommés**, dont celui de **plusieurs redémarrages possibles dans le préflight**. `B1-b` : le §6.2, rang 7, **n'écrit plus que `A₁` est acquis au rang 2** — le rang 2 ne rend qu'un **candidat**, et la fenêtre n'existe qu'après la clause d'identité. `B2-a` : la **« séquence chronologique cohérente » est SUPPRIMÉE** comme critère — les enregistrements `utmp` étant **mis à jour en place**, le conteneur n'est pas ordonné, et ce critère aurait **rejeté le format réel** ; **aucun critère d'ordre n'est opposable**. `B2-b` : la validation structurelle repose sur **quatre critères cumulatifs** — **couverture intégrale**, **minimalité**, champ temporel, témoin indépendant — ; **un parse sautant un enregistrement sur deux MUST NOT être retenu**, et **aucun constat d'absence ne peut être fondé sur un parse partiel**. `B3` : nouveau **§9.2** — pour un lot couvrant **au moins une période du timer**, `RE-5b` exige un **changement positif de l'`InvocationID`** du superviseur ; **à défaut, `RA-3` se déclenche** ; les autres protections sont conservées et **aucune cadence n'est prétendue**. **`B4` non touché. Autorisation toujours `NON DONNÉE`. Exécution du 2026-09-03 toujours `NON CLOSE`. `P-A5` non prononcée. `G3` non rouvert.** |
+| **8** | Après réaudit du correctif. Aucun terrain. **Blocage 1** : **`T` n'avait aucune source** — le §9.2 invoquait une *« période déclarée lue par `L8` »* que **`L8` ne lisait pas**, et la notion était **ambiguë**. **`L8` est étendu nommément** aux directives temporelles de `<timer-guard>` — `OnBootSec`, `OnStartupSec`, `OnActiveSec`, `OnUnitActiveSec`, `OnUnitInactiveSec`, `OnCalendar`, unité déclenchée et type de service —, sa colonne `Sert` propagée vers **`RE-5b`** et **`RA-3`**, et la **condition d'activation due est définie PAR MODE**. **Blocage 2** : **la V7 rendait à `L5` la capacité de porter des instants de démarrage**, que la V6 lui avait retirée — **contradiction interne** ; la condition (ii) du §7.1.0 **repose désormais sur `L4` SEUL**, ses **deux causes d'échec** sont nommées, **`L4` est propagé comme porteur de l'unicité de `A₁`**, et **`L5` ne porte aucun instant de démarrage, en aucune circonstance**. **Non bloquant** : la formule `Δ ≥ T` produisait un **faux positif sur un `oneshot`** — sous `OnUnitInactiveSec`, **l'échéance repart à la fin de l'exécution**, l'intervalle valant `durée + T_i` et la durée n'étant **pas dans l'objet de `L2`** ; la condition est réénoncée par mode, et **si une activation n'est pas établie due, `RE-5b` MUST NOT certifier le cycle et `RA-3` MUST NOT se déclencher sur ce seul motif**. **Autorisation toujours `NON DONNÉE`. Exécution du 2026-09-03 toujours `NON CLOSE`. `P-A5` non prononcée. `G3` non rouvert.** |
