@@ -1,5 +1,21 @@
 # `W4-T` — caractérisation groupée des trois écritures non caractérisées
 
+> ## `CLOS`
+>
+> **La V2 a été exécutée le 2026-09-04 et ABANDONNÉE au rang 2** —
+> `VALEUR NON APPLIQUÉE` sur `heating_curve_slope`, **deux écritures réelles**,
+> `setTempRaumNorSollM1` **caractérisée**, installation rendue nominale. Le
+> constat est porté par **`w4t-constat.md`**.
+>
+> **Les DEUX autorisations de ce document sont CONSOMMÉES**, et le présent
+> protocole **ne peut plus fonder aucune exécution**.
+>
+> **Le rejeu de `heating_curve_slope` est porté par `W4-T1` —
+> `w4t1-rejeu-pente.md`**, et par lui seul. **`dhw_setpoint` demeure non
+> caractérisée**, et son lot reste à ouvrir.
+
+---
+
 > **Version 2 — après l'abandon de la V1.** Une **précondition** est ajoutée,
 > et **rien d'autre**.
 >
