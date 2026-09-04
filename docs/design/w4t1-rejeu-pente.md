@@ -1,5 +1,19 @@
 # `W4-T1` — rejeu minimal, **la pente et rien d'autre**
 
+> ## `EXÉCUTÉ` — `W4-T1 CONFIRMÉ`, exécution `HOMOLOGUÉE`
+>
+> **Exécuté le 2026-09-04.** `applied`, écart `abs(relu − cible)` **exactement
+> nul**, restauration due et exécutée, **cardinalité 2**, fermeture nominale.
+> Le constat est porté par **`w4t1-constat.md`**.
+>
+> **La forme décimale `1.9` est confirmée EN VOL**, et **`setNeigungM1` est
+> caractérisée**. **L'autorisation de ce document est CONSOMMÉE.**
+>
+> **Le dernier rôle non caractérisé est `dhw_setpoint`**, porté par **`W4-T2` —
+> `w4t2-ecs.md`**, et par lui seul.
+
+---
+
 > **Version 1.** Ouverture **et** bornage d'un rejeu **réduit à un seul rôle** :
 > `heating_curve_slope` / `setNeigungM1`, le seul que `W4-T` a laissé
 > **non caractérisé et engageable**.
