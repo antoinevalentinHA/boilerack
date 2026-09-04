@@ -1,5 +1,20 @@
 # `W4-T2` — caractérisation de l'ECS, **le dernier rôle**
 
+> ## `EXÉCUTÉ` — `W4-T2 CONFIRMÉ`, exécution `HOMOLOGUÉE`
+>
+> **Exécuté le 2026-09-04.** `applied`, **égalité stricte**, **régime `A`
+> confirmé par l'observation — aucun démarrage de brûleur**, `R-ECS` sans effet
+> parasite, **cardinalité 2**, fermeture nominale. Constat :
+> **`w4t2-constat.md`**.
+>
+> **Les QUATRE rôles d'écriture du profil sont désormais caractérisés en
+> écriture réelle. L'autorisation de ce document est CONSOMMÉE.**
+>
+> **`I-ECS` et le régime `B` demeurent OUVERTS.** La suite n'est plus une
+> question d'écriture mais de durée : **`LOT 2B` — `lot2b-regime-permanent.md`**.
+
+---
+
 > **Version 1.** Ouverture **et** bornage d'une campagne **réduite à un seul
 > rôle** : `dhw_setpoint` / `setTempWWsoll`, **le dernier des quatre que
 > Boilerack déclare et n'a jamais émis**.
