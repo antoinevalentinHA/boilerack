@@ -1,15 +1,46 @@
 # `LOT 2B` — régime permanent et rollback
 
-> **Version 1.** Ouverture, **mesures terrain**, bancs hors production, et
-> **bornage** des actes qui renversent réellement le régime.
+> ## `EXÉCUTÉ` — et `NON HOMOLOGUABLE STRICTEMENT`
 >
-> **Ce document n'exécute aucune bascule. Aucun acte de souveraineté n'a été
-> accompli.** Ce qui a été fait est **mesuré, simulé ou volatile**, et l'état de
-> l'installation est **exactement celui qu'il était avant** — §3.
+> **`LOT 2B V1` a été exécuté le 2026-09-04.** Les cinq actes, la bascule, le
+> rollback réel chronométré à **73 s** et la remise en régime sont
+> **matériellement établis**. **Le régime permanent est en place.**
 >
-> **L'autorisation humaine est `NON DONNÉE`** — §12.
+> **L'exécution n'est PAS homologable au regard du §10**, et elle ne le
+> deviendra pas : **`§10.0`** — la `P-DEP` est absente et son antériorité est
+> hors d'atteinte · **`§10.4`** — **aucun redémarrage machine APRÈS la bascule** ·
+> **`§10.9`** — les critères `AB`/`FA` **n'ont pas été prononcés en fenêtre**.
 >
-> **L'acte réservé 4 demeure interdit en tout état de cause.**
+> **Réserve NON RÉSOLUE, conservée** : dans la pièce `C-acte-5` du dossier de
+> preuve, l'étiquette « toml AVANT » précède un bloc de contenu relevé **après**
+> la mutation. Défaut de transcription, non de fait — mais **non corrigé**.
+>
+> Preuve matérielle **hors dépôt**, 21 pièces :
+> `687db4d22808a7901dba58f51c3cbe7e0b5af658b281f23db3041128fc72eb1d`.
+>
+> **La preuve de régime est complétée — jamais régularisée — par `LOT 2B-R`,
+> `lot2b-r-reboot.md`.**
+
+---
+
+> **Version 1 — DOCUMENT DE PRÉPARATION.** Il a été écrit **avant** toute
+> bascule, pour mesurer, éprouver hors production, et **borner** les actes qui
+> renversent le régime. **Il a rempli cet office, puis il a été exécuté.**
+>
+> ### Trois mentions de ce document sont **PÉRIMÉES**
+>
+> Elles étaient vraies à la rédaction. **Elles ne le sont plus, et elles sont
+> remplacées ici** — le corps du document les conserve à titre historique,
+> chacune signalée sur place.
+>
+> | Mention périmée | État réel, au 2026-09-04 |
+> |---|---|
+> | *« Aucun acte de souveraineté n'a été accompli »* | **`LOT 2B V1` a été EXÉCUTÉ.** Les cinq actes du §7 sont accomplis, dans l'ordre contraint : **bascule**, **rollback réel**, **remise en régime** |
+> | *« L'autorisation humaine est `NON DONNÉE` »* | **DONNÉE le 2026-09-04**, en deux temps — `10:47:26Z`, puis `10:49:47Z` qui l'a rendue conforme au §12 — **puis CONSOMMÉE** |
+> | *« L'acte réservé 4 demeure interdit en tout état de cause »* | **Clause LEVÉE nommément, pour cette seule campagne**, par l'autorisation, qui porte expressément les **actes réservés 2, 3 et 4** du `w4f` §11.1 |
+>
+> **Et cela ne rend pas l'exécution homologable** : `V1` demeure
+> **`NON HOMOLOGUABLE STRICTEMENT`** — bandeau ci-dessus.
 
 ---
 
@@ -57,6 +88,9 @@ le temps et mesurée**.
 
 ## 2. Périmètre
 
+> **PÉRIMÉ — interdiction levée par l'autorisation du 2026-09-04.** Conservée
+> ici telle qu'elle s'appliquait **avant** l'audit et l'autorisation.
+>
 > **`LOT 2B` MUST NOT**, tant que l'audit n'a pas borné les actes du §7 :
 >
 > - **activer `<unité-boilerack>` au démarrage** ;
@@ -66,9 +100,11 @@ le temps et mesurée**.
 > - **modifier Arsenal**, en quoi que ce soit ;
 > - **basculer la souveraineté** — acte réservé **4**.
 
-**Ce que le lot fait, et qui ne franchit aucune de ces bornes** : il **mesure**,
-il **simule hors production**, et il pose des artefacts **volatils** — dans
-`/run`, effacés au redémarrage — pour éprouver un mécanisme sans l'installer.
+**Ce que le lot faisait, à la rédaction, et qui ne franchissait aucune de ces
+bornes** : il **mesurait**, il **simulait hors production**, et il posait des
+artefacts **volatils** — dans `/run`, effacés au redémarrage — pour éprouver un
+mécanisme sans l'installer. **Les cinq actes ont ensuite été accomplis sous
+l'autorisation du §12.**
 
 ---
 
@@ -143,7 +179,7 @@ La sonde du superviseur est **`vclient getTempKist`**, **timeout `5 s`**.
 | **MQTT** | courtier bloqué **35 s** par une règle de filtrage **volatile**, retirée et vérifiée retirée | service **`active`**, **`NRestarts=0`** |
 | **`<unité-démon>`** | démon **arrêté 40 s** puis redémarré | service **`active`**, **`NRestarts=0`** ; lecture nue redevenue `0` après reprise |
 | **Redémarrage du service** | `restart` | reprise propre, connexion MQTT rétablie en ≈ 2 s |
-| **Redémarrage machine** | `reboot` | machine revenue en **≈ 47 s** |
+| **Redémarrage machine** | `reboot` **au banc, AVANT la bascule** | machine revenue en **≈ 47 s** |
 
 **La preuve de reprise est POSITIVE, et ne repose pas sur l'absence de trace** :
 après les deux pannes, l'état de chaîne **publié par Boilerack** vaut
@@ -157,9 +193,14 @@ après les deux pannes, l'état de chaîne **publié par Boilerack** vaut
 > **Aucune doctrine de cycle de vie n'est créée ici** : les contrats `W1`
 > existants sont **vérifiés**, pas réécrits.
 
-### 3.4 Le filet de boot, tel qu'il est AUJOURD'HUI
+### 3.4 Le filet de boot AVANT la bascule — éprouvé par un redémarrage réel
 
-Après redémarrage réel, **sans aucune intervention** :
+> **Ce relevé date du banc préparatoire, et il est ANTÉRIEUR à la bascule.** Il
+> décrit le filet **non inversé**. Après la bascule, ce tableau **s'inverse** —
+> §8 — et **aucun redémarrage n'a été fait pour le constater** : c'est l'objet de
+> **`LOT 2B-R`**.
+
+Après redémarrage réel **du banc**, **sans aucune intervention** :
 
 ```
 <unité-pont>        active    enabled
@@ -326,6 +367,10 @@ journal : Killing process … with signal SIGKILL / code=killed, status=9/KILL
 
 ## 7. LA BORNE — les cinq actes qui renversent le régime
 
+> **PÉRIMÉ.** À la rédaction, aucun n'avait été accompli. **Ils l'ont tous été
+> le 2026-09-04, dans l'ordre contraint ci-dessous**, sous l'autorisation du §12.
+> Le texte d'origine suit.
+>
 > **Aucun n'a été accompli. Ils forment ensemble la bascule, et ils sont
 > indissociables.**
 
@@ -380,7 +425,7 @@ pont**.
 | **1** | l'état **avant** : `UnitFileState` des quatre unités, autorité persistée, empreintes des fichiers persistés |
 | **2** | **les cinq actes, dans l'ordre du §7**, chacun horodaté et constaté |
 | **3** | **la preuve qu'à aucun instant les deux écrivains n'ont été actifs ensemble** |
-| **4** | un **redémarrage machine réel**, et le **filet de boot inversé** constaté |
+| **4** | un **redémarrage machine réel**, et le **filet de boot inversé** constaté — **NON PRODUIT par `V1`**, et il faut être exact : un redémarrage réel **a bien eu lieu au banc, AVANT la bascule** (§3.4), et il a constaté le filet **NON inversé** ; **aucun redémarrage n'a eu lieu APRÈS la bascule, en régime permanent**. **C'est cette preuve-là, et elle seule, que `LOT 2B-R` doit établir** |
 | **5** | un **cycle nominal du superviseur** re-pointé, sans action corrective |
 | **6** | le **budget de sonde** et la **marge** re-mesurés en régime permanent |
 | **7** | **un rollback réel exécuté de bout en bout**, chronométré, puis le retour au régime permanent |
@@ -400,7 +445,8 @@ puits compris, et le manifeste s'exclut de son propre inventaire**
 
 1. les **cinq actes** accomplis **dans l'ordre**, chacun constaté ;
 2. **aucun instant à deux écrivains actifs**, prouvé ;
-3. **filet de boot inversé**, constaté sur un redémarrage réel ;
+3. **filet de boot inversé**, constaté sur un redémarrage réel **postérieur à la
+   bascule** — le redémarrage du banc, antérieur, ne peut pas y suppléer ;
 4. **cycle nominal** du superviseur re-pointé ;
 5. **rollback réel exécuté**, chronométré, **sans redémarrage machine** ;
 6. **retour au régime permanent** après le rollback ;
@@ -412,7 +458,15 @@ puits compris, et le manifeste s'exclut de son propre inventaire**
 
 ## 12. L'autorisation humaine
 
-> ### `NON DONNÉE`
+> ### `DONNÉE le 2026-09-04, puis CONSOMMÉE`
+>
+> **PÉRIMÉ : `NON DONNÉE`.** L'autorisation a été donnée en deux temps —
+> `10:47:26Z`, puis `10:49:47Z` qui en a porté les points 2 et 6 et l'a rendue
+> conforme. Elle a été **CONSOMMÉE** par l'exécution du même jour, et **ne peut
+> plus fonder aucun acte**.
+>
+> Les exigences ci-dessous sont conservées **comme mémoire de ce qui était
+> requis**, et elles ont été servies.
 
 **L'autorisation, si elle est donnée, MUST :**
 
@@ -459,15 +513,23 @@ puits compris, et le manifeste s'exclut de son propre inventaire**
 
 ---
 
-## 14. Ce que ce document ne fait pas
+## 14. Ce que ce document ne faisait pas
 
-Il **n'exécute aucun des cinq actes du §7** · **n'autorise rien** · **n'installe
-rien** — ni superviseur, ni drop-in, ni variable · **ne modifie pas Arsenal** ·
-**ne corrige pas l'escalade** du superviseur · **ne révise aucune tolérance** ·
-**ne lève ni `I-ECS`, ni `C1`, ni `U-2`, ni `U-3`, ni `H2`, ni `H6 (b)`** ·
-**ne crée aucune doctrine de cycle de vie** : il vérifie les contrats existants.
+> **PÉRIMÉ pour ses deux premières mentions.** Le document n'exécutait ni
+> n'autorisait rien **par lui-même** — et il ne le fait toujours pas : ce sont
+> **l'autorisation du §12** et l'exécution du 2026-09-04 qui ont accompli les
+> cinq actes et installé le superviseur, le drop-in et la variable. **Le reste
+> de la liste demeure vrai.**
 
-**Il mesure, il éprouve hors production, il borne, et il s'arrête là.**
+Il **n'exécutait aucun des cinq actes du §7** · **n'autorisait rien** ·
+**n'installait rien** — ni superviseur, ni drop-in, ni variable · **ne modifie
+pas Arsenal** · **ne corrige pas l'escalade** du superviseur · **ne révise
+aucune tolérance** · **ne lève ni `I-ECS`, ni `C1`, ni `U-2`, ni `U-3`, ni `H2`,
+ni `H6 (b)`** · **ne crée aucune doctrine de cycle de vie** : il vérifie les
+contrats existants.
+
+**Il a mesuré, éprouvé hors production, borné — et l'exécution est venue
+ensuite, sous autorisation.**
 
 ---
 
