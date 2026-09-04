@@ -47,6 +47,7 @@ from boilerack.adapters.config import VclientConfig
 from boilerack.adapters.process_runner import ProcessResult, ProcessRunner
 from boilerack.adapters.vclient_cli import VClientCliReader
 from boilerack.clock import Clock
+from boilerack.decimal_form import format_scalar
 from boilerack.transport.vclient import (
     EvidenceSink,
     TransportStatus,
@@ -179,19 +180,43 @@ class VclientWriteInvocation:
 
     @staticmethod
     def render(value: float) -> str:
-        """Rend la valeur sous sa forme ENTIERE, seule forme caracterisee.
+        """Rend la valeur : forme ENTIERE si elle est entiere, DECIMALE sinon.
 
-        W4-C n'a observe qu'une ecriture, `setNiveauM1 2`, sur un datapoint dont
-        le contrat est `int` a pas 1 : la forme entiere est donc la seule dont on
-        sache qu'elle est acceptee. La representation d'un non-entier releve de
-        l'inconnue **I-8**, que la campagne a deliberement ecartee — elle n'a
-        emis qu'un entier exact, precisement pour ne pas avoir a l'interpreter.
+        FORME ENTIERE — inchangee depuis W4-B
+            `setNiveauM1 2` est la seule ecriture que W4-C ait observee, sur un
+            datapoint `int` a pas 1. Le rendu entier n'est pas touche : les trois
+            roles a conversion identite continuent de recevoir `16`, jamais
+            `16.0`.
 
-        Le rendu est DETERMINISTE et insensible a la locale (W4-A §15) : deux
-        appels de meme valeur produisent le meme texte.
+        FORME DECIMALE — I-8 levee pour le domaine de `setNeigungM1`
+            L'inconnue I-8 portait sur deux choses : la forme textuelle, et la
+            NORMALISATION de la valeur par le demon. Les deux sont instruites,
+            sur pieces, sans terrain :
 
-        `UnrenderableValue` est levee plutot qu'un format devine. Refuser est un
-        fait ; inventer serait une hypothese.
+            - la definition du demon donne, pour l'unite du datapoint de pente,
+              `calc set="V*10"` vers un `short` : le demon attend une valeur
+              DECIMALE et applique lui-meme le facteur ;
+            - il la parse par `atof`, donc avec le point pour separateur ;
+            - le pont historique emet cette meme forme en production ;
+            - sur les 34 crans admissibles du domaine, `atof(texte) * 10` tombe
+              EXACTEMENT sur l'entier attendu : troncature et arrondi coincident,
+              et la normalisation du demon est donc sans ambiguite. Un test le
+              verifie cran par cran, plutot que de l'affirmer ici.
+
+            La forme est produite par `format_scalar`, du module neutre
+            `boilerack.decimal_form`, que la surface de lecture emploie deja :
+            positionnel, separateur `.`, sans exposant ni zeros superflus,
+            DETERMINISTE et insensible a la locale — ce que W4-A §15 exige, et
+            que ce module ne reimplemente donc pas.
+
+        CE QUI DEMEURE REFUSE, a l'identique
+            booleen, non-numerique, non-fini. `UnrenderableValue` est levee
+            plutot qu'un format devine : refuser est un fait, inventer serait une
+            hypothese.
+
+        RESERVE
+            Aucune ecriture reelle n'a encore confirme la forme decimale en vol.
+            La premiere emission demeurera une PREMIERE au sens de W4-C.
         """
         # `bool` est une sous-classe de `int` : l'ecarter explicitement evite que
         # `True` ne se rende silencieusement en `"1"`.
@@ -203,9 +228,7 @@ class VclientWriteInvocation:
         if not math.isfinite(nombre):
             raise UnrenderableValue(f"valeur non finie : {value!r}")
         if not nombre.is_integer():
-            raise UnrenderableValue(
-                f"seule la forme entiere est caracterisee (W4-C) : {value!r}"
-            )
+            return format_scalar(nombre).decode("ascii")
         return str(int(nombre))
 
 
