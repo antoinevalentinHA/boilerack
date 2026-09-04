@@ -277,5 +277,33 @@ def test_module_sans_dependance_technique() -> None:
     assert _modules_importes(payload_module) & _INTERDITS == set()
 
 
-def test_module_ne_depend_d_aucune_autre_partie_du_projet() -> None:
-    assert "boilerack" not in _modules_importes(payload_module)
+def test_module_ne_depend_que_du_siege_neutre_de_la_forme() -> None:
+    """La PURETE est conservee, elle a seulement change de siege.
+
+    `format_scalar` vit desormais dans `boilerack.decimal_form`, module neutre
+    de premier niveau, parce que la couche adaptateur en a besoin et n'a pas le
+    droit de remonter vers `read_surface`. Ce module le REEXPORTE : §4.5 demeure
+    l'autorite contractuelle de la forme.
+
+    L'invariant reste donc entier, et il est verifie AUX DEUX endroits : ce
+    module n'importe rien d'autre du projet, et le siege n'importe rien du tout.
+    """
+    complets = {
+        noeud.module
+        for noeud in ast.walk(
+            ast.parse(
+                pathlib.Path(payload_module.__file__).read_text(encoding="utf-8")
+            )
+        )
+        if isinstance(noeud, ast.ImportFrom) and noeud.module
+    }
+    assert {m for m in complets if m.startswith("boilerack")} == {
+        "boilerack.decimal_form"
+    }
+
+
+def test_le_siege_neutre_ne_depend_d_aucune_partie_du_projet() -> None:
+    """`decimal_form` est sous tout le monde : il n'importe rien de `boilerack`."""
+    from boilerack import decimal_form as siege
+
+    assert "boilerack" not in _modules_importes(siege)

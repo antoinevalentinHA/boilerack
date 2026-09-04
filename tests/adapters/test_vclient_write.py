@@ -547,11 +547,95 @@ def test_le_rendu_est_deterministe() -> None:
     assert fab.build("setNiveauM1", 2.0) == fab.build("setNiveauM1", 2.0)
 
 
-@pytest.mark.parametrize("valeur", [2.5, -0.5, float("nan"), float("inf")])
-def test_une_valeur_non_entiere_est_refusee_et_non_devinee(valeur: float) -> None:
-    """I-8 n'est pas levee : aucune forme decimale n'a jamais ete acceptee."""
+@pytest.mark.parametrize("valeur", [float("nan"), float("inf"), float("-inf")])
+def test_une_valeur_non_finie_est_refusee_et_non_devinee(valeur: float) -> None:
+    """Le refus des non-finies est INCHANGE : aucune forme ne les represente."""
     with pytest.raises(UnrenderableValue):
         VclientWriteInvocation.render(valeur)
+
+
+# ---------------------------------------------------------------------------
+# I-8 — la forme DECIMALE, et ce qui la fonde
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "valeur,attendu",
+    [(1.9, "1.9"), (0.2, "0.2"), (3.5, "3.5"), (2.5, "2.5"), (-0.5, "-0.5")],
+)
+def test_le_rendu_decimal_est_positionnel_et_pointe(
+    valeur: float, attendu: str
+) -> None:
+    """La forme est celle que le demon parse par `atof` et que le pont emet."""
+    assert VclientWriteInvocation.render(valeur) == attendu
+
+
+def test_le_rendu_entier_ne_devient_pas_decimal() -> None:
+    """NON-REGRESSION : les roles a conversion identite recoivent `16`, pas `16.0`.
+
+    C'est l'invariant que la forme decimale ne doit surtout pas emporter avec
+    elle : trois des quatre roles du profil de production sont entiers.
+    """
+    for valeur in (16.0, 15.0, 11.0, 10.0, 2.0, -13.0, 40.0, 0.0, -0.0):
+        rendu = VclientWriteInvocation.render(valeur)
+        assert "." not in rendu, valeur
+        assert rendu == str(int(valeur))
+
+
+_CRANS_DE_PENTE = [round(k / 10, 1) for k in range(2, 36)]
+
+
+def test_les_trente_quatre_crans_de_pente_sont_rendus_sans_ambiguite() -> None:
+    """I-8 : la NORMALISATION du demon est sans ambiguite sur tout le domaine.
+
+    Le demon parse par `atof` puis applique `calc set="V*10"` vers un `short`.
+    Si le produit tombait entre deux entiers, troncature et arrondi
+    divergeraient et l'ecriture serait fausse d'un cran, SILENCIEUSEMENT.
+
+    Ce test le verifie cran par cran plutot que de l'affirmer : pour chacun des
+    34 crans de [0.2 ; 3.5], `float(rendu) * 10` tombe EXACTEMENT sur l'entier
+    attendu, et troncature comme arrondi donnent le meme resultat.
+    """
+    assert len(_CRANS_DE_PENTE) == 34
+    assert _CRANS_DE_PENTE[0] == 0.2
+    assert _CRANS_DE_PENTE[-1] == 3.5
+
+    for k, cran in enumerate(_CRANS_DE_PENTE, start=2):
+        rendu = VclientWriteInvocation.render(cran)
+        produit = float(rendu) * 10
+        assert produit == float(k), (cran, rendu, produit)
+        assert int(produit) == round(produit) == k, (cran, rendu, produit)
+
+
+@pytest.mark.parametrize("cran", _CRANS_DE_PENTE)
+def test_chaque_cran_est_positionnel_sans_exposant_ni_zero_superflu(
+    cran: float,
+) -> None:
+    """Forme exigee : `.` pour separateur, aucun `e`, aucun zero de queue.
+
+    TROIS crans du domaine sont ENTIERS — 1.0, 2.0, 3.0 — et prennent donc la
+    forme entiere, sans point. Ce n'est pas une exception a la regle : c'est la
+    regle elle-meme, qui rend la forme entiere quand la valeur est entiere. Le
+    demon les parse par `atof` de la meme facon, et `float("2") * 10` vaut 20.
+    """
+    rendu = VclientWriteInvocation.render(cran)
+    assert "e" not in rendu.lower()
+    assert "," not in rendu
+    assert float(rendu) == cran
+
+    if float(cran).is_integer():
+        assert "." not in rendu
+        assert rendu == str(int(cran))
+    else:
+        assert rendu.count(".") == 1
+        assert not rendu.endswith("0")
+
+
+def test_le_rendu_decimal_est_deterministe() -> None:
+    """W4-A §15, pour la forme decimale comme pour l'entiere."""
+    fab = VclientWriteInvocation(CONFIG)
+    assert fab.build("setNeigungM1", 1.9) == fab.build("setNeigungM1", 1.9)
+    assert VclientWriteInvocation.render(1.9) == VclientWriteInvocation.render(1.9)
 
 
 def test_une_valeur_irrepresentable_ne_lance_aucun_processus() -> None:
@@ -562,7 +646,7 @@ def test_une_valeur_irrepresentable_ne_lance_aucun_processus() -> None:
         invocation=VclientWriteInvocation(CONFIG),
         clock=_horloge(),
     )
-    r = adapt.write("setNiveauM1", 2.5)
+    r = adapt.write("setNiveauM1", float("nan"))
     assert r.status is TransportStatus.TRANSPORT_ERROR
     assert "non fabricable" in r.detail
 
@@ -1239,7 +1323,7 @@ def test_aucune_observation_si_le_lanceur_n_a_jamais_ete_appele() -> None:
         invocation=VclientWriteInvocation(CONFIG),
         clock=_horloge(),
     )
-    r = adapt.write("setNiveauM1", 2.5)
+    r = adapt.write("setNiveauM1", float("nan"))
 
     assert r.status is TransportStatus.TRANSPORT_ERROR
     assert r.observation is None
@@ -1490,7 +1574,7 @@ def test_aucun_depot_si_le_lanceur_n_a_jamais_ete_appele() -> None:
         evidence=puits,
     )
 
-    r = adapt.write("setNiveauM1", 2.5)
+    r = adapt.write("setNiveauM1", float("nan"))
 
     assert r.status is TransportStatus.TRANSPORT_ERROR
     assert puits.recus == []
