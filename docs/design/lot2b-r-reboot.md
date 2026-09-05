@@ -1,5 +1,24 @@
 # `LOT 2B-R` — épreuve de redémarrage en régime permanent
 
+> ## `EXÉCUTÉ` — `LOT 2B-R CONFIRMÉ`, exécution `HOMOLOGUÉE`
+>
+> **Exécuté le 2026-09-05.** Un redémarrage, **un seul** : la machine a
+> **ramené Boilerack** — `MainPID` neuf — et **n'a pas ramené le pont**.
+> **Le filet de boot est effectivement inversé.** Superviseur `v1.2` `NOMINAL`
+> via `OnBootSec`, chaîne à dix mesures fraîches, quatre valeurs chaudière
+> inchangées, **marge de sonde portée à 2 793 ms**. Constat :
+> **`lot2b-r-constat.md`**.
+>
+> **`AB-5` prononcé `ATTEINT` par construction, puis écarté nommément par
+> l'autorisation.** `FA-4` et `AB-3` **homologués `NON ATTEINT`** par
+> l'arbitrage indépendant, sur une lecture que le lot avait soumise sans se
+> l'accorder. **L'autorisation est CONSOMMÉE.**
+>
+> **`LOT 2B V1` demeure `NON HOMOLOGUABLE STRICTEMENT`** : la preuve produite
+> ici est **postérieure**, et elle ne régularise rien.
+
+---
+
 > **Version 1.** Ouverture et bornage d'un lot **complémentaire**, réduit à **un
 > seul acte** : un **redémarrage machine réel**, en régime Boilerack souverain.
 >
