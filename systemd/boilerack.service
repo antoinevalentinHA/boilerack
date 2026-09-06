@@ -1,8 +1,19 @@
 # Gabarit d'unite systemd pour Boilerack — lot C12.
 #
-# GABARIT, PAS UNE UNITE INSTALLEE. Aucune conformite terrain n'est revendiquee :
-# son contenu est valide statiquement, jamais charge par un systemd reel.
-# Voir docs/design/c12-service-contract.md, §13 et §14.
+# CE FICHIER EST LE GABARIT VERSIONNE : c'est lui qu'`install.py` copie octet
+# pour octet vers /etc/systemd/system/boilerack.service (voir CHEMIN_UNITE et
+# SOURCE_UNITE dans install.py). L'unite reellement chargee sur le deploiement
+# de reference EST ce contenu, sans autre modification : elle tourne en
+# production depuis le 2026-09-04, `enabled` et `active`. Voir
+# docs/design/c12-service-contract.md, §13 et §14 pour ce qui a ete prouve hors
+# ligne au moment ou ce gabarit a ete ecrit, et §9.2 pour l'etat terrain reel.
+#
+# CE QUE CE FICHIER NE PORTE PAS : l'exclusion mutuelle avec l'ancien
+# `boiler_bridge.service` (`Conflicts=`) n'est PAS une directive de ce gabarit.
+# Sur le deploiement de reference, elle est portee par un drop-in TERRAIN,
+# pose hors de ce depot et non gere par `install.py` :
+# /etc/systemd/system/boilerack.service.d/10-exclusion.conf. Voir
+# docs/design/c12-service-contract.md §9.2 et docs/operations.md.
 #
 # Prerequis d'exploitation, non fournis par ce depot :
 #   /opt/boilerack/venv        environnement virtuel dedie, contenant le paquet

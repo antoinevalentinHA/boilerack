@@ -1,5 +1,15 @@
 # C12 — Contrat d'exploitation et de service
 
+> **Version 2 — Lot B documentaire (convergence C48).** Ajoute le §9.2, qui
+> consigne un fait d'exploitation observé sur le déploiement de référence après
+> la bascule `LOT 2B` : l'exclusion mutuelle avec `boiler_bridge.service` est
+> réalisée par un drop-in `systemd` terrain, extérieur à ce contrat et au
+> gabarit versionné. **Aucune clause normative existante n'est modifiée.** Le
+> reste du document est inchangé et continue de décrire, comme à l'origine, un
+> contrat validé hors ligne — voir §13 et §18.
+>
+> **Version 1.** Contrat initial.
+
 Document normatif. Il fixe la **surface d'exploitation** de Boilerack : où vivent
 le code, la configuration et le secret, sous quelle identité le pont tourne, quel
 superviseur le démarre et l'arrête, et ce qu'un superviseur doit conclure de
@@ -371,6 +381,40 @@ Il est **INTERDIT** d'écrire ou de laisser entendre que cette clause garantit q
 le broker est joignable. Si le broker n'est pas la, le démarrage échoue en `1`
 (§8.2) et la politique de redémarrage s'applique : c'est ainsi que la
 disponibilité applicative est traitée, pas par un ordonnancement.
+
+### 9.2 Exclusion mutuelle réelle — le drop-in `Conflicts=` terrain
+
+> **Ajouté en Version 2, après la bascule `LOT 2B`. Constat factuel d'un acte
+> d'exploitation, PAS une clause normative nouvelle.** Ce paragraphe ne fixe
+> aucune exigence : il consigne ce qui a été observé, en audit local en lecture
+> seule, sur le déploiement de référence.
+
+**Le gabarit `systemd/boilerack.service` versionné dans ce dépôt ne porte
+aucune directive `Conflicts=`.** Rien au §9 ci-dessus ne le prévoit, et §16
+(mutations discriminantes) n'en fait pas une propriété verrouillée.
+
+Sur le déploiement de référence, l'exclusion mutuelle avec l'ancien
+`boiler_bridge.service` — exigée par `lot2b-regime-permanent.md` §5 et posée
+comme acte 3 de la bascule (§7 du même document, *« installer le `Conflicts=`
+de façon persistante »*) — est réalisée par un **drop-in `systemd` distinct** :
+
+| | |
+|---|---|
+| Chemin | `/etc/systemd/system/boilerack.service.d/10-exclusion.conf` |
+| Propriétaire, mode | `root:root`, `0644` |
+| Origine | acte terrain manuel, posé le 2026-09-04, **hors du présent dépôt** |
+| Rapport au gabarit versionné | **extérieur** : ce n'est pas un fragment de `systemd/boilerack.service`, et ce dépôt ne le génère pas |
+| Rapport à `install.py` | **aucun** — `install.py` ne référence, ne lit, n'écrit et ne supprime jamais `boilerack.service.d/` ; une réinstallation normale (`installer()`, qui ne touche que `CHEMIN_UNITE`) **préserve donc ce drop-in tel quel** |
+| Persistance | confirmée par `lot2b-r-constat.md` §4 (constat 3 : « exclusion mutuelle effective — la déclaration lue sur l'unité, et son drop-in persistant présent ») après un redémarrage machine réel |
+
+**Ce que ce constat ne fait pas** : il ne rend pas ce drop-in versionné, ne
+l'ajoute pas au gabarit de §9, et ne convertit pas un acte d'exploitation en
+exigence contractuelle. L'intégrer au fragment principal, s'il est un jour
+décidé, relèverait d'une décision architecturale distincte — non de la
+présente version, qui se borne à documenter ce qui est.
+
+Documentation opérateur correspondante, avec la procédure de vérification :
+[`../operations.md`](../operations.md#migration-depuis-boiler-bridge).
 
 ---
 

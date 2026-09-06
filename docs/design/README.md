@@ -4,9 +4,21 @@ Ce répertoire porte **42 documents**. Ils ne sont pas de même nature, et ils n
 lisent pas dans l'ordre alphabétique. Cet index dit ce qu'ils sont, par où entrer,
 et ce qui pourrait induire en erreur.
 
-> **État du projet.** Boilerack est **en construction**. Rien n'est publiable ni
-> utilisable à ce stade, et rien n'a été éprouvé contre un broker, un `vcontrold`
-> ou une chaudière réels. Voir le [`README`](../../README.md) racine.
+> **État du projet.** Boilerack est **déployé en production** comme écrivain
+> souverain actif, depuis le 2026-09-04 (`LOT 2B`), régime confirmé au
+> redémarrage machine par `LOT 2B-R` le 2026-09-05 — voir
+> [`lot2b-regime-permanent.md`](lot2b-regime-permanent.md) et
+> [`lot2b-r-constat.md`](lot2b-r-constat.md). Il a été éprouvé contre un broker
+> MQTT, un `vcontrold` et une chaudière réels. Voir le [`README`](../../README.md)
+> racine.
+>
+> **Ceci ne requalifie pas `W4-F2`.** La bascule réelle a emprunté la voie de
+> `LOT 2B`, autorisée séparément par décision humaine explicite, et non le
+> chemin de qualification formelle `T0`/`T1`/`T2` que `W4-F2` a fermé
+> `NON QUALIFIABLE` — voir « État terminal de `W4-F2` » ci-dessous. Les deux
+> constats coexistent sans se contredire : l'un porte sur un déploiement réel
+> et autorisé, l'autre sur une qualification documentaire qui n'a pas abouti et
+> que la bascule n'a pas empruntée.
 
 ---
 
@@ -33,7 +45,15 @@ et ce qui pourrait induire en erreur.
 | 4 | [`c9-process-lifecycle.md`](c9-process-lifecycle.md) | cycle de vie et arrêt sur signal |
 | 5 | [`c10-user-interface.md`](c10-user-interface.md) | configuration et point d'entrée installé |
 
-**Pour comprendre l'état du projet et pourquoi il s'arrête là** :
+**Pour comprendre ce qui tourne réellement en production, et depuis quand** :
+
+| # | Document | Pourquoi ici |
+|---|---|---|
+| 1 | [`lot2b-regime-permanent.md`](lot2b-regime-permanent.md) | **la bascule réelle** — cinq actes, exclusion mutuelle, rollback mesuré |
+| 2 | [`lot2b-r-reboot.md`](lot2b-r-reboot.md) · [`lot2b-r-constat.md`](lot2b-r-constat.md) | le protocole et le constat du redémarrage machine qui confirme le régime permanent |
+
+**Pour comprendre pourquoi la qualification formelle de la coexistence s'arrête
+avant le terrain** (chemin distinct de la bascule réelle ci-dessus) :
 
 | # | Document | Pourquoi ici |
 |---|---|---|
@@ -96,18 +116,35 @@ d'un `stash`. Le câblage dit « W3 » est couvert par
 
 ## État terminal de `W4-F2`
 
-> **`W4-F2` est clos `NON QUALIFIABLE` au plafond de preuve actuel.**
+> **`W4-F2` est clos `NON QUALIFIABLE` au plafond de preuve actuel.** Cet état
+> n'a pas changé, et ce qui suit le décrit **tel que `W4-F2` l'a laissé**, dans
+> son propre chemin de qualification formelle — **pas** l'état réel du
+> déploiement, qui a changé par une voie distincte : voir
+> [« Pour comprendre ce qui tourne réellement en production »](#par-où-entrer)
+> ci-dessus et [`lot2b-regime-permanent.md`](lot2b-regime-permanent.md).
 
 Ce n'est ni un échec, ni un abandon : c'est la **sortie contractuelle** prévue.
-En conséquence, et sans changement :
+Dans le chemin `W4-F2` lui-même, et sans changement :
 
 - **`W4-F3` demeure inadmissible** ;
-- la **précondition d'autorisation humaine demeure `NON DONNÉE`** ;
-- le **pont historique demeure l'unique écrivain réel** de production ;
-- la **surface transactionnelle demeure sans autorité**, `false` par défaut.
+- la **précondition d'autorisation humaine du §11.2, propre à `W4-F2`, demeure
+  `NON DONNÉE`** — la bascule réelle a été couverte par une autorisation
+  distincte, propre à `LOT 2B`, et non par celle-ci ;
+- la **surface transactionnelle par défaut du code demeure sans autorité**,
+  `false` — le déploiement de référence l'a ouverte explicitement, par un acte
+  d'exploitation hors de ce contrat, voir `lot2b-regime-permanent.md` §7.
 
-Le détail, les dix inconnues laissées ouvertes et le chemin de reprise figurent
-dans [`w4f2-cloture.md`](w4f2-cloture.md).
+> **Ce qui a changé, et par où.** *« Le pont historique demeure l'unique
+> écrivain réel de production »* était vrai lorsque cette phrase a été écrite,
+> et ne l'est plus depuis le 2026-09-04 : le pont historique est aujourd'hui
+> `disabled`/`inactive`, et Boilerack est l'écrivain souverain actif. Ce
+> changement ne vient pas d'une réouverture ou d'une réussite de `W4-F2` — il
+> vient de `LOT 2B`, qui ne prétend à aucune des qualifications que `W4-F2`
+> visait et ne les rend pas non plus caduques.
+
+Le détail, les dix inconnues laissées ouvertes et le chemin de reprise
+**du contrat de qualification lui-même** figurent dans
+[`w4f2-cloture.md`](w4f2-cloture.md).
 
 ---
 
