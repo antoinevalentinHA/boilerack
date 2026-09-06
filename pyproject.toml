@@ -11,7 +11,7 @@ license = { file = "LICENSE" }
 authors = [{ name = "Antoine Valentin" }]
 keywords = ["mqtt", "vcontrold", "viessmann", "optolink", "home-assistant", "boiler"]
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 4 - Beta",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

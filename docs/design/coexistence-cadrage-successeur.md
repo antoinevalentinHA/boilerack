@@ -1,5 +1,16 @@
 # Cadrage du chantier successeur — qualification de la coexistence
 
+> **Note de tête, ajoutée en Lot B documentaire (convergence C48), postérieure
+> aux deux versions ci-dessous.** Ce document cadre un chantier successeur pour
+> **juger** la coexistence par la voie formelle héritée de `W4-F2` (`T0`, `T1`,
+> `T2`). Ce n'est **pas** la voie qu'a empruntée la bascule réelle : la
+> souveraineté d'écriture est passée à Boilerack le 2026-09-04 par `LOT 2B`
+> (`lot2b-regime-permanent.md`), sous une autorisation humaine distincte et
+> propre à ce lot, puis confirmée au redémarrage par `LOT 2B-R`
+> (`lot2b-r-constat.md`). Ce cadrage reste **conservé tel quel**, comme trace
+> de décision et de cadrage historique ; il n'est ni rétracté ni corrigé par
+> cette note, et le chantier qu'il définit n'a pas été ouvert par `LOT 2B`.
+
 > **Version 2**, après audit `NO-GO`. Deux bloqueurs fermés, sept réserves
 > traitées. **Rien d'autre n'est modifié.**
 >

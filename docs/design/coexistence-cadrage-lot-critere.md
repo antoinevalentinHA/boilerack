@@ -1,5 +1,16 @@
 # Cadrage du lot producteur du critère de qualification
 
+> **Note de tête, ajoutée en Lot B documentaire (convergence C48), postérieure
+> aux deux versions ci-dessous.** Ce document cadre une voie de qualification
+> formelle de la coexistence (le critère quantitatif de `§10.3.3`, la barrière
+> `T0`) qui n'a **pas** été celle empruntée par la bascule réelle : la
+> souveraineté d'écriture est passée à Boilerack le 2026-09-04 par `LOT 2B`
+> (`lot2b-regime-permanent.md`), sous une autorisation humaine distincte et
+> propre à ce lot, puis confirmée au redémarrage par `LOT 2B-R`
+> (`lot2b-r-constat.md`). Ce cadrage reste **conservé tel quel**, comme trace
+> de décision et de cadrage historique ; il n'est ni rétracté ni corrigé par
+> cette note.
+
 > **Version 2**, après audit `NO-GO`. Quatre bloqueurs fermés, neuf réserves
 > traitées. **L'objectif du lot est inchangé.**
 >
